@@ -12,6 +12,7 @@
     "migrate:deploy": "prisma migrate deploy"
   },
 
+
   "dependencies": {
     "@conform-to/react": "^1.2.2",
     "@conform-to/zod": "^1.2.2",

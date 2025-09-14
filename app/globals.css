@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand: Black / Yellow / White */
+@layer base {
+  :root {
+    /* surfaces & text (light) */
+    --background: 0 0% 100%;         /* white */
+    --foreground: 222 14% 10%;       /* near-black */
+
+    /* components */
+    --card: 0 0% 100%;
+    --card-foreground: var(--foreground);
+    --popover: 0 0% 100%;
+    --popover-foreground: var(--foreground);
+
+    /* BRAND yellow (primary) */
+    /* tweak L to adjust brightness; keep high S for vibrancy */
+    --primary: 48 95% 54%;           /* construction yellow */
+    --primary-foreground: 222 14% 10%; /* dark text on yellow */
+
+    /* neutrals */
+    --secondary: 0 0% 96%;           /* light gray bg */
+    --secondary-foreground: 222 14% 15%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 222 8% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 222 14% 15%;
+
+    /* feedback */
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 98%;
+
+    /* borders/inputs/focus */
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 48 95% 45%;              /* focus ring: brand yellow, slightly darker */
+
+    /* shape */
+    --radius: 0;                      /* <- no rounded corners site-wide */
+
+    /* charts (optional) — tuned to brand */
+    --chart-1: 48 95% 54%;   /* yellow */
+    --chart-2: 222 14% 16%;  /* near-black */
+    --chart-3: 0 0% 72%;     /* gray */
+    --chart-4: 210 100% 50%; /* blue accent if needed */
+    --chart-5: 140 70% 45%;  /* green accent if needed */
+  }
+
+  .dark {
+    /* surfaces & text (dark) */
+    --background: 222 14% 8%;        /* near-black */
+    --foreground: 0 0% 98%;          /* white-ish */
+
+    --card: 222 14% 10%;
+    --card-foreground: var(--foreground);
+    --popover: 222 14% 8%;
+    --popover-foreground: var(--foreground);
+
+    /* keep brand yellow */
+    --primary: 48 95% 54%;
+    --primary-foreground: 222 14% 10%;
+
+    /* neutrals in dark */
+    --secondary: 222 12% 14%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 222 12% 14%;
+    --muted-foreground: 0 0% 72%;
+    --accent: 222 12% 14%;
+    --accent-foreground: 0 0% 96%;
+
+    --destructive: 0 72% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 222 12% 18%;
+    --input: 222 12% 18%;
+    --ring: 48 95% 54%;
+  }
+
+  /* Base element styling */
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* hide horizontal scrollbar for the snap row */
+.no-scrollbar {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none;    /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;            /* Chrome/Safari */
+}

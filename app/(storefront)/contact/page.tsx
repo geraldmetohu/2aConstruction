@@ -50,7 +50,7 @@ export default function ContactPage() {
                 icon={<Mail className="h-5 w-5" />}
                 title="Email us"
                 subtitle="Reply in 1–2 days"
-                href="mailto:2aconstruction@gmail.com"
+                href="mailto:2a.construction.uk@gmail.com"
               />
               <ContactCard
                 icon={<MessageSquare className="h-5 w-5" />}
@@ -76,8 +76,8 @@ export default function ContactPage() {
                   <Mail className="h-5 w-5 text-amber-500 shrink-0" />
                   <div>
                     <div className="text-sm font-medium text-neutral-600">Email</div>
-                    <Link href="mailto:2aconstruction@gmail.com" className="underline underline-offset-2">
-                      2aconstruction@gmail.com
+                    <Link href="mailto:2a.construction.uk@gmail.com" className="underline underline-offset-2">
+                      2a.construction.uk@gmail.com
                     </Link>
                   </div>
                 </li>

@@ -1,15 +1,21 @@
-// app/(storefront)/page.tsx or app/page.tsx
+// app/(storefront)/page.tsx
 import Image from "next/image";
-import { Hero } from "../componets/storefront/Hero";
+import Link from "next/link";
+// app/(storefront)/page.tsx
+import { ServicesOverview } from "../componets/storefront/ServicesOverview";
+
 import { FeaturedProject } from "../componets/storefront/FeaturedProject";
 import { AnimatedCategorySelection } from "../componets/storefront/AnimatedCategorySelection";
-import { StatsBar } from "../componets/storefront/StatsBar";
-import { TrustBadgesMarquee } from "../componets/storefront/TrustBadges";
+import { ProofBar } from "../componets/storefront/StatsBar";
 import { ProcessSection } from "../componets/storefront/ProcessSection";
 import { CTAQuote } from "../componets/storefront/CTAQuote";
 import { StickyContactBar } from "../componets/storefront/StickyContactBar";
 import { BeforeAfterGallery } from "../componets/dashboard/BeforeAfterGallery";
-import Link from "next/link";
+import { Reveal, RevealStagger } from "@/components/ui/Reveal";
+import { Hero } from "../componets/storefront/Hero";
+
+// 👇 client-side reveal wrappers (small client component)
+// file: app/components/ui/Reveal.tsx (added separately)
 
 export default function IndexPage() {
   const year = new Date().getFullYear();
@@ -18,45 +24,65 @@ export default function IndexPage() {
     <>
       <Hero />
 
-      <TrustBadgesMarquee
-        bgClass="bg-white"
-        pillClass="bg-black text-white"
-        accentClass="ring-1 ring-amber-500/30"
-        baseSpeed={36}
-      />
-
       {/* Services overview (fast paths) */}
-      <ServicesOverview />
+      <RevealStagger>
+        <ServicesOverview />
+      </RevealStagger>
 
-      <AnimatedCategorySelection />
+      <Reveal>
+        <AnimatedCategorySelection />
+      </Reveal>
 
-      <StatsBar />
+      <Reveal>
+        <ProofBar
+          pillars={[
+            { title: "Free Site Visit", blurb: "We assess & advise before quoting.", icon: "📝" },
+            { title: "Fixed-Price Quote", blurb: "Transparent scope—no surprises.", icon: "📦" },
+            { title: "Clear Schedule", blurb: "Start/finish dates agreed.", icon: "📅" },
+            { title: "Clean & Tidy", blurb: "Daily protection & final clean.", icon: "🧹" },
+          ]}
+        />
+      </Reveal>
 
       {/* Latest work (scroll-snap gallery) */}
-      <LatestWorkStrip
-        items={[
-          { src: "/ext.jpg", alt: "Kitchen extension" },
-          { src: "/loft.jpg", alt: "Loft conversion" },
-          { src: "/refurb.jpg", alt: "Full refurb" },
-          { src: "/roof.jpg", alt: "New roof" },
-          { src: "/ext.jpg", alt: "Rear extension" },
-          { src: "/loft.jpg", alt: "Dormer conversion" },
-        ]}
-      />
+      <Reveal>
+        <LatestWorkStrip
+          items={[
+            { src: "/images/ext.jpeg", alt: "Kitchen extension" },
+            { src: "/images/loft.jpg", alt: "Loft conversion" },
+            { src: "/images/refurb.jpg", alt: "Full refurb" },
+            { src: "/images/roof.jpg", alt: "New roof" },
+            { src: "/images/ext.jpeg", alt: "Rear extension" },
+            { src: "/images/loft.jpg", alt: "Dormer conversion" },
+          ]}
+        />
+      </Reveal>
 
-      <BeforeAfterGallery />
+      <Reveal>
+        <BeforeAfterGallery />
+      </Reveal>
 
-      <FeaturedProject />
+      <Reveal>
+        <FeaturedProject />
+      </Reveal>
 
-      <ProcessSection />
+      <Reveal>
+        <ProcessSection />
+      </Reveal>
 
       {/* Social proof */}
-      <Testimonials />
+      <Reveal>
+        <Testimonials />
+      </Reveal>
 
       {/* Mini FAQ */}
-      <HomeFAQ />
+      <Reveal>
+        <HomeFAQ />
+      </Reveal>
 
-      <CTAQuote />
+      <Reveal>
+        <CTAQuote />
+      </Reveal>
 
       <StickyContactBar />
 
@@ -78,84 +104,33 @@ export default function IndexPage() {
               addressCountry: "GB",
             },
             openingHoursSpecification: [
-              { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"], opens: "08:00", closes: "18:00" },
-              { "@type": "OpeningHoursSpecification", dayOfWeek: "Saturday", opens: "09:00", closes: "14:00" }
+              {
+                "@type": "OpeningHoursSpecification",
+                dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+                opens: "08:00",
+                closes: "18:00",
+              },
+              {
+                "@type": "OpeningHoursSpecification",
+                dayOfWeek: "Saturday",
+                opens: "09:00",
+                closes: "14:00",
+              },
             ],
             priceRange: "££",
             sameAs: [
               "https://facebook.com/",
               "https://twitter.com/",
               "https://www.instagram.com/",
-              "https://www.linkedin.com/"
-            ]
-          })
+              "https://www.linkedin.com/",
+            ],
+          }),
         }}
       />
     </>
   );
 }
 
-/* ---------------- Inline sections (server-safe, no hooks) ---------------- */
-
-function ServicesOverview() {
-  const cards = [
-    {
-      href: "/portfolio/extention",
-      title: "House Extensions",
-      blurb: "Open-plan kitchens, RSJs, single & double-storey builds.",
-      src: "/ext.jpg",
-    },
-    {
-      href: "/portfolio/loft",
-      title: "Loft Conversions",
-      blurb: "Dormer, hip-to-gable, mansard & Velux layouts.",
-      src: "/loft.jpg",
-    },
-    {
-      href: "/portfolio/refurbishment",
-      title: "Refurbishments",
-      blurb: "Full reconfiguration, kitchens, bathrooms & finishes.",
-      src: "/refurb.jpg",
-    },
-    {
-      href: "/portfolio/roof",
-      title: "Roofing",
-      blurb: "Slate, tile, GRP/EPDM flat roofs, leadwork & gutters.",
-      src: "/roof.jpg",
-    },
-  ];
-
-  return (
-    <section className="py-14 bg-white">
-      <div className="max-w-7xl mx-auto px-4">
-        <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight">What we do</h2>
-
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {cards.map((c) => (
-            <Link
-              key={c.title}
-              href={c.href}
-              className="group relative overflow-hidden rounded-lg border border-amber-500/20 bg-white"
-            >
-              <div className="relative h-40 w-full">
-                <Image src={c.src} alt={c.title} fill className="object-cover transition-transform duration-500 group-hover:scale-[1.05]" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent" />
-              </div>
-              <div className="p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-neutral-900">{c.title}</h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500 text-black">View</span>
-                </div>
-                <p className="mt-2 text-sm text-neutral-600">{c.blurb}</p>
-              </div>
-              <span className="absolute inset-x-0 bottom-0 h-0.5 bg-amber-500 scale-x-0 origin-left transition-transform duration-300 group-hover:scale-x-100" />
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function LatestWorkStrip({ items }: { items: { src: string; alt: string }[] }) {
   return (
@@ -186,7 +161,6 @@ function LatestWorkStrip({ items }: { items: { src: string; alt: string }[] }) {
     </section>
   );
 }
-
 
 function Testimonials() {
   const items = [
@@ -252,7 +226,10 @@ function HomeFAQ() {
             <div key={f.q} className="p-6 rounded-lg border border-amber-500/20 bg-white">
               <div className="font-semibold text-neutral-900">{f.q}</div>
               <p className="mt-2 text-neutral-600">{f.a}</p>
-              <Link href="/contact#quote" className="mt-3 inline-block text-amber-700 hover:text-amber-800 font-medium">
+              <Link
+                href="/contact#quote"
+                className="mt-3 inline-block text-amber-700 hover:text-amber-800 font-medium"
+              >
                 Ask a question →
               </Link>
             </div>

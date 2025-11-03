@@ -23,7 +23,7 @@ export function StickyContactBar() {
         <Link href="tel:+447903095967" className="flex-1 bg-primary text-white py-3 text-center font-medium inline-flex items-center justify-center gap-2">
           <Phone className="h-4 w-4" /> Call
         </Link>
-        <Link href="mailto:2aconstruction@gmail.com" className="flex-1 bg-black text-white py-3 text-center font-medium inline-flex items-center justify-center gap-2">
+        <Link href="mailto:2a.construction.uk@gmail.com" className="flex-1 bg-black text-white py-3 text-center font-medium inline-flex items-center justify-center gap-2">
           <Mail className="h-4 w-4" /> Email
         </Link>
         <Link href="/contact#quote" className="flex-1 bg-white text-black border py-3 text-center font-medium inline-flex items-center justify-center gap-2">

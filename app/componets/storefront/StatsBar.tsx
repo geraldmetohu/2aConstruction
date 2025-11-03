@@ -1,105 +1,186 @@
+// app/components/storefront/ProofBar.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
+import { motion, type Variants, type Transition } from "framer-motion";
 
-type Stat = { k: string; v: number; suffix?: string };
+type Pillar = {
+  title: string;
+  blurb?: string;
+  icon?: React.ReactNode; // keep it flexible: emoji, SVG, or Icon component
+};
 
-const DEFAULT_STATS: Stat[] = [
-  { k: "Projects Completed", v: 240 },
-  { k: "Years Experience", v: 12 },
-  { k: "Avg. Review", v: 4.9, suffix: "/5" },
-  { k: "Cities Covered", v: 18 },
+const DEFAULT_PILLARS: Pillar[] = [
+  { title: "Free Site Visit", blurb: "We assess, measure & advise before quoting.", icon: "📝" },
+  { title: "Fixed-Price Quote", blurb: "Transparent scope. No hidden extras.", icon: "📦" },
+  { title: "Clear Schedule", blurb: "Agreed start/finish dates & milestones.", icon: "📅" },
+  { title: "Clean & Tidy", blurb: "Daily protection and end-of-job clean.", icon: "🧹" },
 ];
 
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3);
-}
-
-export function StatsBar({
-  stats = DEFAULT_STATS,
-  accentClass = "text-primary",           // ← change accent colour here
-  bgClass = "bg-gradient-to-r from-gray-50 to-white",
-  durationMs = 1200,                      // ← animation duration
+export function ProofBar({
+  pillars = DEFAULT_PILLARS,
+  bgClass = "bg-zinc-100 dark:bg-zinc-950",
+  ringClass = "ring-1 ring-zinc-200/70 dark:ring-white/10",
+  accentClass = "bg-amber-400 text-black",
+  withIntro = true,
 }: {
-  stats?: Stat[];
-  accentClass?: string;
+  pillars?: Pillar[];
   bgClass?: string;
-  durationMs?: number;
+  ringClass?: string;
+  accentClass?: string;
+  withIntro?: boolean;
 }) {
-  const [vals, setVals] = useState<number[]>(stats.map(() => 0));
-  const [started, setStarted] = useState(false);
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  const prefersReduced = useMemo(
-    () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches,
+  const container: Variants = useMemo(
+    () => ({
+      hidden: {},
+      show: {
+        transition: { staggerChildren: 0.09, delayChildren: 0.05 },
+      },
+    }),
     []
   );
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+  const dropBounce: Transition = useMemo(
+    () => ({ type: "spring", stiffness: 260, damping: 20, mass: 0.7 }),
+    []
+  );
 
-    // If reduced motion, jump straight to values when visible
-    if (prefersReduced) {
-      setVals(stats.map((s) => s.v));
-      setStarted(true);
-      return;
-    }
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting && !started) {
-            setStarted(true);
-          }
-        });
+  const item: Variants = useMemo(
+    () => ({
+      hidden: { opacity: 0, y: -20, scale: 0.98, filter: "blur(2px)" },
+      show: {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        filter: "blur(0px)",
+        transition: dropBounce,
       },
-      { threshold: 0.25 }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [prefersReduced, started, stats]);
-
-  useEffect(() => {
-    if (!started || prefersReduced) return;
-
-    const start = performance.now();
-    let raf = 0;
-    const loop = (t: number) => {
-      const p = Math.min(1, (t - start) / durationMs);
-      const eased = easeOutCubic(p);
-
-      setVals(stats.map((s) => {
-        // keep 1 decimal for values that have decimals; integers stay integers
-        const next = s.v * eased;
-        return Number.isInteger(s.v) ? Math.round(next) : Math.round(next * 10) / 10;
-      }));
-
-      if (p < 1) {
-        raf = requestAnimationFrame(loop);
-      } else {
-        setVals(stats.map((s) => s.v)); // ensure exact final values
-      }
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, [started, durationMs, prefersReduced, stats]);
+    }),
+    [dropBounce]
+  );
 
   return (
-    <section className={`${bgClass} py-14`}>
-      <div ref={ref} className="mx-auto max-w-7xl px-4 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-        {stats.map((s, i) => (
-          <div key={s.k} className="relative">
-            <div className={`text-4xl font-extrabold tracking-tight ${accentClass}`}>
-              {vals[i]}
-              {s.suffix ?? ""}
-            </div>
-            <div className="text-sm text-gray-600 mt-2">{s.k}</div>
-            {/* subtle accent underline */}
-            <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-current opacity-15" />
+    <section className={`${bgClass} relative py-14`}>
+      {/* subtle background accents */}
+      <div
+        aria-hidden
+        className="
+          pointer-events-none absolute inset-0
+          bg-[radial-gradient(40rem_20rem_at_20%_0%,rgba(253,230,138,0.10),transparent_60%)]
+          dark:bg-[radial-gradient(40rem_20rem_at_20%_0%,rgba(253,230,138,0.08),transparent_60%)]
+        "
+      />
+      <div
+        aria-hidden
+        className="
+          pointer-events-none absolute inset-0
+          bg-[radial-gradient(30rem_18rem_at_90%_10%,rgba(168,162,158,0.20),transparent_55%)]
+          dark:bg-[radial-gradient(30rem_18rem_at_90%_10%,rgba(168,162,158,0.12),transparent_55%)]
+        "
+      />
+
+      <div className="relative mx-auto max-w-7xl px-4">
+        {withIntro && (
+          <div className="mb-8 text-center">
+            <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-zinc-900 dark:text-zinc-50">
+              What you can expect from us
+            </h3>
+            <p className="mt-2 text-zinc-600 dark:text-zinc-300">
+              Practical promises we actually keep—no inflated numbers.
+            </p>
           </div>
-        ))}
+        )}
+
+        <motion.div
+          variants={container}
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.25 }}
+          className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6"
+        >
+          {pillars.map((p, i) => (
+            <motion.div
+              key={`${p.title}-${i}`}
+              variants={item}
+              className={`
+                group relative overflow-hidden rounded-2xl
+                bg-zinc-50/80 dark:bg-zinc-900/60 backdrop-blur
+                ${ringClass}
+                shadow-sm hover:shadow-md transition
+                hover:-translate-y-0.5
+              `}
+            >
+              <div className="p-5">
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`
+                      inline-flex h-8 w-8 items-center justify-center rounded-full
+                      ${accentClass} text-sm font-bold
+                    `}
+                    aria-hidden
+                  >
+                    {p.icon ?? "✔️"}
+                  </span>
+                  <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    {p.title}
+                  </h4>
+                </div>
+                {p.blurb && (
+                  <p className="mt-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                    {p.blurb}
+                  </p>
+                )}
+              </div>
+
+              {/* bottom accent bar */}
+              <span
+                className="
+                  pointer-events-none absolute inset-x-0 bottom-0 h-0.5
+                  bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500
+                  scale-x-0 origin-left transition-transform duration-300
+                  group-hover:scale-x-100
+                "
+              />
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
     </section>
   );
 }
+
+/* -------------------------
+   OPTION B: Logo marquee (replace grid above if you prefer)
+   - Use for partner logos, suppliers, or accreditation *logos you truly hold*.
+   - Keep it honest: only show what you can verify.
+--------------------------------
+import Image from "next/image";
+
+export function ProofMarquee() {
+  const logos = [
+    { src: "/logos/dulux.png", alt: "Dulux" },
+    { src: "/logos/travisperkins.png", alt: "Travis Perkins" },
+    { src: "/logos/howdens.png", alt: "Howdens" },
+    { src: "/logos/velux.png", alt: "VELUX" },
+  ];
+  return (
+    <section className="bg-zinc-100 dark:bg-zinc-950 py-10">
+      <div className="mx-auto max-w-7xl px-4 overflow-hidden">
+        <div className="flex animate-[marquee_28s_linear_infinite] gap-12 opacity-80 hover:opacity-100">
+          {logos.concat(logos).map((l, i) => (
+            <div key={i} className="relative h-10 w-32 grayscale hover:grayscale-0 transition">
+              <Image src={l.src} alt={l.alt} fill className="object-contain" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <style jsx>{`
+        @keyframes marquee {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+    </section>
+  );
+}
+*/

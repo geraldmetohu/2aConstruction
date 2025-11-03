@@ -112,7 +112,7 @@ export default function ServicesPage() {
               blurb="Single and double-storey extensions, open-plan kitchens, RSJ installation, and structural works."
               href="/portfolio/extention"
               bullets={["Planning & design support", "Steelwork + foundations", "Building control sign-off"]}
-              imageSrc="/ext.jpg"
+              imageSrc="/extention.jpeg"
             />
             <ServiceCard
               icon={<Layers className="h-6 w-6" />}
@@ -128,7 +128,7 @@ export default function ServicesPage() {
               blurb="Full interior renovations, reconfiguration, plastering, electrics, plumbing, kitchens and bathrooms."
               href="/portfolio/refurbishment"
               bullets={["Project management", "NICEIC & Gas Safe partners", "High-end finishes"]}
-              imageSrc="/refurb.jpg"
+              imageSrc="/refurbishment.jpg"
             />
             <ServiceCard
               icon={<ShieldCheck className="h-6 w-6" />}
@@ -145,9 +145,9 @@ export default function ServicesPage() {
       {/* FEATURED GALLERY (slides slightly on scroll) */}
       <FeaturedGallery
         items={[
-          { src: "/ext.jpg", alt: "Kitchen extension" },
+          { src: "/extention.jpeg", alt: "Kitchen extension" },
           { src: "/loft.jpg", alt: "Loft conversion" },
-          { src: "/refurb.jpg", alt: "Full refurbishment" },
+          { src: "/refurbishment.jpg", alt: "Full refurbishment" },
           { src: "/roof.jpg", alt: "New roof" },
         ]}
       />

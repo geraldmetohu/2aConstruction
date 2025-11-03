@@ -90,7 +90,7 @@ export default function MobileNav() {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-amber-500/30">
           <Link href="/" onClick={() => setOpen(false)} className="flex items-center gap-2">
-            <Image src="/2a_l.png" alt="2A Construction Logo" width={36} height={36} className="object-contain" />
+            <Image src="/2a_l.png" alt="2A Construction Logo" width={60} height={36} className="object-contain" />
           </Link>
 
           <button

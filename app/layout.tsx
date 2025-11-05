@@ -79,11 +79,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full scroll-smooth">
       <body
+        suppressHydrationWarning
         className={[
           geistSans.variable,
           geistMono.variable,
           "antialiased h-full w-full m-0 p-0 overflow-x-hidden [--radius:14px] bg-white dark:bg-neutral-950",
-          // ✨ Layered background: radial glow + subtle grid (no client code)
           "relative",
           "before:pointer-events-none before:fixed before:inset-0 before:-z-10 before:opacity-[0.85]",
           "before:bg-[radial-gradient(60rem_40rem_at_top_right,rgba(245,158,11,0.12),transparent),radial-gradient(50rem_40rem_at_-10%_120%,rgba(6,182,212,0.10),transparent)]",
@@ -91,8 +91,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           "after:bg-[linear-gradient(transparent_31px,rgba(0,0,0,0.08)_32px),linear-gradient(90deg,transparent_31px,rgba(0,0,0,0.08)_32px)] after:bg-[length:32px_32px]",
         ].join(" ")}
       >
-        {/* UploadThing SSR config */}
         <NextSSRPlugin routerConfig={extractRouterConfig(ourFileRouter)} />
+        {/* …rest unchanged */}
+        {/* UploadThing SSR config */}
 
         {/* JSON-LD: LocalBusiness (Construction) */}
         <script

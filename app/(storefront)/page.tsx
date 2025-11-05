@@ -22,7 +22,7 @@ export default function IndexPage() {
 
   return (
     <>
-      <Hero />
+      <Hero/>
 
       {/* Services overview (fast paths) */}
       <RevealStagger>

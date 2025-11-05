@@ -6,8 +6,8 @@ import { ServicesOverview } from "../componets/storefront/ServicesOverview";
 
 import { FeaturedProject } from "../componets/storefront/FeaturedProject";
 import { AnimatedCategorySelection } from "../componets/storefront/AnimatedCategorySelection";
-import { ProofBar } from "../componets/storefront/StatsBar";
-import { ProcessSection } from "../componets/storefront/ProcessSection";
+import { InteractiveProof } from "../componets/storefront/StatsBar";
+import { ProcessLifeline } from "../componets/storefront/ProcessSection";
 import { CTAQuote } from "../componets/storefront/CTAQuote";
 import { StickyContactBar } from "../componets/storefront/StickyContactBar";
 import { BeforeAfterGallery } from "../componets/dashboard/BeforeAfterGallery";
@@ -34,14 +34,9 @@ export default function IndexPage() {
       </Reveal>
 
       <Reveal>
-        <ProofBar
-          pillars={[
-            { title: "Free Site Visit", blurb: "We assess & advise before quoting.", icon: "📝" },
-            { title: "Fixed-Price Quote", blurb: "Transparent scope—no surprises.", icon: "📦" },
-            { title: "Clear Schedule", blurb: "Start/finish dates agreed.", icon: "📅" },
-            { title: "Clean & Tidy", blurb: "Daily protection & final clean.", icon: "🧹" },
-          ]}
-        />
+<InteractiveProof
+  beforeAfter={{ before: "/images/refurb.jpg", after: "/images/ext.jpeg" }}
+/>
       </Reveal>
 
       {/* Latest work (scroll-snap gallery) */}
@@ -67,7 +62,14 @@ export default function IndexPage() {
       </Reveal>
 
       <Reveal>
-        <ProcessSection />
+        <ProcessLifeline
+          steps={[
+            { title: "Site Visit", text: "Measure, inspect and capture your brief.", img: "/images/site_insp.jpg" },
+            { title: "Fixed Quote", text: "Scope, inclusions and schedule—no surprises.", img: "/images/quote.jpg" },
+            { title: "Build & Protect", text: "Daily protection, tidy site, clear updates.", img: "/images/build.jpg" },
+            { title: "Clean Handover", text: "Deep clean, snag-free finish, warranties.", img: "/images/handover.jpg" },
+          ]}
+        />
       </Reveal>
 
       {/* Social proof */}

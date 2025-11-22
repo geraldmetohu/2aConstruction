@@ -10,7 +10,7 @@ export async function CreateProject(prevState: unknown,formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 
@@ -41,7 +41,7 @@ export async function EditProject(prevState: any,formData: FormData ) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (!user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (!user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
     const submission = parseWithZod(formData, {
@@ -77,7 +77,7 @@ export async function DeleteProject(formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
         // ✅ Get the productId safely
@@ -104,7 +104,7 @@ export async function CreateBeforeAfter(prevState: any, formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 
@@ -132,7 +132,7 @@ export async function DeleteBeforeAfter (formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 
@@ -150,7 +150,7 @@ export async function CreateContact(prevState: unknown,formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 
@@ -181,7 +181,7 @@ export async function EditContact(prevState: any,formData: FormData ) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
     const submission = parseWithZod(formData, {
@@ -217,7 +217,7 @@ export async function DeleteContact(formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
         // ✅ Get the productId safely
@@ -244,7 +244,7 @@ export async function CreateBanner(prevState: any, formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 
@@ -274,7 +274,7 @@ export async function DeleteBanner (formData: FormData) {
     const { getUser} = getKindeServerSession();
     const user = await getUser();
 
-    if ( !user || (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com")){
+    if ( !user || (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
         return redirect("/");
     }
 

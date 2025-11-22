@@ -9,6 +9,7 @@ import { LoginLink, LogoutLink, RegisterLink } from "@kinde-oss/kinde-auth-nextj
 const ADMIN_EMAILS = new Set([
   "geraldmetohu@gmail.com",
   "hasanajaleksios@icloud.com",
+  "ensisako11@gmail.com",
 ]);
 
 export async function NavBar() {

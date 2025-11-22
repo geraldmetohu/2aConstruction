@@ -10,7 +10,7 @@ import Image from "next/image";
 import { useKindeAuth } from "@kinde-oss/kinde-auth-nextjs";
 import { LoginLink, LogoutLink, RegisterLink } from "@kinde-oss/kinde-auth-nextjs/components";
 
-const ADMIN_EMAILS = new Set(["geraldmetohu@gmail.com", "hasanajaleksios@icloud.com"]);
+const ADMIN_EMAILS = new Set(["geraldmetohu@gmail.com", "hasanajaleksios@icloud.com", "ensisako11@gmail.com"]);
 
 export default function MobileNav() {
   const [open, setOpen] = useState(false);

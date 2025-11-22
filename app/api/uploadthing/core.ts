@@ -4,67 +4,104 @@ import { UploadThingError } from "uploadthing/server";
 
 const f = createUploadthing();
 
-// Small helper to keep auth DRY (same check you already use)
+/* -------------------------------------------
+   ALLOWED ADMIN EMAILS
+-------------------------------------------- */
+const allowedEmails = [
+  "geraldmetohu@gmail.com",
+  "hasanajaleksios@icloud.com",
+  "ensisako11@gmail.com",
+];
+
+/* -------------------------------------------
+   ADMIN CHECK
+-------------------------------------------- */
 async function requireAdmin() {
   const { getUser } = getKindeServerSession();
   const user = await getUser();
-  if (!user || user.email !== "geraldmetohu@gmail.com") {
+
+  // Check user is logged in
+  if (!user || !user.email) {
     throw new UploadThingError("Unauthorized");
   }
+
+  // Check email whitelist
+  if (!allowedEmails.includes(user.email)) {
+    throw new UploadThingError("Unauthorized");
+  }
+
   return { userId: user.id };
 }
 
-// Shared completion logger/return payload
-function onComplete({ metadata, file }: { metadata: { userId: string }; file: { url: string } }) {
-  console.log("Upload complete for userId:", metadata.userId);
-  console.log("file url", file.url);
-  // Send url back to client too
-  return { uploadedBy: metadata.userId, url: file.url };
+/* -------------------------------------------
+   UPLOAD COMPLETE HANDLER
+   (Use UploadThing's file object safely)
+-------------------------------------------- */
+function onComplete({ metadata, file }: { metadata: { userId: string }; file: any }) {
+  console.log("Upload complete for:", metadata.userId);
+  console.log("File URL:", file.url);
+
+  return {
+    uploadedBy: metadata.userId,
+    url: file.url,
+  };
 }
 
-// FileRouter for your app, can contain multiple FileRoutes
+/* -------------------------------------------
+   FILE ROUTER
+-------------------------------------------- */
 export const ourFileRouter = {
-  // Generic multi-image uploader
+  /* -----------------------------------------
+     MULTI IMAGE UPLOADER (GALLERY)
+  -------------------------------------------- */
   imageUploader: f({
     image: {
-      maxFileSize: "8MB",
+      maxFileSize: "128MB",
       maxFileCount: 40,
     },
   })
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  // Banner images (1x image)
+  /* -----------------------------------------
+     BANNER IMAGE (1x)
+  -------------------------------------------- */
   bannerImageRoute: f({
     image: {
-      maxFileSize: "4MB",
+      maxFileSize: "8MB",
       maxFileCount: 1,
     },
   })
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  // Before image (1x image)
+  /* -----------------------------------------
+     BEFORE IMAGE (1x)
+  -------------------------------------------- */
   beforeImageRoute: f({
     image: {
-      maxFileSize: "4MB",
+      maxFileSize: "8MB",
       maxFileCount: 1,
     },
   })
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  // After image (1x image)
+  /* -----------------------------------------
+     AFTER IMAGE (1x)
+  -------------------------------------------- */
   afterImageRoute: f({
     image: {
-      maxFileSize: "4MB",
+      maxFileSize: "8MB",
       maxFileCount: 1,
     },
   })
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  // NEW: Hero video (MP4/WebM) for the homepage hero
+  /* -----------------------------------------
+     HERO VIDEO (1x MP4/WebM)
+  -------------------------------------------- */
   heroVideoRoute: f({
     video: {
       maxFileSize: "128MB",

@@ -73,6 +73,10 @@ enum Category {
   loft
   extention
   roof
+  painting
+  flooring
+  plumbing
+  electrical
 }
 
 enum Role {

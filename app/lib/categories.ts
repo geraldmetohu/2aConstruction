@@ -25,5 +25,25 @@ export const categories = [
         id: 4,
         title: "Roof",
         name: "roof"
+    },
+        {
+        id: 5,
+        title: "Painting and Decorating",
+        name: "painting"
+    },
+        {
+        id: 6,
+        title: "Flooring",
+        name: "flooring"
+    },
+        {
+        id: 7,
+        title: "Plumbing",
+        name: "plumbing"
+    },
+        {
+        id: 8,
+        title: "Electrical",
+        name: "electrical"
     }
 ];

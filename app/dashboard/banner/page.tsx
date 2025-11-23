@@ -1,96 +1,108 @@
 import { prisma } from "@/app/lib/db";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { MoreHorizontal, PlusCircle, User2 } from "lucide-react";
+import {
+  Card, CardContent, CardDescription, CardHeader, CardTitle
+} from "@/components/ui/card";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from "@/components/ui/table";
+import { MoreHorizontal, PlusCircle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 async function getData() {
-    const data = await prisma.banner.findMany({
-        orderBy: {
-            createdAt: "desc"
-        },
-    });
-    return data;
+  return prisma.banner.findMany({
+    orderBy: { createdAt: "desc" },
+  });
 }
 
-export default async function BannerRoute(){
-    
-    const data = await getData()
+export default async function BannerRoute() {
+  const data = await getData();
 
-    return(
-        <>
-            <div className="flex items-center jusstify-end">
-                <Button asChild className="flex gap-x-2">
-                    <Link href="/dashboard/banner/create">
-                        <PlusCircle className="h-3.5 w-3.5" />
-                        <span>Add Banner</span>
-                    </Link>
-                </Button>
-            </div>
+  return (
+    <>
+      <div className="flex items-center justify-end"> 
+        <Button asChild className="flex gap-x-2">
+          <Link href="/dashboard/banner/create">
+            <PlusCircle className="h-3.5 w-3.5" />
+            <span>Add Banner</span>
+          </Link>
+        </Button>
+      </div>
 
-            <Card className="mt-5">
-                <CardHeader>
-                    <CardTitle>Banners</CardTitle>
-                    <CardDescription>Manage your banners</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Image</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Subtitle</TableHead>
-                                <TableHead>CTA Text</TableHead>
-                                <TableHead>CTA Href</TableHead>
-                                <TableHead className="text-end">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Banners</CardTitle>
+          <CardDescription>Manage your homepage banners</CardDescription>
+        </CardHeader>
 
-                        <TableBody>
-                            {data.map((item) => (
-                                <TableRow key={item.id}>
-                                    <TableCell>
-                                        <Image 
-                                            alt="Product image" 
-                                            src={item.imageString} 
-                                            width={64} 
-                                            height={64}
-                                            className="rounded-lg object-ccover h-16 w-16" />
-                                    </TableCell>
-                                    <TableCell className="font-medium">{item.title}</TableCell>
-                                    <TableCell className="font-medium">{item.subtitle}</TableCell>                                    
-                                    <TableCell className="font-medium">{item.ctaText}</TableCell>
-                                    <TableCell className="font-medium">{item.ctaHref}</TableCell>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Image</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Subtitle</TableHead>
+                <TableHead>CTA Text</TableHead>
+                <TableHead>CTA Link</TableHead>
+                <TableHead className="text-end">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
 
-                                    <TableCell className="text-end">
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button size="icon" variant="ghost">
-                                                    <MoreHorizontal className="h-4 w-4"/>
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Action</DropdownMenuLabel>
-                                                <DropdownMenuSeparator/>
-                                                <DropdownMenuItem asChild>
-                                                    <Link href={`/dashboard/banner/${item.id}/delete`}>
-                                                        Delete
-                                                    </Link> 
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                              </TableRow>
-                            ) )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
+            <TableBody>
+              {data.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    {item.imageString ? (
+                      <Image
+                        src={item.imageString}
+                        alt={item.title}
+                        width={64}
+                        height={64}
+                        className="rounded-lg object-cover h-16 w-16"
+                      />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg bg-neutral-100 grid place-items-center text-xs text-neutral-500">
+                        No image
+                      </div>
+                    )}
+                  </TableCell>
 
-        </>
-    );
+                  <TableCell>{item.title}</TableCell>
+                  <TableCell>{item.subtitle}</TableCell>
+                  <TableCell>{item.ctaText}</TableCell>
+                  <TableCell>{item.ctaHref}</TableCell>
 
+                  <TableCell className="text-end">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+
+                        <DropdownMenuItem asChild>
+                          <Link href={`/dashboard/banner/${item.id}/delete`}>
+                            Delete
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  );
 }

@@ -5,7 +5,7 @@ export const ProjectSchema = z.object({
     description: z.string(),
     status: z.enum(["draft", "published", "archived"]),
     images: z.array(z.string()).min(1, "At least one image is required"),
-    category: z.enum(["general", "refurbishment", "extention", "roof", "loft",]),
+    category: z.enum(["general", "refurbishment", "extention", "roof", "loft","painting","flooring","plumbing", "electrical"]),
     isFeatured: z.boolean().optional(),
 });
 

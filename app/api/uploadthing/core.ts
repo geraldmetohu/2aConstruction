@@ -1,6 +1,6 @@
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { createUploadthing, type FileRouter } from "uploadthing/next";
-import { UploadThingError } from "uploadthing/server";
+import { UploadThingError, UTApi } from "uploadthing/server";
 
 const f = createUploadthing();
 
@@ -20,30 +20,33 @@ async function requireAdmin() {
   const { getUser } = getKindeServerSession();
   const user = await getUser();
 
-  // Check user is logged in
   if (!user || !user.email) {
-    throw new UploadThingError("Unauthorized");
+    throw new UploadThingError("Unauthorized: no user");
   }
 
-  // Check email whitelist
   if (!allowedEmails.includes(user.email)) {
-    throw new UploadThingError("Unauthorized");
+    throw new UploadThingError("Unauthorized: not allowed");
   }
 
   return { userId: user.id };
 }
 
 /* -------------------------------------------
-   UPLOAD COMPLETE HANDLER
-   (Use UploadThing's file object safely)
+   UPLOAD COMPLETE (Return URL)
 -------------------------------------------- */
-function onComplete({ metadata, file }: { metadata: { userId: string }; file: any }) {
+function onComplete({
+  metadata,
+  file,
+}: {
+  metadata: { userId: string };
+  file: any;
+}) {
   console.log("Upload complete for:", metadata.userId);
-  console.log("File URL:", file.url);
+  console.log("File URL:", file?.url);
 
   return {
     uploadedBy: metadata.userId,
-    url: file.url,
+    url: file?.url,
   };
 }
 
@@ -51,9 +54,6 @@ function onComplete({ metadata, file }: { metadata: { userId: string }; file: an
    FILE ROUTER
 -------------------------------------------- */
 export const ourFileRouter = {
-  /* -----------------------------------------
-     MULTI IMAGE UPLOADER (GALLERY)
-  -------------------------------------------- */
   imageUploader: f({
     image: {
       maxFileSize: "128MB",
@@ -63,9 +63,6 @@ export const ourFileRouter = {
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  /* -----------------------------------------
-     BANNER IMAGE (1x)
-  -------------------------------------------- */
   bannerImageRoute: f({
     image: {
       maxFileSize: "8MB",
@@ -75,9 +72,6 @@ export const ourFileRouter = {
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  /* -----------------------------------------
-     BEFORE IMAGE (1x)
-  -------------------------------------------- */
   beforeImageRoute: f({
     image: {
       maxFileSize: "8MB",
@@ -87,9 +81,6 @@ export const ourFileRouter = {
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  /* -----------------------------------------
-     AFTER IMAGE (1x)
-  -------------------------------------------- */
   afterImageRoute: f({
     image: {
       maxFileSize: "8MB",
@@ -99,9 +90,6 @@ export const ourFileRouter = {
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
-  /* -----------------------------------------
-     HERO VIDEO (1x MP4/WebM)
-  -------------------------------------------- */
   heroVideoRoute: f({
     video: {
       maxFileSize: "128MB",
@@ -113,3 +101,26 @@ export const ourFileRouter = {
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof ourFileRouter;
+
+/* -------------------------------------------
+   GLOBAL DELETE FUNCTION (ANY FILE)
+-------------------------------------------- */
+export const deleteFile = async (url: string) => {
+  try {
+    const key = url.split("/f/")[1];
+
+    if (!key) {
+      throw new UploadThingError("Invalid file URL");
+    }
+
+    const utapi = new UTApi();
+    await utapi.deleteFiles(key);
+
+    return { success: true };
+  } catch (err) {
+    console.error("Delete failed:", err);
+    throw new UploadThingError(
+      err instanceof Error ? err.message : "Delete failed"
+    );
+  }
+};

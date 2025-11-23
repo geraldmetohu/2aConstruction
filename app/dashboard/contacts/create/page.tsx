@@ -17,6 +17,7 @@ import { useActionState, useState } from "react";
 import Image from "next/image";
 import { roles } from "@/app/lib/roles";
 import { SubmitButton } from "@/app/componets/SubmitButtons";
+import { deleteFile } from "@/app/api/uploadthing/core";
 
 
 export default function ContactCreateRoute(){
@@ -31,9 +32,19 @@ export default function ContactCreateRoute(){
         shouldRevalidate: "onInput"
     });
 
-    const handleDelete = (index: number) => {
-        setImages(images.filter((_, i) => i !== index));
-    };
+const handleDelete = async (index: number) => {
+  const urlToDelete = images[index];
+
+  // Delete from UploadThing storage
+
+await deleteFile(urlToDelete), {
+    method: "POST",
+    body: JSON.stringify({ url: urlToDelete }),
+  };
+
+  // Remove from local state
+  setImages((prev) => prev.filter((_, i) => i !== index));
+};
     return (
         <form id={form.id} onSubmit={form.onSubmit} action={action}>
             <div className="flex items-center gap-4">

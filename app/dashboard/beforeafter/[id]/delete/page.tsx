@@ -1,32 +1,31 @@
+import Link from "next/link";
 import { DeleteBeforeAfter } from "@/app/actions";
 import { SubmitButton } from "@/app/componets/SubmitButtons";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import Link from "next/link";
+import {
+  Card, CardHeader, CardTitle, CardDescription, CardFooter
+} from "@/components/ui/card";
 
-export default function DeleteBeforeAfterRoute({params}: {params: {id: string};}) {
+export default function DeleteBeforeAfterRoute({ params }: { params: { id: string } }) {
+  return (
+    <div className="flex h-[88vh] w-full items-center justify-center">
+      <Card className="max-w-xl">
+        <CardHeader>
+          <CardTitle>Delete Before/After?</CardTitle>
+          <CardDescription>This action cannot be undone.</CardDescription>
+        </CardHeader>
 
-    return (
+        <CardFooter className="flex justify-between w-full">
+          <Button variant="secondary" asChild>
+            <Link href="/dashboard/beforeafter">Cancel</Link>
+          </Button>
 
-        <div className="h-[88vh w-full flex items-center justify-center">
-            <Card className="max-w-xl">
-                <CardHeader>
-                    <CardTitle>Are you sure you want to delete this B/A</CardTitle>
-                    <CardDescription>
-                        This action can not be undone. This will permenently delete this B/A and remove all data from our servers.
-                    </CardDescription>
-                </CardHeader>
-                <CardFooter className="w-full flex justify-between">
-                    <Button variant="secondary" asChild>
-                        <Link href="/dashboard/beforeafter">Cancel</Link>
-                    </Button>
-                    <form action={DeleteBeforeAfter} >
-                        <input type="hidden" name="beforeafterId" value={params.id}/>
-                        <SubmitButton variant="destructive" text="Delete B/A"/>
-                    </form>
-                </CardFooter>
-            </Card>
-        </div>
-
-    );
+          <form action={DeleteBeforeAfter}>
+            <input type="hidden" name="beforeafterId" value={params.id} />
+            <SubmitButton variant="destructive" text="Delete" />
+          </form>
+        </CardFooter>
+      </Card>
+    </div>
+  );
 }

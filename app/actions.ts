@@ -5,6 +5,8 @@ import {parseWithZod} from "@conform-to/zod"
 import { bannerSchema, beforeafterSchema, ProjectSchema, ContactSchema, heroVideoSchema } from "./lib/zodSchemas";
 import { prisma } from "./lib/db";
 import nodemailer from "nodemailer";
+import { headers } from "next/headers";
+import { deleteFile } from "./api/uploadthing/core";
 
 export async function CreateProject(prevState: unknown,formData: FormData) {
     const { getUser} = getKindeServerSession();
@@ -136,11 +138,27 @@ export async function DeleteBeforeAfter (formData: FormData) {
         return redirect("/");
     }
 
-    await prisma.beforeAfter.delete({
-        where: {
-            id: formData.get("beforeafterId") as string,
-        },
-    });
+const id = formData.get("beforeafterId") as string;
+
+  const entry = await prisma.beforeAfter.findUnique({
+    where: { id },
+  });
+
+  if (!entry) return;
+
+  // delete both images
+  if (entry.imageStringBefore) {
+    await deleteFile(entry.imageStringBefore);
+  }
+
+  if (entry.imageStringAfter) {
+    await deleteFile(entry.imageStringAfter);
+  }
+
+  // delete DB
+  await prisma.beforeAfter.delete({
+    where: { id },
+  });
     redirect("/dashboard/beforeafter");
 }
 
@@ -278,11 +296,24 @@ export async function DeleteBanner (formData: FormData) {
         return redirect("/");
     }
 
-    await prisma.banner.delete({
-        where: {
-            id: formData.get("bannerId") as string,
-        },
-    });
+  const id = formData.get("bannerId") as string;
+
+  const banner = await prisma.banner.findUnique({
+    where: { id },
+  });
+
+  if (!banner) return;
+
+  // Delete UploadThing file
+  if (banner.imageString) {
+    await deleteFile(banner.imageString);
+  }
+
+  // Delete database entry
+  await prisma.banner.delete({
+    where: { id },
+  });
+
     redirect("/dashboard/banner");
 }
     
@@ -376,9 +407,30 @@ export async function CreateHeroVideo(_: any, formData: FormData) {
   redirect("/dashboard/hero-videos");
 }
 
+
+
+
+
 export async function DeleteHeroVideo(formData: FormData) {
-  const id = String(formData.get("id"));
-  if (!id) return;
-  await prisma.heroVideo.delete({ where: { id } });
+  const id = formData.get("id") as string;
+
+  const hero = await prisma.heroVideo.findUnique({
+    where: { id },
+  });
+
+  if (!hero) return;
+
+  // delete video and poster (both may be null)
+  if (hero.videoUrl) {
+    await deleteFile(hero.videoUrl);
+  }
+
+  if (hero.posterUrl) {
+    await deleteFile(hero.posterUrl);
+  }
+
+  await prisma.heroVideo.delete({
+    where: { id },
+  });
   redirect("/dashboard/hero-videos");
 }

@@ -1,118 +1,151 @@
 "use client";
-import { CreateBeforeAfter,  } from "@/app/actions";
+
+import { useState, useActionState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { ChevronLeft } from "lucide-react";
+import { CreateBeforeAfter } from "@/app/actions";
 import { SubmitButton } from "@/app/componets/SubmitButtons";
 import { UploadDropzone } from "@/app/lib/uploadthing";
 import { beforeafterSchema } from "@/app/lib/zodSchemas";
+import {
+  Card, CardHeader, CardTitle, CardDescription,
+  CardContent, CardFooter
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod";
-import { ChevronLeft } from "lucide-react";
-import Image from "next/image";
-import Link from "next/link";
-import { useActionState, useState } from "react";
-import { useFormState } from "react-dom";
 
-export default function BeforeafterRoute(){
-    const [image, setImages] = useState <string | undefined>(undefined);
+export default function CreateBeforeAfterPage() {
+  const [beforeImage, setBeforeImage] = useState<string | undefined>();
+  const [afterImage, setAfterImage] = useState<string | undefined>();
 
-    const [lastResult, action] = useActionState(CreateBeforeAfter, undefined);
-    const [form, fields] = useForm({
-        lastResult,
+  const [lastResult, action] = useActionState(CreateBeforeAfter, undefined);
 
-        onValidate({formData}) {
-           return parseWithZod(formData, {schema: beforeafterSchema}) 
-        },
-        shouldValidate: "onBlur",
-        shouldRevalidate: "onInput"
-    });
-    return (
-        <form id={form.id} onSubmit={form.onSubmit} action={action}>
-            <div className="flex items-center gap-x-4">
-                <Button asChild variant="outline" size="icon">
-                    <Link href="/dashboard/beforeafter">
-                        <ChevronLeft className="w-4 h-4" />
-                    </Link>
+  const [form, fields] = useForm({
+    lastResult,
+    onValidate({ formData }) {
+      return parseWithZod(formData, { schema: beforeafterSchema });
+    },
+    shouldValidate: "onBlur",
+    shouldRevalidate: "onInput",
+  });
 
-                </Button>
-                <h1 className="text-xl font-semibold tracking-tight">New B/A Image</h1>
+  const extractURL = (file: any) =>
+    file.url ?? file.serverData?.url ?? "";
+
+  return (
+    <form id={form.id} onSubmit={form.onSubmit} action={action}>
+      <div className="flex items-center gap-x-4">
+        <Button asChild variant="outline" size="icon">
+          <Link href="/dashboard/beforeafter">
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+
+        <h1 className="text-xl font-semibold tracking-tight">
+          New Before / After
+        </h1>
+      </div>
+
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>Before/After Details</CardTitle>
+          <CardDescription>Add a new transformation showcase</CardDescription>
+        </CardHeader>
+
+        <CardContent>
+          <div className="flex flex-col gap-6">
+
+            {/* Title */}
+            <div className="flex flex-col gap-2">
+              <Label>Title</Label>
+              <Input
+                name={fields.title.name}
+                defaultValue={fields.title.initialValue}
+              />
+              <p className="text-red-500 text-sm">{fields.title.errors}</p>
             </div>
-            <Card>
-                <CardHeader className="mt-5">
-                    <CardTitle>B/A Details</CardTitle>
-                    <CardDescription>Create your B/A here</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex flex-col gap-y-6">
-                        <div className="flex flex-col gap-3">
-                            <Label>Name</Label>
-                            <Input name={fields.title.name} key={fields.title.key} defaultValue={fields.title.initialValue} type="text" placeholder="Create title for B/A Image" />
-                            <p className="text-red-500">{fields.title.errors}</p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Label> Before Image</Label>
-                            <input 
-                                type="hidden" 
-                                value={image ?? ""} // ✅ Ensure it's never undefined
-                                key={fields.imageStringBefore.key} 
-                                name={fields.imageStringBefore.name} 
-/>
 
-                            {image !== undefined ? (
-                                <Image 
-                                    src={image} 
-                                    alt="Before Image" 
-                                    width={200} height={200} 
-                                    className="w-[200] h-[200] object-cover border rounded-lg" />
-                            ): (
-                                <UploadDropzone 
-                                onClientUploadComplete={(res) => {
-                                    setImages(res[0].url);
-                                }} 
-                                onUploadError={() => {
-                                    alert("Something went wrong")
-                                }}
-                                endpoint="beforeImageRoute" />
-                            )}
+            {/* BEFORE IMAGE */}
+            <input
+              type="hidden"
+              name={fields.imageStringBefore.name}
+              value={beforeImage ?? ""}
+            />
 
-                            <p className="text-red-500">{fields.imageStringBefore.errors}</p>
-                        </div>
-                        <div className="flex flex-col gap-3">
-                            <Label> After Image</Label>
-                            <input 
-                                type="hidden" 
-                                value={image ?? ""} // ✅ Ensure it's never undefined
-                                key={fields.imageStringAfter.key} 
-                                name={fields.imageStringAfter.name} 
-/>
+            <div className="flex flex-col gap-2">
+              <Label>Before Image</Label>
 
-                            {image !== undefined ? (
-                                <Image 
-                                    src={image} 
-                                    alt="After Image" 
-                                    width={200} height={200} 
-                                    className="w-[200] h-[200] object-cover border rounded-lg" />
-                            ): (
-                                <UploadDropzone 
-                                onClientUploadComplete={(res) => {
-                                    setImages(res[0].url);
-                                }} 
-                                onUploadError={() => {
-                                    alert("Something went wrong")
-                                }}
-                                endpoint="afterImageRoute" />
-                            )}
+              {beforeImage ? (
+                <Image
+                  src={beforeImage}
+                  alt="Before"
+                  width={200}
+                  height={200}
+                  className="rounded-lg border object-cover"
+                />
+              ) : (
+                <UploadDropzone
+                  endpoint="beforeImageRoute"
+                  onClientUploadComplete={(files: any[]) => {
+                    setBeforeImage(extractURL(files[0]));
+                  }}
+                  onUploadError={(error) =>
+                    alert(error instanceof Error ? error.message : "Upload failed")
+                  }
+                />
+              )}
 
-                            <p className="text-red-500">{fields.imageStringAfter.errors}</p>
-                        </div>
-                    </div>
-                </CardContent>
-                <CardFooter>
-                    <SubmitButton text="Create B/A Image" />
-                </CardFooter>
-            </Card>
-        </form>
-    );
+              <p className="text-red-500 text-sm">
+                {fields.imageStringBefore.errors}
+              </p>
+            </div>
+
+            {/* AFTER IMAGE */}
+            <input
+              type="hidden"
+              name={fields.imageStringAfter.name}
+              value={afterImage ?? ""}
+            />
+
+            <div className="flex flex-col gap-2">
+              <Label>After Image</Label>
+
+              {afterImage ? (
+                <Image
+                  src={afterImage}
+                  alt="After"
+                  width={200}
+                  height={200}
+                  className="rounded-lg border object-cover"
+                />
+              ) : (
+                <UploadDropzone
+                  endpoint="afterImageRoute"
+                  onClientUploadComplete={(files: any[]) => {
+                    setAfterImage(extractURL(files[0]));
+                  }}
+                  onUploadError={(error) =>
+                    alert(error instanceof Error ? error.message : "Upload failed")
+                  }
+                />
+              )}
+
+              <p className="text-red-500 text-sm">
+                {fields.imageStringAfter.errors}
+              </p>
+            </div>
+
+          </div>
+        </CardContent>
+
+        <CardFooter>
+          <SubmitButton text="Create Before/After" />
+        </CardFooter>
+      </Card>
+    </form>
+  );
 }

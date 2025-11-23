@@ -19,7 +19,7 @@ export default async function HeroVideosRoute() {
     <>
       <div className="flex items-center justify-end">
         <Button asChild className="flex gap-x-2">
-          <Link href="/dashboard/hero-videos/create">
+          <Link href="/dashboard/hero/create">
             <PlusCircle className="h-3.5 w-3.5" />
             <span>Add Hero Video</span>
           </Link>
@@ -84,7 +84,7 @@ export default async function HeroVideosRoute() {
                         <DropdownMenuLabel>Action</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/hero-videos/${item.id}/delete`}>Delete</Link>
+                          <Link href={`/dashboard/hero/${item.id}/delete`}>Delete</Link>
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>

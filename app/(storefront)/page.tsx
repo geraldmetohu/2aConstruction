@@ -10,7 +10,7 @@ import { InteractiveProof } from "../componets/storefront/StatsBar";
 import { ProcessLifeline } from "../componets/storefront/ProcessSection";
 import { CTAQuote } from "../componets/storefront/CTAQuote";
 import { StickyContactBar } from "../componets/storefront/StickyContactBar";
-import { BeforeAfterGallery } from "../componets/dashboard/BeforeAfterGallery";
+import { BeforeAfterGallery } from "../componets/storefront/BeforeAfterGallery";
 import { Reveal, RevealStagger } from "@/components/ui/Reveal";
 import { Hero } from "../componets/storefront/Hero";
 

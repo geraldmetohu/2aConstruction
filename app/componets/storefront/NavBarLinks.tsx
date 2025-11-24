@@ -19,11 +19,17 @@ export const navbarLinks = [
       { id: 14, name: "Loft", href: "/portfolio/loft" },
       { id: 15, name: "Extention", href: "/portfolio/extention" },
       { id: 16, name: "Roofing", href: "/portfolio/roof" },
+      { id: 17, name: "Painting and Decorating", href: "/portfolio/painting" },
+      { id: 18, name: "Flooring", href: "/portfolio/flooring" },
+      { id: 19, name: "Plumbing", href: "/portfolio/plumbing" },
+      { id: 20, name: "Electrical", href: "/portfolio/electrical" },
+
     ],
   },
   { id: 7, name: "Services", href: "/services" },
   { id: 8, name: "About us", href: "/about" },
   { id: 9, name: "Contact", href: "/contact" },
+  { id: 21, name: "Certifiations and Compilance", href: "/certifications"}
 ];
 
 export function NavbarLinks() {
@@ -85,7 +91,7 @@ export function NavbarLinks() {
             <div
               role="menu"
               className={cn(
-                "absolute left-0 top-full z-50 w-56 rounded-md border border-amber-500/30 bg-black text-white shadow-xl p-2",
+                "absolute left-0 top-full z-50 w-56 rounded-md border border-amber-500/30 bg-black text-white shadow-xl p-2 ",
                 // hidden by default…
                 "opacity-0 invisible translate-y-1 transition",
                 // …shown on hover/focus within the wrapper
@@ -102,7 +108,7 @@ export function NavbarLinks() {
                     role="menuitem"
                     className={cn(
                       "block px-3 py-2 rounded-md transition",
-                      subActive ? "bg-amber-500 text-black" : "hover:bg-amber-500 hover:text-black"
+                      subActive ? "bg-amber-500 text- " : " hover:text-amber-400 hover:bg-white/5"
                     )}
                   >
                     {sub.name}

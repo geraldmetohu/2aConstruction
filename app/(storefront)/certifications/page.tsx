@@ -119,31 +119,91 @@ export default function CertificationsPage() {
 
           {/* Placeholder link for certifications */}
           <Link
-            href="#future-certifications"
+            href="#certifications"
             className="
               text-sm font-semibold text-black hover:text-[#ffc92e]
               transition-colors duration-300
               border-b-2 border-transparent hover:border-[#ffc92e]
             "
           >
-            Future Certifications
+            Certifications
           </Link>
         </motion.div>
+      {/* ---------------------- */}
+{/*  CERTIFICATIONS */}
+{/* ---------------------- */}
+<motion.section
+  id="certifications"
+  initial={{ opacity: 0, y: 40 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  viewport={{ once: true }}
+  transition={{ duration: 0.6 }}
+  className="
+    max-w-4xl mx-auto space-y-6
+    bg-blue-50 border border-blue-200
+    rounded-2xl shadow-2xl
+    p-8
+  "
+>
+  {/* Title & Description */}
+  <div className="space-y-3 px-4">
+    <div className="flex items-center gap-3">
+      <div className="w-2 h-10 bg-blue-600 rounded-full shadow-md" />
+      <h2 className="text-3xl font-bold text-blue-800">
+        SafeContractor Accreditation
+      </h2>
+    </div>
 
-        {/* ---------------------- */}
-        {/*  FUTURE CERTIFICATION PLACEHOLDER */}
-        {/* ---------------------- */}
-        <section
-          id="future-certifications"
-          className=" hidden max-w-4xl mx-auto mt-10 mb-10 p-10 bg-white border border-neutral-300 rounded-2xl shadow-xl text-center"
-        >
-          <h2 className="text-3xl font-bold text-black mb-4">Accreditations Coming Soon</h2>
-          <p className="text-neutral-700 leading-relaxed max-w-2xl mx-auto">
-            This section will showcase verified certifications such as CHAS, SafeContractor, 
-            Constructionline Gold, ISO 9001 / 14001 / 45001, and more. Once approved, 
-            downloadable certificates and validation links will appear here.
-          </p>
-        </section>
+    <p className="text-blue-900 text-lg leading-relaxed pl-5 border-l-2 border-blue-300">
+      2A Construction Ltd is officially approved under the SafeContractor scheme,
+      having met the SSIP Core Criteria through independent assessment of our
+      health & safety policies, procedures, and site practices.
+    </p>
+
+    <ul className="pl-5 text-sm text-blue-900 space-y-1">
+      <li><strong>Certificate Number:</strong> KV8788</li>
+      <li><strong>Valid Until:</strong> 15 December 2026</li>
+    </ul>
+  </div>
+
+  {/* PDF Viewer */}
+  <div className="bg-white p-6 shadow-2xl rounded-2xl border border-blue-200">
+    <div className="overflow-hidden rounded-xl border border-blue-200 shadow-inner">
+      <iframe
+        src="/pdf/SCCertificate15122025.pdf#zoom=65"
+        className="w-full h-[500px] md:h-[650px] bg-white"
+      />
+    </div>
+  </div>
+
+  {/* Actions */}
+  <div className="flex flex-wrap gap-4 justify-center pt-4">
+    <a
+      href="/pdf/SCCertificate15122025.pdf"
+      target="_blank"
+      className="
+        px-6 py-3 rounded-lg
+        bg-blue-700 text-white font-semibold text-sm
+        hover:bg-blue-800 transition
+      "
+    >
+      Open Certificate (PDF)
+    </a>
+
+    <a
+      href="https://www.ssipportal.org.uk/"
+      target="_blank"
+      className="
+        px-6 py-3 rounded-lg
+        border border-blue-700 text-blue-700 font-semibold text-sm
+        hover:bg-blue-700 hover:text-white transition
+      "
+    >
+      Verify via SSIP Portal
+    </a>
+  </div>
+</motion.section>
+
 
         {/* ---------------------- */}
         {/*  POLICY SECTIONS */}

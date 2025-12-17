@@ -13,9 +13,11 @@ import { StickyContactBar } from "../componets/storefront/StickyContactBar";
 import { BeforeAfterGallery } from "../componets/storefront/BeforeAfterGallery";
 import { Reveal, RevealStagger } from "@/components/ui/Reveal";
 import { Hero } from "../componets/storefront/Hero";
+import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
+export const dynamic = "force-dynamic";
 
 export default function IndexPage() {
   const year = new Date().getFullYear();
@@ -23,7 +25,8 @@ export default function IndexPage() {
   return (
     <>
       <Hero/>
-
+{/* SAFE CONTRACTOR – TRUST SECTION */}
+<SafeContractorBadgeSection />
       {/* Services overview (fast paths) */}
       <RevealStagger>
         <ServicesOverview />

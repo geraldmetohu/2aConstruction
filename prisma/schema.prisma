@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -13,60 +7,74 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User{
-  id String @id @unique
-  email String
-  firstName String
-  lastName String
+model User {
+  id           String    @id
+  email        String
+  firstName    String
+  lastName     String
   profileImage String
-  createdAt DateTime @default(now())
+  createdAt    DateTime? @default(now()) @db.Timestamp(6)
 }
 
 model Project {
-  id String  @id @default(uuid())
-  name String
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
   description String
-  status ProjectStatus
-  images String[]
-  category Category
-  isFeatured Boolean @default(false)
-  createdAt DateTime @default(now())
+  status      ProjectStatus
+  images      String[]
+  category    Category
+  isFeatured  Boolean?      @default(false)
+  createdAt   DateTime?     @default(now()) @db.Timestamp(6)
 }
 
 model Banner {
-  id          String   @id @default(uuid())
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   title       String
   subtitle    String?
-  ctaText     String?    // <-- new
-  ctaHref     String?    // <-- new
+  ctaText     String?
+  ctaHref     String?
   imageString String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime? @default(now()) @db.Timestamp(6)
 }
 
-model BeforeAfter{
-  id String @id @default(uuid())
-  title String
+model BeforeAfter {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title             String
   imageStringBefore String
-  imageStringAfter String
-  createdAt DateTime @default(now())
+  imageStringAfter  String
+  createdAt         DateTime? @default(now()) @db.Timestamp(6)
 }
 
 model Contact {
-  id String @id @default(uuid())
-  name String
-  email String
-  phone String
-  role Role
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  email       String
+  phone       String
+  role        Role
   description String
-  address String
-  price String
-  createdAt DateTime @default(now())
+  address     String
+  price       String
+  createdAt   DateTime? @default(now()) @db.Timestamp(6)
 }
+
+model HeroVideo {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title     String
+  subtitle  String?
+  videoUrl  String
+  posterUrl String?
+  ctaText   String?
+  ctaHref   String?
+  isActive  Boolean?  @default(true)
+  createdAt DateTime? @default(now()) @db.Timestamp(6)
+}
+
 enum ProjectStatus {
   draft
   published
   archived
 }
+
 enum Category {
   general
   refurbishment
@@ -97,16 +105,4 @@ enum Role {
   skip
   architect
   other
-}
-
-model HeroVideo {
-id String @id @default(uuid())
-title String
-subtitle String?
-videoUrl String
-posterUrl String?
-ctaText String?
-ctaHref String?
-isActive Boolean @default(true)
-createdAt DateTime @default(now())
 }

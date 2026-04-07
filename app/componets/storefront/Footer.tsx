@@ -72,10 +72,9 @@ export default function Footer({
           </ul>
 
           <div className="mt-6 flex gap-4">
-            <a href="#" className="hover:text-yellow-300"><Facebook size={18} /></a>
-            <a href="#" className="hover:text-yellow-300"><Twitter size={18} /></a>
-            <a href="#" className="hover:text-yellow-300"><Linkedin size={18} /></a>
-            <a href="#" className="hover:text-yellow-300"><Instagram size={18} /></a>
+            <a href="https://www.facebook.com/2A.Construction.WA/" className="hover:text-yellow-300"><Facebook size={18} /></a>
+            <a href="https://uk.linkedin.com/company/2a-construction-ltd" className="hover:text-yellow-300"><Linkedin size={18} /></a>
+            <a href="https://www.instagram.com/2a.construction.ltd/" className="hover:text-yellow-300"><Instagram size={18} /></a>
           </div>
         </div>
 

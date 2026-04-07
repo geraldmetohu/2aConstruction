@@ -7,52 +7,80 @@ import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { extractRouterConfig } from "uploadthing/server";
 import { ourFileRouter } from "./api/uploadthing/core";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  // Important for canonical + absolute social URLs
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://2aconstruction.co.uk"),
-  title: { default: "2A Construction | London Builders", template: "%s | 2A Construction" },
+  metadataBase: new URL("https://2aconstruction.co.uk"),
+  title: {
+    default: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
+    template: "%s | 2A Construction",
+  },
   description:
-    "London construction specialists for extensions, loft conversions, refurbishments, roofing, and general building. Fully insured. Free quotes.",
+    "2A Construction provides loft conversions, house extensions, roofing, refurbishments and general building services across North London, including Enfield, Barnet and Walthamstow. Fully insured. Free quotes.",
   keywords: [
-    "construction London",
-    "builders London",
-    "house extension London",
-    "loft conversion London",
-    "refurbishment London",
-    "roofing contractors London",
-    "general building",
     "2A Construction",
+    "builders north london",
+    "loft conversions north london",
+    "loft conversion enfield",
+    "loft conversion barnet",
+    "builders enfield",
+    "builders barnet",
+    "builders walthamstow",
+    "roofing north london",
+    "house extensions north london",
+    "refurbishments north london",
+    "general building london",
   ],
   applicationName: "2A Construction",
   authors: [{ name: "2A Construction" }],
   creator: "2A Construction",
   publisher: "2A Construction",
   category: "Construction",
+  alternates: {
+    canonical: "/",
+  },
   robots: {
     index: true,
     follow: true,
-    googleBot: { index: true, follow: true, "max-snippet": -1, "max-image-preview": "large", "max-video-preview": -1 },
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
+    },
   },
-  alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "en_GB",
     url: "/",
     siteName: "2A Construction",
-    title: "2A Construction | London Builders",
+    title: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
     description:
-      "Extensions, lofts, roofing, refurbishments—quality building work across London. Free, no-obligation quotes.",
-    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "2A Construction" }],
+      "Trusted North London builders for loft conversions, house extensions, roofing and refurbishments in Enfield, Barnet, Walthamstow and surrounding areas.",
+    images: [
+      {
+        url: "/og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "2A Construction - North London Builders",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "2A Construction | London Builders",
-    description: "Extensions, lofts, roofing, refurbishments—quality building work across London. Free quotes.",
+    title: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
+    description:
+      "Trusted North London builders for loft conversions, house extensions, roofing and refurbishments.",
     images: ["/og.jpg"],
-    creator: "@yourhandle",
   },
   icons: {
     icon: [
@@ -77,7 +105,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full scroll-smooth">
+    <html lang="en-GB" className="h-full scroll-smooth">
       <body
         suppressHydrationWarning
         className={[
@@ -92,10 +120,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ].join(" ")}
       >
         <NextSSRPlugin routerConfig={extractRouterConfig(ourFileRouter)} />
-        {/* …rest unchanged */}
-        {/* UploadThing SSR config */}
 
-        {/* JSON-LD: LocalBusiness (Construction) */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -103,31 +128,54 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               "@context": "https://schema.org",
               "@type": "HomeAndConstructionBusiness",
               name: "2A Construction",
-              url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com",
+              url: "https://2aconstruction.co.uk",
+              logo: "https://2aconstruction.co.uk/og.jpg",
+              image: ["https://2aconstruction.co.uk/og.jpg"],
               telephone: "+44 790 3095 967",
               email: "2a.construction.uk@gmail.com",
-              address: { "@type": "PostalAddress", addressLocality: "London", addressCountry: "GB" },
-              areaServed: "London",
-              image: [`${process.env.NEXT_PUBLIC_SITE_URL ?? "https://example.com"}/og.jpg`],
+              priceRange: "££",
+              address: {
+                "@type": "PostalAddress",
+                addressLocality: "London",
+                addressCountry: "GB",
+              },
+              areaServed: [
+                "North London",
+                "Enfield",
+                "Barnet",
+                "Walthamstow",
+                "London",
+              ],
               openingHours: "Mo-Fr 08:00-18:00, Sa 09:00-14:00",
               sameAs: [
-                "https://www.facebook.com/yourpage",
-                "https://www.instagram.com/yourpage",
                 "https://www.linkedin.com/company/2a-construction-ltd/?originalSubdomain=uk",
               ],
-              priceRange: "££",
-              aggregateRating: { "@type": "AggregateRating", ratingValue: "4.9", reviewCount: "87" },
               makesOffer: [
-                { "@type": "Offer", itemOffered: { "@type": "Service", name: "House Extensions" } },
-                { "@type": "Offer", itemOffered: { "@type": "Service", name: "Loft Conversions" } },
-                { "@type": "Offer", itemOffered: { "@type": "Service", name: "Roofing" } },
-                { "@type": "Offer", itemOffered: { "@type": "Service", name: "Refurbishments" } },
+                {
+                  "@type": "Offer",
+                  itemOffered: { "@type": "Service", name: "Loft Conversions" },
+                },
+                {
+                  "@type": "Offer",
+                  itemOffered: { "@type": "Service", name: "House Extensions" },
+                },
+                {
+                  "@type": "Offer",
+                  itemOffered: { "@type": "Service", name: "Roofing" },
+                },
+                {
+                  "@type": "Offer",
+                  itemOffered: { "@type": "Service", name: "Refurbishments" },
+                },
+                {
+                  "@type": "Offer",
+                  itemOffered: { "@type": "Service", name: "General Building" },
+                },
               ],
             }),
           }}
         />
 
-        {/* Page chrome */}
         <div className="relative">
           <div className="pointer-events-none fixed inset-x-0 top-0 h-[16rem] -z-10 bg-gradient-to-b from-black/15 to-transparent dark:from-black/30" />
           {children}

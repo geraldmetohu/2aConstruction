@@ -1,6 +1,7 @@
 // app/(storefront)/page.tsx
 import Image from "next/image";
 import Link from "next/link";
+import Script from "next/script";
 // app/(storefront)/page.tsx
 import { ServicesOverview } from "../componets/storefront/ServicesOverview";
 
@@ -14,6 +15,7 @@ import { BeforeAfterGallery } from "../componets/storefront/BeforeAfterGallery";
 import { Reveal, RevealStagger } from "@/components/ui/Reveal";
 import { Hero } from "../componets/storefront/Hero";
 import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
+import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -25,8 +27,35 @@ export default function IndexPage() {
   return (
     <>
       <Hero/>
-{/* SAFE CONTRACTOR – TRUST SECTION */}
-<SafeContractorBadgeSection />
+      {/* SAFE CONTRACTOR – TRUST SECTION */}
+      <SafeContractorBadgeSection />
+      <Reveal>
+        <ReviewsWidgets />
+      </Reveal>
+      <section className="py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="rounded-3xl border border-neutral-200 bg-gradient-to-br from-white via-neutral-50 to-amber-50/40 p-8 md:p-12 shadow-[0_20px_60px_rgba(0,0,0,0.06)]">
+            <div className="max-w-4xl">
+              <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">
+                North London Builders
+              </span>
+
+              <h2 className="mt-5 text-3xl md:text-5xl font-extrabold tracking-tight text-neutral-900 leading-tight">
+                Loft conversions, extensions, roofing and refurbishments across North London
+              </h2>
+
+              <p className="mt-5 text-base md:text-lg leading-8 text-neutral-700 max-w-3xl">
+                2A Construction delivers high-quality building work for homeowners across North London,
+                including Enfield, Barnet, Walthamstow and surrounding areas. We specialise in loft
+                conversions, house extensions, roofing, refurbishments and general building, with a
+                strong focus on workmanship, clear communication and reliable project delivery.
+              </p>
+
+            
+            </div>
+          </div>
+        </div>
+      </section>
       {/* Services overview (fast paths) */}
       <RevealStagger>
         <ServicesOverview />
@@ -37,9 +66,9 @@ export default function IndexPage() {
       </Reveal>
 
       <Reveal>
-<InteractiveProof
-  beforeAfter={{ before: "/images/refurb.jpg", after: "/images/ext.jpeg" }}
-/>
+      <InteractiveProof
+          beforeAfter={{ before: "/images/refurb.jpg", after: "/images/ext.jpeg" }}
+        />
       </Reveal>
 
       {/* Latest work (scroll-snap gallery) */}
@@ -75,6 +104,8 @@ export default function IndexPage() {
         />
       </Reveal>
 
+
+
       {/* Social proof */}
       <Reveal>
         <Testimonials />
@@ -100,8 +131,8 @@ export default function IndexPage() {
             "@context": "https://schema.org",
             "@type": "LocalBusiness",
             name: "2A Construction",
-            image: "https://your-domain.com/2a_l.png",
-            url: "https://your-domain.com/",
+            image: "https://2aconstruction.co.uk/2a_l.png",
+            url: "https://2aconstruction.co.uk",
             telephone: "+44 790 3095 967",
             address: {
               "@type": "PostalAddress",
@@ -124,16 +155,16 @@ export default function IndexPage() {
             ],
             priceRange: "££",
             sameAs: [
-              "https://facebook.com/",
-              "https://twitter.com/",
-              "https://www.instagram.com/",
-              "https://www.linkedin.com/",
+              "https://www.facebook.com/profile.php?id=100095250444954",
+              "https://www.instagram.com/2a.construction.ltd/",
+              "https://uk.linkedin.com/company/2a-construction-ltd",
             ],
           }),
         }}
       />
     </>
   );
+  
 }
 
 
@@ -205,7 +236,6 @@ function Testimonials() {
     </section>
   );
 }
-
 function HomeFAQ() {
   const qs = [
     {

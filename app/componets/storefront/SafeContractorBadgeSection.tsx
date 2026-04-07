@@ -42,7 +42,7 @@ export function SafeContractorBadgeSection() {
 
             <div className="flex flex-wrap gap-4 pt-4">
               <Link
-                href="/pdf/SCCertificate-15122025.pdf"
+                href="/pdf/SCCertificate15122025.pdf"
                 target="_blank"
                 className="px-6 py-3 rounded-lg bg-white text-blue-900 font-semibold hover:bg-blue-100 transition"
               >

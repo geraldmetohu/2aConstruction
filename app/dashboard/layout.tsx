@@ -9,22 +9,22 @@ import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { redirect } from "next/navigation";
 import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components";
 
+export default async function DashboardLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const { getUser } = getKindeServerSession();
+  const user = await getUser();
 
-export default async function DashboardLayout({children}: {children: ReactNode} ) {
-   const {getUser} = getKindeServerSession()
-   const user = await getUser()
+  const allowedAdmins =
+    process.env.ADMIN_EMAILS?.split(",").map((e) => e.trim().toLowerCase()) || [];
 
-   if (!user || user.email !== "geraldmetohu@gmail.com"){
-        return redirect("/");
-    }const allowedAdmins = [
-  "geraldmetohu@gmail.com",
-  "hasanajaleksios@icloud.com",
-  "ensisako11@gmail.com",
-];
+  const email = user?.email?.toLowerCase();
 
-if (!user || !user.email || !allowedAdmins.includes(user.email)) {
-  return redirect("/");
-}
+  if (!email || !allowedAdmins.includes(email)) {
+    return redirect("/");
+  }
 
     return (
         <div className="flex w-full flex-col max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

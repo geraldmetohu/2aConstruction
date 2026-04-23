@@ -27,6 +27,7 @@ export const navbarLinks = [
     ],
   },
   { id: 7, name: "Services", href: "/services" },
+  { id: 22, name: "Estimator", href: "/estimator" },
   { id: 8, name: "About us", href: "/about" },
   { id: 9, name: "Contact", href: "/contact" },
   { id: 21, name: "Certifiations and Compilance", href: "/certifications"}

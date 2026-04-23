@@ -28,6 +28,10 @@ const links = [
     {
         name: "Contacts",
         href: "/dashboard/contacts"
+    },
+    {
+        name: "Clients",
+        href: "/dashboard/clients"
     }
 ];
 

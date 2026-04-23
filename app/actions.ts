@@ -7,6 +7,7 @@ import { prisma } from "./lib/db";
 import nodemailer from "nodemailer";
 import { headers } from "next/headers";
 import { deleteFile } from "./api/uploadthing/core";
+import { randomUUID } from "crypto";
 
 export async function CreateProject(prevState: unknown,formData: FormData) {
     const { getUser} = getKindeServerSession();
@@ -395,6 +396,236 @@ function nl2br(s: string) {
   return s.replace(/\n/g, "<br/>");
 }
 
+function getFormString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function formDataToSnapshot(formData: FormData) {
+  const snapshot: Record<string, string | string[]> = {};
+
+  for (const key of Array.from(new Set(formData.keys()))) {
+    if (key === "company") continue;
+
+    const values = formData.getAll(key)
+      .map((value) => {
+        if (typeof value === "string") return value.trim();
+        return value.name ? `[file] ${value.name}` : "[file]";
+      })
+      .filter(Boolean);
+
+    snapshot[key] = values.length > 1 ? values : values[0] ?? "";
+  }
+
+  return snapshot;
+}
+
+async function sendEstimatorEmails({
+  fullName,
+  email,
+  phone,
+  address,
+  preferredContact,
+  projectType,
+  budgetRange,
+  foundUs,
+  startTimeframe,
+  projectId,
+  snapshot,
+}: {
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  preferredContact: string;
+  projectType: string;
+  budgetRange: string;
+  foundUs: string;
+  startTimeframe: string;
+  projectId: string;
+  snapshot: Record<string, string | string[]>;
+}) {
+  if (!isResendEmailConfigured()) {
+    throw new Error("Estimator email is not configured. Set RESEND_API_KEY in .env.");
+  }
+
+  const from = process.env.RESEND_FROM ?? "2A Construction <quotes@2aconstruction.co.uk>";
+  const to = process.env.CONTACT_TO ?? "2a.construction.uk@gmail.com";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://2aconstruction.co.uk";
+  const portfolioUrl = `${siteUrl}/portfolio/all`;
+  const logoUrl = `${siteUrl}/2a_l.png`;
+  const detailsRows = Object.entries(snapshot)
+    .map(([key, value]) => {
+      const readableKey = key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
+      const readableValue = Array.isArray(value) ? value.join(", ") : value;
+      return `<tr><td style="padding:6px;border:1px solid #ddd;"><b>${escapeHtml(readableKey)}</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(readableValue)}</td></tr>`;
+    })
+    .join("");
+
+  await sendResendEmail({
+    from,
+    to,
+    subject: `New estimator form submitted by ${fullName}`,
+    replyTo: email,
+    text: [
+      "New estimator form has been sent in your account.",
+      "",
+      `Project ID: ${projectId}`,
+      `Name: ${fullName}`,
+      `Email: ${email}`,
+      `Phone: ${phone}`,
+      `Address: ${address}`,
+      `Preferred contact: ${preferredContact}`,
+      `Project type: ${projectType}`,
+      budgetRange ? `Budget range: ${budgetRange}` : null,
+      foundUs ? `Where they found us: ${foundUs}` : null,
+      startTimeframe ? `Looking to start: ${startTimeframe}` : null,
+    ].filter(Boolean).join("\n"),
+    html: `
+      <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; color:#171717;">
+        <h2>New estimator form has been sent in your account</h2>
+        <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Project ID</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(projectId)}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Name</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(fullName)}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Email</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(email)}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Phone</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(phone)}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Address</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(address)}</td></tr>
+          <tr><td style="padding:6px;border:1px solid #ddd;"><b>Preferred contact</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(preferredContact)}</td></tr>
+          ${detailsRows}
+        </table>
+      </div>
+    `,
+  });
+
+  try {
+    await sendResendEmail({
+      from,
+      to: email,
+      subject: "We received your 2A Construction estimator request",
+      replyTo: to,
+      text: [
+        `Hi ${fullName},`,
+        "",
+        "Thank you for sending your project details to 2A Construction Ltd.",
+        "We have received your details and will review the information provided.",
+        "I’ll be in touch when we have a suitable project scope to price.",
+        "",
+        `Project type: ${projectType}`,
+        budgetRange ? `Budget range: ${budgetRange}` : null,
+        startTimeframe ? `Looking to start: ${startTimeframe}` : null,
+        "",
+        `In the meantime, you can see our projects here: ${portfolioUrl}`,
+        "",
+        "Kind regards,",
+        "Alex",
+        "2A Construction Ltd",
+        "",
+        "Loft Conversions • Extensions • Refurbishments • Roofing",
+        "Phone: +44(0)7903095967",
+        "Email: 2A.CONSTRUCTION.UK@GMAIL.COM",
+        `Website: ${siteUrl}`,
+      ].filter(Boolean).join("\n"),
+      html: `
+        <div style="margin:0;padding:0;background:#f4f4f2;font-family:Arial,Helvetica,sans-serif;color:#171717;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f2;margin:0;padding:24px 12px;">
+            <tr>
+              <td align="center">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #e5e5e5;">
+                  <tr>
+                    <td style="background:#0b0b0b;padding:24px 28px;">
+                      <img src="${logoUrl}" alt="2A Construction Ltd" width="150" style="display:block;height:auto;margin:0 0 18px 0;" />
+                      <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#f5c542;font-weight:700;">Estimator request received</div>
+                      <h1 style="margin:10px 0 0 0;color:#ffffff;font-size:28px;line-height:1.2;font-weight:800;">Thank you, ${escapeHtml(fullName)}</h1>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:30px 28px 22px 28px;">
+                      <p style="margin:0 0 16px 0;font-size:16px;line-height:1.65;color:#333333;">Thank you for sending your project details to <strong>2A Construction Ltd</strong>.</p>
+                      <p style="margin:0 0 22px 0;font-size:16px;line-height:1.65;color:#333333;">We have received your details and will review the information provided. I’ll be in touch when we have a suitable project scope to price.</p>
+                      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0;margin:22px 0;background:#faf7ef;border:1px solid #f0d78a;border-radius:14px;overflow:hidden;">
+                        <tr>
+                          <td style="padding:14px 16px;font-size:13px;color:#6b5a1a;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Project type</td>
+                          <td style="padding:14px 16px;font-size:15px;color:#171717;font-weight:700;text-align:right;">${escapeHtml(projectType)}</td>
+                        </tr>
+                        ${budgetRange ? `<tr><td style="padding:14px 16px;border-top:1px solid #f0d78a;font-size:13px;color:#6b5a1a;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Budget range</td><td style="padding:14px 16px;border-top:1px solid #f0d78a;font-size:15px;color:#171717;font-weight:700;text-align:right;">${escapeHtml(budgetRange)}</td></tr>` : ""}
+                        ${startTimeframe ? `<tr><td style="padding:14px 16px;border-top:1px solid #f0d78a;font-size:13px;color:#6b5a1a;font-weight:700;text-transform:uppercase;letter-spacing:1px;">Looking to start</td><td style="padding:14px 16px;border-top:1px solid #f0d78a;font-size:15px;color:#171717;font-weight:700;text-align:right;">${escapeHtml(startTimeframe)}</td></tr>` : ""}
+                      </table>
+                      <p style="margin:0 0 22px 0;font-size:15px;line-height:1.6;color:#555555;">In the meantime, you can view examples of our loft conversions, extensions, refurbishments and roofing projects.</p>
+                      <a href="${portfolioUrl}" style="display:inline-block;background:#f5c542;color:#111111;text-decoration:none;font-weight:800;font-size:15px;padding:13px 20px;border-radius:999px;">View our portfolio</a>
+                      <div style="margin-top:30px;font-size:15px;line-height:1.7;color:#333333;">
+                        <p style="margin:0;">Kind regards,</p>
+                        <p style="margin:0;font-weight:800;">Alex</p>
+                        <p style="margin:0;">2A Construction Ltd</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="background:#111111;padding:22px 28px;color:#ffffff;">
+                      <p style="margin:0 0 12px 0;color:#f5c542;font-size:13px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">Loft Conversions • Extensions • Refurbishments • Roofing</p>
+                      <p style="margin:0 0 6px 0;font-size:14px;line-height:1.5;">Phone: <a href="tel:+447903095967" style="color:#ffffff;text-decoration:none;">+44(0)7903095967</a></p>
+                      <p style="margin:0 0 6px 0;font-size:14px;line-height:1.5;">Email: <a href="mailto:2A.CONSTRUCTION.UK@GMAIL.COM" style="color:#ffffff;text-decoration:none;">2A.CONSTRUCTION.UK@GMAIL.COM</a></p>
+                      <p style="margin:0 0 18px 0;font-size:14px;line-height:1.5;">Website: <a href="${siteUrl}" style="color:#ffffff;text-decoration:none;">2A Construction</a></p>
+                      <p style="margin:0 0 10px 0;font-size:11px;line-height:1.6;color:#b8b8b8;">2A CONSTRUCTION LTD (England & Wales No. 15102296). Registered office: 3 Devonshire Close, London N13 4QT. This email and any attachments are confidential and may be legally privileged. If you are not the intended recipient, please inform the sender immediately, delete it from your systems, and refrain from copying or disclosing it.</p>
+                      <p style="margin:0 0 10px 0;font-size:11px;line-height:1.6;color:#b8b8b8;">While we use reasonable measures to reduce risks, email can be intercepted, altered, or contain malware. You should scan attachments before opening. 2A CONSTRUCTION LTD is not liable for losses caused by transmission errors, unauthorised access, or malware, except where liability cannot be excluded by law.</p>
+                      <p style="margin:0 0 10px 0;font-size:11px;line-height:1.6;color:#b8b8b8;">Nothing in this email constitutes a binding agreement unless expressly confirmed in writing by a Director of 2A CONSTRUCTION LTD. Emails may be monitored and retained for compliance, security, and training. Our privacy practices are described in our Privacy Notice, available on request or via our website.</p>
+                      <p style="margin:0;font-size:11px;line-height:1.6;color:#91c788;">Please consider the environment before printing this email.</p>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </div>
+      `,
+    });
+  } catch (clientEmailError) {
+    console.warn("Estimator client confirmation email skipped. Verify a Resend domain before sending to client addresses.");
+  }
+}
+
+async function sendResendEmail({
+  from,
+  to,
+  subject,
+  replyTo,
+  text,
+  html,
+}: {
+  from: string;
+  to: string;
+  subject: string;
+  replyTo?: string;
+  text: string;
+  html: string;
+}) {
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to,
+      subject,
+      reply_to: replyTo,
+      text,
+      html,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Resend email failed: ${response.status} ${errorText}`);
+  }
+}
+
+function isResendEmailConfigured() {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+
+  return !!apiKey && apiKey.startsWith("re_");
+}
+
 
 export async function CreateHeroVideo(_: any, formData: FormData) {
   const data = Object.fromEntries(formData) as Record<string, string>;
@@ -433,4 +664,110 @@ export async function DeleteHeroVideo(formData: FormData) {
     where: { id },
   });
   redirect("/dashboard/hero-videos");
+}
+
+export async function submitEstimator(formData: FormData) {
+  const honey = getFormString(formData, "company");
+  if (honey) return { ok: true, message: "Thanks, your estimator request has been sent." };
+
+  const fullName = getFormString(formData, "fullName");
+  const email = getFormString(formData, "email");
+  const phone = getFormString(formData, "phone");
+  const houseNumber = getFormString(formData, "houseNumber");
+  const street = getFormString(formData, "street");
+  const postcode = getFormString(formData, "postcode");
+  const preferredContact = getFormString(formData, "preferredContact");
+  const projectType = getFormString(formData, "projectType");
+  const budgetRange = getFormString(formData, "budgetRange");
+  const foundUs = getFormString(formData, "foundUs");
+  const startTimeframe = getFormString(formData, "startTimeframe");
+  const termsAccepted = formData.get("termsAccepted") === "on";
+  const marketingAccepted = formData.get("marketingAccepted") === "on";
+
+  if (!fullName || !email || !phone || !houseNumber || !street || !postcode || !preferredContact || !projectType || !termsAccepted || !marketingAccepted) {
+    return { ok: false, message: "Please complete the required contact details and consent boxes." };
+  }
+
+  const [firstName, ...lastNameParts] = fullName.split(" ");
+  const address = [houseNumber, street, postcode].filter(Boolean).join(", ");
+  const estimatorData = formDataToSnapshot(formData);
+
+  try {
+    const created = await prisma.user.create({
+      data: {
+        id: randomUUID(),
+        email,
+        firstName: firstName || fullName,
+        lastName: lastNameParts.join(" "),
+        profileImage: "",
+        clients: {
+          create: {
+            fullName,
+            email,
+            phone,
+            houseNumber,
+            street,
+            postcode,
+            preferredContact,
+            address,
+            foundUs,
+            startTimeframe,
+            termsAccepted,
+            marketingAccepted,
+            projects: {
+              create: {
+                projectType,
+                status: "review",
+                priceEstimated: budgetRange,
+                finalPrice: null,
+                formData: estimatorData,
+              },
+            },
+          },
+        },
+      },
+      include: {
+        clients: {
+          include: {
+            projects: true,
+          },
+        },
+      },
+    });
+
+    const client = created.clients[0];
+    const clientProject = client.projects[0];
+
+    let emailSent = true;
+
+    try {
+      await sendEstimatorEmails({
+        fullName,
+        email,
+        phone,
+        address,
+        preferredContact,
+        projectType,
+        budgetRange,
+        foundUs,
+        startTimeframe,
+        projectId: clientProject.id,
+        snapshot: estimatorData,
+      });
+    } catch (emailError) {
+      emailSent = false;
+      console.error("Estimator email failed:", emailError);
+    }
+
+    return {
+      ok: true,
+      emailSent,
+      message: emailSent
+        ? "Thanks, your estimator request has been sent."
+        : "Thanks, your estimator request has been saved. Email sending needs SMTP attention.",
+    };
+  } catch (err) {
+    console.error("Estimator submit failed:", err);
+    return { ok: false, message: "Sorry, we could not send your estimator request. Please try again or contact us directly." };
+  }
 }

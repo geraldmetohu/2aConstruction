@@ -298,7 +298,7 @@ export function FlipCard({
             bg-[linear-gradient(80deg,transparent_45%,rgba(255,255,255,.26)_50%,transparent_55%)]
             translate-x-[-120%]
             group-hover:translate-x-[120%]
-            transition-transform duration-[1100ms] ease-out
+            transition-transform duration-1000 ease-out
           "
         />
 

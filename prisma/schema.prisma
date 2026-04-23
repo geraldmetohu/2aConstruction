@@ -15,6 +15,7 @@ model User {
   lastName     String
   profileImage String
   createdAt    DateTime? @default(now()) @db.Timestamp(6)
+  clients      Client[]
 }
 
 model Project {
@@ -56,6 +57,39 @@ model Contact {
   address     String
   price       String
   createdAt   DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model Client {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName          String
+  email             String
+  phone             String
+  houseNumber       String
+  street            String
+  postcode          String
+  preferredContact  String
+  address           String
+  foundUs           String?
+  startTimeframe    String?
+  termsAccepted     Boolean         @default(false)
+  marketingAccepted Boolean         @default(false)
+  createdAt         DateTime?       @default(now()) @db.Timestamp(6)
+  projects          ClientProject[]
+}
+
+model ClientProject {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId       String              @db.Uuid
+  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectType    String
+  status         ClientProjectStatus @default(review)
+  priceEstimated String?
+  finalPrice     String?
+  formData       Json
+  createdAt      DateTime?           @default(now()) @db.Timestamp(6)
+  updatedAt      DateTime?           @updatedAt @db.Timestamp(6)
 }
 
 model HeroVideo {
@@ -106,4 +140,12 @@ enum Role {
   skip
   architect
   other
+}
+
+enum ClientProjectStatus {
+  review
+  sent
+  started
+  ongoing
+  finished
 }

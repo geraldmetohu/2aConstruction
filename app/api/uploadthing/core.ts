@@ -31,6 +31,10 @@ async function requireAdmin() {
   return { userId: user.id };
 }
 
+async function allowEstimatorUpload() {
+  return { userId: "estimator-form" };
+}
+
 /* -------------------------------------------
    UPLOAD COMPLETE (Return URL)
 -------------------------------------------- */
@@ -97,6 +101,19 @@ export const ourFileRouter = {
     },
   })
     .middleware(requireAdmin)
+    .onUploadComplete(onComplete),
+
+  estimatorUploader: f({
+    image: {
+      maxFileSize: "16MB",
+      maxFileCount: 10,
+    },
+    pdf: {
+      maxFileSize: "16MB",
+      maxFileCount: 10,
+    },
+  })
+    .middleware(allowEstimatorUpload)
     .onUploadComplete(onComplete),
 } satisfies FileRouter;
 

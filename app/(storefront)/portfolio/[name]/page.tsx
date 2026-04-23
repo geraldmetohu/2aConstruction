@@ -11,13 +11,13 @@ const CATEGORY_META: Record<Category, { title: string; blurb: string; image: str
     title: "All Projects",
     blurb:
       "Explore our latest extensions, loft conversions, refurbishments and roofing projects across London. Every build is delivered with quality, communication and tidy sites.",
-    image: "/images/hero-all.jpg",
+    image: "/images/general.jpg",
   },
   general: {
     title: "General Building",
     blurb:
       "From structural works to clean finishes—our general building team delivers reliable workmanship and tidy sites.",
-    image: "/images/hero-all.jpg",
+    image: "/images/general.jpg",
   },
   refurbishment: {
     title: "Refurbishment Projects",
@@ -65,8 +65,9 @@ async function getRows(category: Category) {
   });
 }
 
-export default async function CategoryPage({ params }: { params: { name: string } }){
-  const name = params.name?.toLowerCase() as Category;
+export default async function CategoryPage({ params }: { params: Promise<{ name: string }> }){
+  const { name: rawName } = await params;
+  const name = rawName?.toLowerCase() as Category;
   if (!VALID.includes(name)) notFound();
 
   const meta = CATEGORY_META[name];

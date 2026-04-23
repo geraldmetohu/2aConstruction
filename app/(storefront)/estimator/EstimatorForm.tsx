@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useMemo, useState } from "react";
+import Link from "next/link";
+import { ChangeEvent, FormEvent, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { submitEstimator } from "@/app/actions";
+import { UploadDropzone } from "@/app/lib/uploadthing";
 
 type ProjectType = "extension" | "loft" | "refurbishment" | "roof" | "foundations" | "garden";
 
@@ -43,6 +46,13 @@ const roofTiles = [
   { title: "Clay plain tiles", tone: "from-orange-500 to-red-700", detail: "Traditional look with strong kerb appeal." },
   { title: "Slate tiles", tone: "from-slate-700 to-slate-950", detail: "Premium finish for period and modern roofs." },
   { title: "Pantiles", tone: "from-amber-600 to-orange-800", detail: "Curved profile, often used for character roofs." },
+];
+
+const flatRoofSystems = [
+  { title: "Felt roof", image: "/images/roof.jpg", detail: "Cost-effective layered system for sheds, garages and flat roofs." },
+  { title: "Fibreglass GRP", image: "/images/roof_edmonton.jpg", detail: "Seamless rigid finish with a clean modern appearance." },
+  { title: "EPDM rubber", image: "/roof.jpg", detail: "Flexible membrane system, popular for extensions and dormers." },
+  { title: "Not sure", image: "/images/site_insp.jpg", detail: "We can advise after seeing photos and roof access." },
 ];
 
 const loftTypes = [
@@ -95,12 +105,16 @@ const finishDefaults = [
 const steps = ["Project", "Measurements", "Details", "Logistics", "Budget", "Contact"];
 
 export function EstimatorForm() {
+  const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState(0);
   const [projectType, setProjectType] = useState<ProjectType>("loft");
   const [quality, setQuality] = useState(65);
   const [cheap, setCheap] = useState(45);
   const [fast, setFast] = useState(40);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [emailSent, setEmailSent] = useState(true);
 
   const selectedProject = projectTypes.find((item) => item.id === projectType) ?? projectTypes[1];
   const tradeMood = useMemo(() => getTradeMood(quality, cheap, fast), [quality, cheap, fast]);
@@ -125,10 +139,66 @@ export function EstimatorForm() {
     }
   }
 
-  function submitForm(event: FormEvent<HTMLFormElement>) {
+  async function submitForm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSent(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+
+    if (!validateCurrentStep()) return;
+
+    setSending(true);
+    setSubmitError("");
+
+    const result = await submitEstimator(new FormData(event.currentTarget));
+
+    setSending(false);
+
+    if (result.ok) {
+      setEmailSent(result.emailSent ?? true);
+      setSent(true);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+
+    setSubmitError(result.message);
+  }
+
+  function validateCurrentStep() {
+    const currentStep = formRef.current?.querySelector<HTMLElement>(`[data-step="${step}"]`);
+    if (!currentStep) return true;
+
+    const requiredFields = Array.from(
+      currentStep.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        "input[required], select[required], textarea[required]"
+      )
+    );
+
+    const checkedRadioNames = new Set<string>();
+
+    for (const field of requiredFields) {
+      if (field instanceof HTMLInputElement && field.type === "radio") {
+        if (checkedRadioNames.has(field.name)) continue;
+        checkedRadioNames.add(field.name);
+
+        const groupChecked = !!currentStep.querySelector<HTMLInputElement>(
+          `input[type="radio"][name="${CSS.escape(field.name)}"]:checked`
+        );
+
+        if (!groupChecked) {
+          field.setCustomValidity("Please choose one option.");
+          field.reportValidity();
+          field.setCustomValidity("");
+          return false;
+        }
+
+        continue;
+      }
+
+      if (!field.checkValidity()) {
+        field.reportValidity();
+        return false;
+      }
+    }
+
+    return true;
   }
 
   return (
@@ -169,11 +239,13 @@ export function EstimatorForm() {
             </div>
           </aside>
 
-          <form onSubmit={submitForm} className="rounded-[2rem] border border-white/10 bg-white p-4 text-neutral-950 shadow-2xl md:p-8">
+          <form ref={formRef} onSubmit={submitForm} noValidate className="rounded-[2rem] border border-white/10 bg-white p-4 text-neutral-950 shadow-2xl md:p-8">
             {sent ? (
-              <SuccessState />
+              <SuccessState emailSent={emailSent} />
             ) : (
               <>
+                <input type="hidden" name="projectType" value={projectType} />
+                <input type="text" name="company" tabIndex={-1} autoComplete="off" className="hidden" />
                 <div className="mb-8">
                   <div className="mb-4 h-2 overflow-hidden rounded-full bg-neutral-200">
                     <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-cyan-400 transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
@@ -181,12 +253,12 @@ export function EstimatorForm() {
                   <p className="text-sm font-bold uppercase tracking-[0.25em] text-amber-700">Step {step + 1} of {steps.length}</p>
                 </div>
 
-                {step === 0 && <ProjectStep projectType={projectType} setProjectType={setProjectType} />}
-                {step === 1 && <MeasurementStep />}
-                {step === 2 && <ProjectDetailStep projectType={projectType} />}
-                {step === 3 && <LogisticsStep />}
-                {step === 4 && <BudgetStep quality={quality} cheap={cheap} fast={fast} tradeMood={tradeMood} updateTradeSlider={updateTradeSlider} />}
-                {step === 5 && <ContactStep />}
+                <div data-step="0" className={step === 0 ? "block" : "hidden"}><ProjectStep projectType={projectType} setProjectType={setProjectType} /></div>
+                <div data-step="1" className={step === 1 ? "block" : "hidden"}><MeasurementStep /></div>
+                <div data-step="2" className={step === 2 ? "block" : "hidden"}><ProjectDetailStep projectType={projectType} /></div>
+                <div data-step="3" className={step === 3 ? "block" : "hidden"}><LogisticsStep /></div>
+                <div data-step="4" className={step === 4 ? "block" : "hidden"}><BudgetStep quality={quality} cheap={cheap} fast={fast} tradeMood={tradeMood} updateTradeSlider={updateTradeSlider} /></div>
+                <div data-step="5" className={step === 5 ? "block" : "hidden"}><ContactStep /></div>
 
                 <div className="mt-10 flex flex-col gap-3 border-t border-neutral-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
                   <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0} className="h-12 rounded-full border-neutral-300">
@@ -194,17 +266,22 @@ export function EstimatorForm() {
                     Back
                   </Button>
                   {step < steps.length - 1 ? (
-                    <Button type="button" onClick={() => setStep((current) => Math.min(steps.length - 1, current + 1))} className="h-12 rounded-full bg-neutral-950 px-7 text-white hover:bg-amber-500 hover:text-black">
+                    <Button type="button" onClick={() => validateCurrentStep() && setStep((current) => Math.min(steps.length - 1, current + 1))} className="h-12 rounded-full bg-neutral-950 px-7 text-white hover:bg-amber-500 hover:text-black">
                       Continue
                       <ArrowRight className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button type="submit" className="h-12 rounded-full bg-amber-500 px-7 text-black hover:bg-amber-400">
-                      Send estimator request
+                    <Button type="submit" disabled={sending} className="h-12 rounded-full bg-amber-500 px-7 text-black hover:bg-amber-400">
+                      {sending ? "Sending..." : "Send estimator request"}
                       <Send className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
+                {submitError && (
+                  <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
+                    {submitError}
+                  </p>
+                )}
               </>
             )}
           </form>
@@ -261,12 +338,12 @@ function MeasurementStep() {
       intro="Approximate dimensions are enough. If you are not sure, use the not sure options and upload photos later."
     >
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Rough house width" placeholder="e.g. 6.2 metres or not sure" icon={<Ruler />} required />
-        <Field label="Rough house length" placeholder="e.g. 9.5 metres or not sure" icon={<Ruler />} required />
-        <Field label="Floor height" placeholder="e.g. 2.4 metres per floor" icon={<Home />} />
-        <SelectLike label="Confidence" options={["Measured roughly", "Not sure", "Please advise from photos"]} required />
+        <Field name="houseWidth" label="Rough house width" placeholder="e.g. 6.2 metres or not sure" icon={<Ruler />} required />
+        <Field name="houseLength" label="Rough house length" placeholder="e.g. 9.5 metres or not sure" icon={<Ruler />} required />
+        <Field name="floorHeight" label="Floor height" placeholder="e.g. 2.4 metres per floor" icon={<Home />} />
+        <SelectLike name="measurementConfidence" label="Confidence" options={["Measured roughly", "Not sure", "Please advise from photos"]} required />
       </div>
-      <TextareaBlock label="Anything unusual about access, structure or measurements?" placeholder="Tell us about narrow alleys, shared walls, sloped ground, previous works, etc." />
+      <TextareaBlock name="measurementNotes" label="Anything unusual about access, structure or measurements?" placeholder="Tell us about narrow alleys, shared walls, sloped ground, previous works, etc." />
     </StepShell>
   );
 }
@@ -284,6 +361,7 @@ function RoofQuestions() {
   return (
     <StepShell eyebrow="Roof details" title="What does the roof need?" intro="Choose the roof type, finishes and the extra items you want included in the quote.">
       <ChoiceGrid title="Roof type" name="roofType" type="radio" required options={["Pitched roof", "Flat roof", "Roof repair only", "Not sure"]} />
+      <VisualChoiceGrid title="If flat roof, choose preferred system" name="flatRoofSystem" options={flatRoofSystems} />
       <div>
         <h3 className="mb-3 text-lg font-black">If pitched, choose tile style</h3>
         <div className="grid gap-3 md:grid-cols-2">
@@ -300,7 +378,7 @@ function RoofQuestions() {
         </div>
       </div>
       <YesNoMaybeGrid items={["Replace joists", "Insulation", "New gutters", "New fascia"]} />
-      <TextareaBlock label="Any other roof details?" placeholder="Leaks, rotten timber, chimney work, rooflights, neighbour access, matching existing tiles..." />
+      <TextareaBlock name="roofDetails" label="Any other roof details?" placeholder="Leaks, rotten timber, chimney work, rooflights, neighbour access, matching existing tiles..." />
     </StepShell>
   );
 }
@@ -329,16 +407,16 @@ function LoftQuestions() {
       </div>
       <VisualChoiceGrid title="Dormer outside finish" name="dormerFinish" options={dormerFinishes} />
       <ChoiceGrid title="Planning permission" name="loftPlanning" type="radio" required options={["Yes", "No", "Applied", "Would like help with that"]} />
-      <FileDrop label="If yes, upload plans" accept=".pdf,.png,.jpg,.jpeg" />
+      <FileDrop name="loftPlans" label="If yes, upload plans" accept=".pdf,.png,.jpg,.jpeg" />
       <YesNoMaybeGrid items={["Need new stairs", "Need RSJs", "Want Velux windows", "Want uPVC windows", "Paint finish"]} />
       <div className="grid gap-4 md:grid-cols-3">
-        <SelectLike label="Rooms" options={["1", "2", "3", "I don't know"]} icon={<BedDouble />} />
-        <SelectLike label="Bathrooms" options={["1", "2", "I don't know"]} icon={<Bath />} />
-        <Field label="Current loft height" placeholder="Value or I don't know" icon={<Ruler />} />
+        <SelectLike name="loftRooms" label="Rooms" options={["1", "2", "3", "I don't know"]} icon={<BedDouble />} />
+        <SelectLike name="loftBathrooms" label="Bathrooms" options={["1", "2", "I don't know"]} icon={<Bath />} />
+        <Field name="currentLoftHeight" label="Current loft height" placeholder="Value or I don't know" icon={<Ruler />} />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="How many Velux windows?" placeholder="e.g. 2, none, or not sure" />
-        <Field label="How many uPVC windows?" placeholder="e.g. 1, none, or not sure" />
+        <Field name="veluxWindowCount" label="How many Velux windows?" placeholder="e.g. 2, none, or not sure" />
+        <Field name="upvcWindowCount" label="How many uPVC windows?" placeholder="e.g. 1, none, or not sure" />
       </div>
       <BathroomAndFinishQuestions />
     </StepShell>
@@ -350,10 +428,10 @@ function ExtensionQuestions() {
     <StepShell eyebrow="Extension details" title="Shape the extension scope." intro="A few choices here help separate shell-only work from full finished living space.">
       <VisualChoiceGrid title="Extension style" name="extensionStyle" options={extensionStyles} required />
       <ChoiceGrid title="Planning status" name="extensionPlanning" type="radio" required options={["Approved", "Not started", "Applied", "Would like help"]} />
-      <FileDrop label="Upload drawings or planning documents" accept=".pdf,.png,.jpg,.jpeg" />
+      <FileDrop name="extensionPlans" label="Upload drawings or planning documents" accept=".pdf,.png,.jpg,.jpeg" />
       <YesNoMaybeGrid items={["Kitchen included", "Structural steel / RSJs", "Roof lantern", "Bi-fold or sliding doors", "Underfloor heating", "New drainage"]} />
       <BathroomAndFinishQuestions />
-      <TextareaBlock label="Anything else for the extension?" placeholder="Open-plan kitchen, utility room, downstairs WC, matching brickwork, skylights, demolition..." />
+      <TextareaBlock name="extensionDetails" label="Anything else for the extension?" placeholder="Open-plan kitchen, utility room, downstairs WC, matching brickwork, skylights, demolition..." />
     </StepShell>
   );
 }
@@ -364,7 +442,7 @@ function RefurbishmentQuestions() {
       <ChoiceGrid title="Refurbishment size" name="refurbSize" type="radio" required options={["One room", "Kitchen", "Bathroom", "Whole floor", "Whole house"]} />
       <YesNoMaybeGrid items={["Layout changes", "Kitchen install", "Bathroom install", "New flooring", "Rewiring", "Plumbing upgrades", "Plastering", "Decorating"]} />
       <BathroomAndFinishQuestions />
-      <TextareaBlock label="Refurbishment notes" placeholder="Remove walls, match existing finishes, repair damp, replace doors, bespoke storage..." />
+      <TextareaBlock name="refurbishmentNotes" label="Refurbishment notes" placeholder="Remove walls, match existing finishes, repair damp, replace doors, bespoke storage..." />
     </StepShell>
   );
 }
@@ -374,7 +452,7 @@ function FoundationQuestions() {
     <StepShell eyebrow="Foundation details" title="Groundwork and structure." intro="Tell us what the foundations are supporting and what access is like.">
       <ChoiceGrid title="Foundation purpose" name="foundationPurpose" type="radio" required options={["Extension", "Outbuilding", "Retaining wall", "Underpinning", "Not sure"]} />
       <YesNoMaybeGrid items={["Structural drawings available", "Engineer calculations available", "Trial holes done", "Drainage nearby", "Concrete pump likely needed"]} />
-      <TextareaBlock label="Ground conditions or access notes" placeholder="Clay, trees nearby, slope, shared access, existing concrete, drainage runs..." />
+      <TextareaBlock name="foundationNotes" label="Ground conditions or access notes" placeholder="Clay, trees nearby, slope, shared access, existing concrete, drainage runs..." />
     </StepShell>
   );
 }
@@ -385,7 +463,7 @@ function GardenQuestions() {
       <ChoiceGrid title="Main work" name="gardenWork" type="radio" required options={["Driveway", "Patio", "Garden landscaping", "Fencing", "Drainage", "Mixed works"]} />
       <VisualChoiceGrid title="Preferred finish" name="gardenFinish" options={gardenFinishes} />
       <YesNoMaybeGrid items={["Existing surface removal", "New drainage", "Retaining wall", "New steps", "Lighting", "Side gate / fencing"]} />
-      <TextareaBlock label="Garden or driveway notes" placeholder="Parking spaces, levels, water pooling, manholes, planting, edging, access width..." />
+      <TextareaBlock name="gardenNotes" label="Garden or driveway notes" placeholder="Parking spaces, levels, water pooling, manholes, planting, edging, access width..." />
     </StepShell>
   );
 }
@@ -411,8 +489,8 @@ function BathroomAndFinishQuestions() {
           ))}
         </div>
       </div>
-      <TextareaBlock label="Other requirements or finish ideas" placeholder="Door supplied by client, specific paint colour, bathroom brand, inspiration links..." />
-      <FileDrop label="Upload pictures of ideas you have" accept="image/*" multiple />
+      <TextareaBlock name="finishIdeas" label="Other requirements or finish ideas" placeholder="Door supplied by client, specific paint colour, bathroom brand, inspiration links..." />
+      <FileDrop name="ideaPhotos" label="Upload pictures of ideas you have" accept="image/*" multiple />
     </>
   );
 }
@@ -424,8 +502,8 @@ function LogisticsStep() {
       <ChoiceGrid title="Is there space for a skip?" name="skipSpace" type="radio" required options={["Yes", "No", "Maybe with permit", "Not sure"]} />
       <ChoiceGrid title="Building control, if needed" name="buildingControl" type="radio" required options={["I will deal with building control", "I want 2A Construction to handle it", "Not sure if needed", "Already arranged"]} />
       <ChoiceGrid title="Quote type" name="quoteType" type="radio" required options={["Labour only", "Labour + skip + scaffolding + contractor-supplied materials", "Not sure yet"]} />
-      <TextareaBlock label="Access details" placeholder="Parking restrictions, narrow roads, rear access, permit needs, working hours..." />
-      <FileDrop label="Upload photos of the current space" accept="image/*" multiple />
+      <TextareaBlock name="accessDetails" label="Access details" placeholder="Parking restrictions, narrow roads, rear access, permit needs, working hours..." />
+      <FileDrop name="sitePhotos" label="Upload photos of the current space" accept="image/*" multiple />
     </StepShell>
   );
 }
@@ -446,10 +524,13 @@ function BudgetStep({
   return (
     <StepShell eyebrow="Budget and priorities" title="Set expectations early." intro="A budget range lets us recommend the right specification instead of guessing.">
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Overall budget range" placeholder="e.g. GBP 45k-65k" required />
-        <SelectLike label="Budget preference" options={["Happy to share range", "Prefer not to say", "Need guidance"]} required />
+        <Field name="budgetRange" label="Overall budget range" placeholder="e.g. GBP 45k-65k" required />
+        <SelectLike name="budgetPreference" label="Budget preference" options={["Happy to share range", "Prefer not to say", "Need guidance"]} required />
       </div>
       <div className="rounded-[2rem] border border-neutral-200 bg-neutral-950 p-5 text-white">
+        <input type="hidden" name="qualityPriority" value={quality} />
+        <input type="hidden" name="cheapPriority" value={cheap} />
+        <input type="hidden" name="fastPriority" value={fast} />
         <div className="flex items-start gap-3">
           <Sparkles className="mt-1 h-5 w-5 text-amber-300" />
           <div>
@@ -473,27 +554,31 @@ function BudgetStep({
 
 function ContactStep() {
   return (
-    <StepShell eyebrow="Your details" title="Where should we send the estimate?" intro="No backend is connected yet, so this button only completes the front-end flow for now.">
+    <StepShell eyebrow="Your details" title="Where should we send the estimate?" intro="Add your contact details so we can save the request and follow up with the next steps.">
       <div className="grid gap-4 md:grid-cols-2">
-        <Field label="Full name" placeholder="Your name" required />
-        <Field label="Email address" type="email" placeholder="you@example.com" required />
-        <Field label="Phone number" type="tel" placeholder="07..." required />
-        <SelectLike label="Preferred contact" options={["Email", "Phone", "Either is fine"]} required />
-        <Field label="House number" placeholder="e.g. 42" required />
-        <Field label="Street" placeholder="Street name" required />
-        <Field label="Postcode" placeholder="e.g. N13 4AB" required />
+        <Field name="fullName" label="Full name" placeholder="Your name" required />
+        <Field name="email" label="Email address" type="email" placeholder="you@example.com" required />
+        <Field name="phone" label="Phone number" type="tel" placeholder="07..." required />
+        <SelectLike name="preferredContact" label="Preferred contact" options={["Email", "Phone", "Either is fine"]} required />
+        <Field name="houseNumber" label="House number" placeholder="e.g. 42" required />
+        <Field name="street" label="Street" placeholder="Street name" required />
+        <Field name="postcode" label="Postcode" placeholder="e.g. N13 4AB" required />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <SelectLike name="foundUs" label="Where did you find us?" options={["Google", "Instagram", "Facebook", "Recommendation", "Saw our van/sign", "Existing client", "Other"]} />
+        <SelectLike name="startTimeframe" label="When are you looking to start?" options={["Urgent", "Next week", "Next month", "This quarter", "This year", "Not sure"]} />
       </div>
       <div className="space-y-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
         <label className="flex gap-3 text-sm font-semibold leading-6 has-[:checked]:text-amber-800">
-          <input type="checkbox" required className="mt-1" />
+          <input type="checkbox" name="termsAccepted" required className="mt-1" />
           I agree to the terms and conditions and confirm the information provided is accurate for estimate purposes.
         </label>
         <label className="flex gap-3 text-sm font-semibold leading-6 has-[:checked]:text-amber-800">
-          <input type="checkbox" required className="mt-1" />
+          <input type="checkbox" name="marketingAccepted" required className="mt-1" />
           I agree that 2A Construction can contact me by email or phone with estimate information and follow-up questions.
         </label>
       </div>
-      <TextareaBlock label="Anything you would like to add before sending?" placeholder="Timescale, decision makers, preferred appointment days, important constraints..." />
+      <TextareaBlock name="finalNotes" label="Anything you would like to add before sending?" placeholder="Timescale, decision makers, preferred appointment days, important constraints..." />
     </StepShell>
   );
 }
@@ -520,12 +605,14 @@ function StepShell({
 }
 
 function Field({
+  name,
   label,
   placeholder,
   type = "text",
   icon,
   required = false,
 }: {
+  name: string;
   label: string;
   placeholder: string;
   type?: string;
@@ -539,21 +626,21 @@ function Field({
         {label}
         {required && <span className="text-amber-700">*</span>}
       </span>
-      <Input type={type} placeholder={placeholder} required={required} className="h-12 rounded-2xl border-neutral-300 bg-neutral-50" />
+      <Input name={name} type={type} placeholder={placeholder} required={required} className="h-12 rounded-2xl border-neutral-300 bg-neutral-50" />
     </label>
   );
 }
 
-function TextareaBlock({ label, placeholder }: { label: string; placeholder: string }) {
+function TextareaBlock({ name, label, placeholder }: { name: string; label: string; placeholder: string }) {
   return (
     <label className="block">
       <span className="mb-2 block text-sm font-black text-neutral-800">{label}</span>
-      <Textarea placeholder={placeholder} className="min-h-32 rounded-2xl border-neutral-300 bg-neutral-50" />
+      <Textarea name={name} placeholder={placeholder} className="min-h-32 rounded-2xl border-neutral-300 bg-neutral-50" />
     </label>
   );
 }
 
-function SelectLike({ label, options, icon, required = false }: { label: string; options: string[]; icon?: React.ReactNode; required?: boolean }) {
+function SelectLike({ name, label, options, icon, required = false }: { name: string; label: string; options: string[]; icon?: React.ReactNode; required?: boolean }) {
   return (
     <label className="block">
       <span className="mb-2 flex items-center gap-2 text-sm font-black text-neutral-800">
@@ -561,7 +648,7 @@ function SelectLike({ label, options, icon, required = false }: { label: string;
         {label}
         {required && <span className="text-amber-700">*</span>}
       </span>
-      <select required={required} className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400">
+      <select name={name} required={required} className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400">
         {options.map((option) => (
           <option key={option}>{option}</option>
         ))}
@@ -661,14 +748,95 @@ function YesNoMaybeGrid({ items }: { items: string[] }) {
   );
 }
 
-function FileDrop({ label, accept, multiple = false }: { label: string; accept: string; multiple?: boolean }) {
+function FileDrop({ name, label, accept, multiple = false }: { name: string; label: string; accept: string; multiple?: boolean }) {
+  const [files, setFiles] = useState<{ name: string; url?: string; type: string }[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string }[]>([]);
+  const [uploadError, setUploadError] = useState("");
+
+  function updateFiles(event: ChangeEvent<HTMLInputElement>) {
+    const selectedFiles = Array.from(event.target.files ?? []);
+
+    setFiles((currentFiles) => {
+      currentFiles.forEach((file) => {
+        if (file.url) URL.revokeObjectURL(file.url);
+      });
+
+      return selectedFiles.map((file) => ({
+        name: file.name,
+        type: file.type,
+        url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+      }));
+    });
+  }
+
   return (
-    <label className="flex cursor-pointer flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-amber-300 bg-amber-50 p-6 text-center hover:bg-amber-100">
-      <Upload className="h-8 w-8 text-amber-700" />
-      <span className="mt-3 text-base font-black">{label}</span>
-      <span className="mt-1 text-sm text-neutral-600">Click to choose {multiple ? "files" : "a file"}.</span>
-      <input type="file" accept={accept} multiple={multiple} className="sr-only" />
-    </label>
+    <div className="space-y-4">
+      <label className="flex cursor-pointer flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-amber-300 bg-amber-50 p-6 text-center hover:bg-amber-100">
+        <Upload className="h-8 w-8 text-amber-700" />
+        <span className="mt-3 text-base font-black">{label}</span>
+        <span className="mt-1 text-sm text-neutral-600">Click to choose {multiple ? "files" : "a file"}.</span>
+        <input name={name} type="file" accept={accept} multiple={multiple} onChange={updateFiles} className="sr-only" />
+      </label>
+
+      {uploadedFiles.map((file) => (
+        <input key={file.url} type="hidden" name={`${name}Urls`} value={file.url} />
+      ))}
+
+      {files.length > 0 && (
+        <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+          <p className="text-sm font-black text-neutral-800">Selected files preview</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {files.map((file) => (
+              <div key={file.name} className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+                {file.url ? (
+                  <div className="relative h-32">
+                    <Image src={file.url} alt={file.name} fill className="object-cover" unoptimized />
+                  </div>
+                ) : (
+                  <div className="grid h-20 place-items-center bg-neutral-100 px-3 text-center text-xs font-semibold text-neutral-600">
+                    File selected
+                  </div>
+                )}
+                <p className="truncate px-3 py-2 text-xs font-semibold text-neutral-700">{file.name}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-neutral-200 bg-white p-3">
+        <p className="mb-2 text-sm font-black text-neutral-800">Upload these files</p>
+        <UploadDropzone
+          endpoint="estimatorUploader"
+          onClientUploadComplete={(res) => {
+            setUploadError("");
+            setUploadedFiles(
+              res.map((file) => ({
+                name: file.name,
+                url: file.url ?? file.ufsUrl,
+              }))
+            );
+          }}
+          onUploadError={(error) => {
+            setUploadError(error.message);
+          }}
+          config={{
+            mode: "auto",
+          }}
+          className="rounded-xl border-amber-300 bg-amber-50 ut-button:bg-neutral-950 ut-button:text-white ut-label:text-neutral-800 ut-allowed-content:text-neutral-500"
+        />
+        {uploadedFiles.length > 0 && (
+          <div className="mt-3 rounded-xl bg-green-50 p-3 text-sm font-semibold text-green-700">
+            Uploaded {uploadedFiles.length} file{uploadedFiles.length === 1 ? "" : "s"} successfully.
+          </div>
+        )}
+        {uploadError && (
+          <div className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+            Upload failed: {uploadError}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -695,17 +863,23 @@ function TradeSlider({
   );
 }
 
-function SuccessState() {
+function SuccessState({ emailSent }: { emailSent: boolean }) {
   return (
     <div className="grid min-h-[620px] place-items-center rounded-[2rem] bg-gradient-to-br from-amber-50 to-white p-8 text-center">
       <div className="max-w-xl">
-        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-amber-400 text-black">
+        <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-green-500 text-white">
           <Check className="h-10 w-10" />
         </div>
-        <h2 className="mt-6 text-4xl font-black tracking-tight">Estimator front-end complete.</h2>
+        <h2 className="mt-6 text-4xl font-black tracking-tight">Your form has been sent.</h2>
         <p className="mt-4 text-lg leading-8 text-neutral-600">
-          This confirms the slide form experience works visually. Backend saving, email sending and upload processing can be connected next.
+          {emailSent
+            ? "We have emailed you a confirmation and sent the new estimator request to the 2A Construction team."
+            : "Your request has been saved for the 2A Construction team. The confirmation email could not be sent right now because the email account needs attention."}
+          The team will contact you as soon as possible.
         </p>
+        <Button asChild className="mt-6 rounded-full bg-neutral-950 text-white hover:bg-amber-500 hover:text-black">
+          <Link href="/portfolio/all">In the meantime, see our projects</Link>
+        </Button>
         <div className="mt-6 grid gap-3 text-left sm:grid-cols-3">
           {[
             { label: "Brief", Icon: ClipboardList },

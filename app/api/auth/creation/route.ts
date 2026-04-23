@@ -1,8 +1,8 @@
 import { prisma } from "@/app/lib/db";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     const { getUser} = getKindeServerSession();
     const user = await getUser()
     
@@ -27,5 +27,8 @@ export async function GET() {
             }
         });
     }
-    return NextResponse.redirect("http://localhost:3000/")
+    const admins = process.env.ADMIN_EMAILS?.split(",").map((email) => email.trim().toLowerCase()) ?? [];
+    const redirectPath = user.email && admins.includes(user.email.toLowerCase()) ? "/dashboard" : "/";
+
+    return NextResponse.redirect(new URL(redirectPath, request.url));
 }

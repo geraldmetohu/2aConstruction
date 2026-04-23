@@ -37,54 +37,55 @@ const projectTypes: {
   { id: "loft", title: "Loft conversion", summary: "Dormer, hip-to-gable, L-shape or Velux rooflight conversions.", image: "/images/loft.jpg" },
   { id: "refurbishment", title: "Refurbishment", summary: "Full home refresh, kitchens, bathrooms, layouts and finishes.", image: "/images/refurb.jpg" },
   { id: "roof", title: "Roof", summary: "Pitched, flat, repairs, replacements, gutters and fascias.", image: "/images/roof.jpg" },
-  { id: "foundations", title: "Foundations", summary: "New structural bases, underpinning preparation and groundwork.", image: "/images/site_insp.jpg" },
-  { id: "garden", title: "Garden / driveway", summary: "Paving, drainage, fencing, landscaping and parking surfaces.", image: "/images/general.jpg" },
+  { id: "foundations", title: "Foundations", summary: "New structural bases, underpinning preparation and groundwork.", image: "/images/estimator/foundations.jpg" },
+  { id: "garden", title: "Garden / driveway", summary: "Paving, drainage, fencing, landscaping and parking surfaces.", image: "/images/estimator/resin.jpg" },
 ];
 
 const roofTiles = [
-  { title: "Concrete interlocking", tone: "from-stone-500 to-stone-700", detail: "Durable and common across UK homes." },
-  { title: "Clay plain tiles", tone: "from-orange-500 to-red-700", detail: "Traditional look with strong kerb appeal." },
-  { title: "Slate tiles", tone: "from-slate-700 to-slate-950", detail: "Premium finish for period and modern roofs." },
-  { title: "Pantiles", tone: "from-amber-600 to-orange-800", detail: "Curved profile, often used for character roofs." },
+  { title: "Concrete interlocking", image: "/images/estimator/interlocking.jfif", detail: "Durable and common across UK homes." },
+  { title: "Clay plain tiles", image: "/images/estimator/clay_plain_tiles.jfif", detail: "Traditional look with strong kerb appeal." },
+  { title: "Slate tiles", image: "/images/estimator/slate_tiles.jpg", detail: "Premium finish for period and modern roofs." },
+  { title: "Pantiles", image: "/images/estimator/pantile.jpg", detail: "Curved profile, often used for character roofs." },
 ];
 
 const flatRoofSystems = [
-  { title: "Felt roof", image: "/images/roof.jpg", detail: "Cost-effective layered system for sheds, garages and flat roofs." },
-  { title: "Fibreglass GRP", image: "/images/roof_edmonton.jpg", detail: "Seamless rigid finish with a clean modern appearance." },
-  { title: "EPDM rubber", image: "/roof.jpg", detail: "Flexible membrane system, popular for extensions and dormers." },
-  { title: "Not sure", image: "/images/site_insp.jpg", detail: "We can advise after seeing photos and roof access." },
+  { title: "Felt roof", image: "/images/estimator/flat_roof.jfif", detail: "Cost-effective layered system for sheds, garages and flat roofs." },
+  { title: "Fibreglass GRP", image: "/images/estimator/fiberglass.jfif", detail: "Seamless rigid finish with a clean modern appearance." },
+  { title: "EPDM rubber", image: "/images/estimator/rubber.jpg", detail: "Flexible membrane system, popular for extensions and dormers." },
+  { title: "Not sure", image: "/images/estimator/other_flat.jfif", detail: "We can advise after seeing photos and roof access." },
 ];
 
 const loftTypes = [
-  { title: "Dormer", image: "/images/loft.jpg", detail: "Adds headroom and floor space at the rear." },
-  { title: "L-shape dormer", image: "/loft.jpg", detail: "Great for period properties with rear additions." },
-  { title: "Hip-to-gable", image: "/images/roof.jpg", detail: "Extends the sloped side into a vertical wall." },
-  { title: "Velux / rooflight", image: "/roof.jpg", detail: "Lower disruption where the roof volume already works." },
-  { title: "Not sure yet", image: "/images/site_insp.jpg", detail: "We can advise after measurements and photos." },
+  { title: "Dormer", image: "/images/estimator/dormer_loft.jpg", detail: "Adds headroom and floor space at the rear." },
+  { title: "L-shape dormer", image: "/images/estimator/L_shaped_loft.png", detail: "Great for period properties with rear additions." },
+  { title: "Hip-to-gable", image: "/images/estimator/hip_loft.jfif", detail: "Extends the sloped side into a vertical wall." },
+  { title: "Velux / rooflight", image: "/images/estimator/velux_loft.png", detail: "Lower disruption where the roof volume already works." },
+  { title: "Not sure yet", image: "/images/estimator/not_sure_loft.jpeg", detail: "We can advise after measurements and photos." },
 ];
 
 const extensionStyles = [
-  { title: "Rear extension", image: "/images/ext.jpeg", detail: "Most common for larger kitchen and dining spaces." },
-  { title: "Side return", image: "/extention.jpeg", detail: "Uses side alley space to widen the ground floor." },
-  { title: "Wrap-around", image: "/images/general.jpg", detail: "Combines rear and side return for a bigger layout." },
-  { title: "Double storey", image: "/images/build.jpg", detail: "Adds upstairs space as well as ground floor space." },
-  { title: "Not sure", image: "/images/site_insp.jpg", detail: "We can advise from plans, photos or a site visit." },
+  { title: "Rear extension", image: "/images/estimator/rear.jfif", detail: "Most common for larger kitchen and dining spaces." },
+  { title: "Side return", image: "/images/estimator/side_return.jfif", detail: "Uses side alley space to widen the ground floor." },
+  { title: "Wrap-around", image: "/images/estimator/Wraparound.jpg", detail: "Combines rear and side return for a bigger layout." },
+  { title: "Double storey", image: "/images/estimator/double_storey.png", detail: "Adds upstairs space as well as ground floor space." },
+  { title: "Not sure", image: "/images/estimator/other_ext.webp", detail: "We can advise from plans, photos or a site visit." },
 ];
 
 const dormerFinishes = [
-  { title: "Tile hanging", image: "/roof.jpg", detail: "Classic UK dormer finish, often matched to roof tiles." },
-  { title: "Rendering", image: "/images/refurb.jpg", detail: "Clean rendered finish, usually coloured or painted." },
-  { title: "Cladding", image: "/images/general.jpg", detail: "Modern look with composite, timber-style or metal cladding." },
-  { title: "Not sure", image: "/images/site_insp.jpg", detail: "Let us suggest the best finish for the property." },
+  { title: "Tile hanging", image: "/images/estimator/tile_hanging_loft.jfif", detail: "Classic UK dormer finish, often matched to roof tiles." },
+  { title: "Rendering", image: "/images/estimator/rendering_loft.jpg", detail: "Clean rendered finish, usually coloured or painted." },
+  { title: "Cladding", image: "/images/estimator/cladding_loft.jpg", detail: "Modern look with composite, timber-style or metal cladding." },
+  { title: "Not sure", image: "/images/estimator/other_loft.jfif", detail: "Let us suggest the best finish for the property." },
 ];
 
 const gardenFinishes = [
-  { title: "Block paving", image: "/images/general.jpg", detail: "Flexible, repairable and common for driveways." },
-  { title: "Porcelain tiles", image: "/images/refurb.jpg", detail: "Smart patio finish with a premium look." },
-  { title: "Resin", image: "/images/site_insp.jpg", detail: "Smooth driveway finish when the base is suitable." },
-  { title: "Tarmac", image: "/images/build.jpg", detail: "Practical surface for parking areas." },
-  { title: "Turf / planting", image: "/general.jpg", detail: "Soft landscaping for gardens." },
-  { title: "Not sure", image: "/images/site_insp.jpg", detail: "We can recommend after seeing levels and drainage." },
+  { title: "Block paving", image: "/images/estimator/block_paving.jpg", detail: "Flexible, repairable and common for driveways." },
+  { title: "Porcelain tiles", image: "/images/estimator/porcelain_tiles.jpg", detail: "Smart patio finish with a premium look." },
+  { title: "Resin", image: "/images/estimator/resin.jpg", detail: "Smooth driveway finish when the base is suitable." },
+  { title: "Tarmac", image: "/images/estimator/tarmac.jpg", detail: "Practical surface for parking areas." },
+  { title: "Decking", image: "/images/estimator/decking.jpg", detail: "Raised or flush timber/composite decking for outdoor living areas." },
+  { title: "Turf / planting", image: "/images/estimator/turf.jfif", detail: "Soft landscaping for gardens." },
+  { title: "Not sure", image: "/images/estimator/other_garden.jfif", detail: "We can recommend after seeing levels and drainage." },
 ];
 
 const finishDefaults = [
@@ -368,7 +369,9 @@ function RoofQuestions() {
           {roofTiles.map((tile) => (
             <label key={tile.title} className="flex cursor-pointer gap-3 rounded-2xl border border-neutral-200 p-3 transition hover:border-amber-400 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:shadow-md">
               <input type="checkbox" name="roofTiles" className="peer sr-only" />
-              <span className={cn("h-20 w-24 shrink-0 rounded-xl bg-gradient-to-br", tile.tone)} />
+              <span className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
+                <Image src={tile.image} alt={tile.title} fill className="object-cover" />
+              </span>
               <span className="peer-checked:text-amber-800">
                 <span className="block font-bold">{tile.title}</span>
                 <span className="mt-1 block text-sm text-neutral-600">{tile.detail}</span>

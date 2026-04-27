@@ -87,6 +87,7 @@ export default function Footer({
           <ul className="mt-4 space-y-2 text-base">
             <li><Link href="/about" className="hover:text-yellow-300">About Us</Link></li>
             <li><Link href="/portfolio/all" className="hover:text-yellow-300">Projects</Link></li>
+            <li><Link href="/estimator" className="hover:text-yellow-300">Estimator</Link></li>
             <li><Link href="/contact" className="hover:text-yellow-300">Contact</Link></li>
             <li><Link href="/certifications" className="hover:text-yellow-300">Certifications</Link></li>
           </ul>

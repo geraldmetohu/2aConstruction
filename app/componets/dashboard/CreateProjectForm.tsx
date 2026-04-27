@@ -1,5 +1,10 @@
 "use client";
 
+import { CreateProject } from "@/app/actions";
+import { SubmitButton } from "@/app/componets/SubmitButtons";
+import SortableImageList from "@/app/componets/dashboard/SortTableImageList";
+import { categories } from "@/app/lib/categories";
+import { ProjectSchema } from "@/app/lib/zodSchemas";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -9,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -17,44 +23,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
-import { SubmitButton } from "../SubmitButtons";
-import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
-import { categories } from "@/app/lib/categories";
 import { useActionState, useState } from "react";
-import { EditProject } from "@/app/actions";
 import { useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod";
-import { ProjectSchema } from "@/app/lib/zodSchemas";
-import { Textarea } from "@/components/ui/textarea";
-import { type $Enums } from "@prisma/client";
-import SortTableImageList from "./SortTableImageList";
 import { deleteFile } from "@/app/api/uploadthing/core";
 
-interface iAppProps {
-  data: {
-    id: string;
-    name: string;
-    description: string;
-    status: $Enums.ProjectStatus;
-    images: string[];
-    category: $Enums.Category;
-    isFeatured: boolean;
-    sourceClientProjectId: string | null;
-  };
+export function CreateProjectForm({
+  sourceOptions,
+}: {
   sourceOptions: {
     id: string;
     label: string;
     images: string[];
   }[];
-}
+}) {
+  const [images, setImages] = useState<string[]>([]);
+  const [sourceClientProjectId, setSourceClientProjectId] = useState("");
+  const [lastResult, action] = useActionState(CreateProject, undefined);
 
-export function EditForm({ data, sourceOptions }: iAppProps) {
-  const [images, setImages] = useState<string[]>(data.images);
-  const [sourceClientProjectId, setSourceClientProjectId] = useState(data.sourceClientProjectId ?? "");
-  const [lastResult, action] = useActionState(EditProject, undefined);
   const [form, fields] = useForm({
     lastResult,
     onValidate({ formData }) {
@@ -64,35 +54,33 @@ export function EditForm({ data, sourceOptions }: iAppProps) {
     shouldRevalidate: "onInput",
   });
 
-const handleDelete = async (index: number) => {
-  const urlToDelete = images[index];
+  const handleDelete = async (index: number) => {
+    const urlToDelete = images[index];
 
-  // Delete from UploadThing storage
+    await deleteFile(urlToDelete), {
+      method: "POST",
+      body: JSON.stringify({ url: urlToDelete }),
+    };
 
-await deleteFile(urlToDelete), {
-    method: "POST",
-    body: JSON.stringify({ url: urlToDelete }),
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Remove from local state
-  setImages((prev) => prev.filter((_, i) => i !== index));
-};
+  const selectedSource = sourceOptions.find((item) => item.id === sourceClientProjectId);
 
   return (
     <form id={form.id} onSubmit={form.onSubmit} action={action}>
-      <input type="hidden" name="projectId" value={data.id} />
       <div className="flex items-center gap-4">
         <Button asChild variant="outline" size="icon">
           <Link href="/dashboard/projects">
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <h1 className="text-xl font-semibold tracking-tight">Edit Project</h1>
+        <h1 className="text-xl font-semibold tracking-tight">New Project</h1>
       </div>
       <Card className="mt-5">
         <CardHeader>
           <CardTitle>Project Details</CardTitle>
-          <CardDescription>Here you can update your project...</CardDescription>
+          <CardDescription>Here you add a new project...</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-6">
@@ -104,7 +92,7 @@ await deleteFile(urlToDelete), {
                 type="text"
                 key={fields.name.key}
                 name={fields.name.name}
-                defaultValue={data.name}
+                defaultValue={fields.name.initialValue}
               />
               <p className="text-red-500">{fields.name.errors}</p>
             </div>
@@ -115,7 +103,7 @@ await deleteFile(urlToDelete), {
                 placeholder="Write the project description here..."
                 key={fields.description.key}
                 name={fields.description.name}
-                defaultValue={data.description}
+                defaultValue={fields.description.initialValue}
               />
               <p className="text-red-500">{fields.description.errors}</p>
             </div>
@@ -125,7 +113,10 @@ await deleteFile(urlToDelete), {
               <Switch
                 key={fields.isFeatured.key}
                 name={fields.isFeatured.name}
-                defaultChecked={data.isFeatured}
+                defaultChecked={
+                  fields.isFeatured.initialValue === "on" ||
+                  fields.isFeatured.initialValue === "true"
+                }
               />
               <p className="text-red-500">{fields.isFeatured.errors}</p>
             </div>
@@ -135,7 +126,7 @@ await deleteFile(urlToDelete), {
               <Select
                 key={fields.status.key}
                 name={fields.status.name}
-                defaultValue={data.status}
+                defaultValue={fields.status.initialValue}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Status" />
@@ -154,7 +145,7 @@ await deleteFile(urlToDelete), {
               <Select
                 key={fields.category.key}
                 name={fields.category.name}
-                defaultValue={data.category}
+                defaultValue={fields.category.initialValue}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Category" />
@@ -172,21 +163,17 @@ await deleteFile(urlToDelete), {
 
             <div className="flex flex-col gap-3">
               <Label>Images</Label>
-
-              {/* Hidden field sending images as comma-separated list */}
               <input
                 type="hidden"
-                value={images.join(",")}
                 key={fields.images.key}
                 name={fields.images.name}
+                value={images.join(",")}
               />
-
-              <SortTableImageList
+              <SortableImageList
                 images={images}
                 setImages={setImages}
                 onDelete={handleDelete}
               />
-
               <p className="text-red-500">{fields.images.errors}</p>
             </div>
 
@@ -199,7 +186,7 @@ await deleteFile(urlToDelete), {
                 onValueChange={setSourceClientProjectId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Choose a linked client project" />
+                  <SelectValue placeholder="Choose a client project if this public case study comes from a live dashboard" />
                 </SelectTrigger>
                 <SelectContent>
                   {sourceOptions.map((option) => (
@@ -216,7 +203,7 @@ await deleteFile(urlToDelete), {
               <div className="flex flex-col gap-3 rounded-2xl border bg-muted/20 p-4">
                 <Label>Existing dashboard image URLs</Label>
                 <p className="text-sm text-muted-foreground">
-                  These image URLs already exist in the project/client system if you want to reuse them in this public project.
+                  These are already in the system from the client dashboard. Copy the ones you want into your image list or upload different ones above.
                 </p>
                 <Textarea readOnly value={selectedSource.images.join("\n")} className="min-h-32 font-mono text-xs" />
               </div>
@@ -224,10 +211,9 @@ await deleteFile(urlToDelete), {
           </div>
         </CardContent>
         <CardFooter>
-          <SubmitButton text="Edit Project" />
+          <SubmitButton text="Create Project" />
         </CardFooter>
       </Card>
     </form>
   );
 }
-  const selectedSource = sourceOptions.find((item) => item.id === sourceClientProjectId);

@@ -4,6 +4,7 @@ import { NavbarLinks } from "./NavBarLinks";
 import MobileNav from "./MobileNav";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { Button } from "@/components/ui/button";
+import { prisma } from "@/app/lib/db";
 import { LoginLink, LogoutLink, RegisterLink } from "@kinde-oss/kinde-auth-nextjs/components";
 
 const ADMIN_EMAILS = new Set([
@@ -17,6 +18,18 @@ export async function NavBar() {
   const user = await getUser();
   const isAdmin = !!user?.email && ADMIN_EMAILS.has(user.email);
   const displayName = user?.given_name || user?.family_name || user?.email || "User";
+  const dbUser = user?.id
+    ? await prisma.user.findUnique({
+        where: {
+          id: user.id,
+        },
+        include: {
+          clients: true,
+        },
+      })
+    : null;
+  const hasClientDashboard = (dbUser?.clients.length ?? 0) > 0;
+  const dashboardHref = isAdmin ? "/dashboard" : hasClientDashboard ? "/client-dashboard" : null;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-amber-500/20 bg-black text-white">
@@ -69,7 +82,7 @@ export async function NavBar() {
             {!user ? (
               <>
                 <Button asChild className="bg-amber-500 text-black hover:bg-amber-300">
-                  <LoginLink authUrlParams={{ prompt: "login" }} postLoginRedirectURL="/dashboard">
+                  <LoginLink authUrlParams={{ prompt: "login" }} postLoginRedirectURL="/api/auth/creation">
                     Sign in
                   </LoginLink>
                 </Button>
@@ -79,9 +92,9 @@ export async function NavBar() {
               </>
             ) : (
               <>
-                {isAdmin && (
+                {dashboardHref && (
                   <Button asChild className="bg-amber-500 text-black hover:bg-amber-300">
-                    <Link href="/dashboard">Dashboard</Link>
+                    <Link href={dashboardHref}>{isAdmin ? "Admin Dashboard" : "My Dashboard"}</Link>
                   </Button>
                 )}
                 <span className="text-sm opacity-90">Hi, {displayName}</span>
@@ -93,7 +106,7 @@ export async function NavBar() {
           </div>
 
           {/* Mobile menu trigger */}
-          <MobileNav />
+          <MobileNav dashboardHref={dashboardHref} dashboardLabel={isAdmin ? "Admin Dashboard" : "My Dashboard"} />
         </div>
       </div>
     </nav>

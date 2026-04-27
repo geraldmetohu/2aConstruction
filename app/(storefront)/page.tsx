@@ -16,6 +16,7 @@ import { Reveal, RevealStagger } from "@/components/ui/Reveal";
 import { Hero } from "../componets/storefront/Hero";
 import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
 import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
+import { EstimatorOverview } from "../componets/storefront/EstimatorOverview";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -29,6 +30,9 @@ export default function IndexPage() {
       <Hero/>
       {/* SAFE CONTRACTOR – TRUST SECTION */}
       <SafeContractorBadgeSection />
+      <Reveal>
+        <EstimatorOverview />
+      </Reveal>
       <Reveal>
         <ReviewsWidgets />
       </Reveal>

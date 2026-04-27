@@ -12,7 +12,13 @@ import { LoginLink, LogoutLink, RegisterLink } from "@kinde-oss/kinde-auth-nextj
 
 const ADMIN_EMAILS = new Set(["geraldmetohu@gmail.com", "hasanajaleksios@icloud.com", "ensisako11@gmail.com"]);
 
-export default function MobileNav() {
+export default function MobileNav({
+  dashboardHref,
+  dashboardLabel,
+}: {
+  dashboardHref?: string | null;
+  dashboardLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const pathname = usePathname();
@@ -179,7 +185,7 @@ export default function MobileNav() {
             <div className="grid grid-cols-2 gap-2">
               <LoginLink
                 authUrlParams={{ prompt: "login" }}
-                postLoginRedirectURL="/dashboard"
+                postLoginRedirectURL="/api/auth/creation"
                 className="inline-flex w-full items-center justify-center rounded-md bg-amber-500 px-4 py-2 font-medium text-black hover:bg-amber-400"
               >
                 Sign in
@@ -192,13 +198,13 @@ export default function MobileNav() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm">Hi, {displayName}</span>
               <div className="flex items-center gap-2">
-                {isAdmin && (
+                {dashboardHref && (
                   <Link
-                    href="/dashboard"
+                    href={dashboardHref}
                     onClick={() => setOpen(false)}
                     className="rounded-md bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
                   >
-                    Dashboard
+                    {dashboardLabel ?? (isAdmin ? "Admin Dashboard" : "My Dashboard")}
                   </Link>
                 )}
                 <LogoutLink className="rounded-md px-3 py-2 text-sm hover:bg-white/10">

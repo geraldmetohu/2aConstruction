@@ -7,10 +7,19 @@ import { MoreHorizontal, PlusCircle, UserIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 async function getData() {
     const data = await prisma.project.findMany({
         orderBy: {
             createdAt: "desc",
+        },
+        include: {
+            sourceClientProject: {
+                include: {
+                    client: true,
+                },
+            },
         },
     });
     return data;
@@ -43,6 +52,7 @@ export default async function ProjectsRoute() {
                             <TableHead>Name</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Category</TableHead>
+                            <TableHead>Client source</TableHead>
                             <TableHead>Date</TableHead>
                             <TableHead className="text-end">Action</TableHead>
                         </TableRow>
@@ -56,6 +66,7 @@ export default async function ProjectsRoute() {
                             <TableCell>{item.name}</TableCell>
                             <TableCell>{item.status}</TableCell>
                             <TableCell>{item.category}</TableCell>
+                            <TableCell>{item.sourceClientProject ? item.sourceClientProject.client.fullName : "—"}</TableCell>
                             <TableCell>{new Intl.DateTimeFormat(['ban','id']).format(item.createdAt)}</TableCell>
                             <TableCell className="text-end">
                                 <DropdownMenu>

@@ -8,6 +8,19 @@ import nodemailer from "nodemailer";
 import { headers } from "next/headers";
 import { deleteFile } from "./api/uploadthing/core";
 import { randomUUID } from "crypto";
+import { ClientPhaseStatus, ClientPortalStage } from "@prisma/client";
+
+type ClientPhaseInput = {
+  id?: string;
+  title: string;
+  status: ClientPhaseStatus;
+  phaseOrder: number;
+  targetDays?: number | null;
+  targetDate?: string | null;
+  jobs: string[];
+  notes?: string;
+  images: string[];
+};
 
 export async function CreateProject(prevState: unknown,formData: FormData) {
     const { getUser} = getKindeServerSession();
@@ -33,6 +46,7 @@ export async function CreateProject(prevState: unknown,formData: FormData) {
             status: submission.value.status,
             images: flattenUrls,
             category: submission.value.category,
+            sourceClientProjectId: submission.value.sourceClientProjectId || null,
             isFeatured: submission.value.isFeatured === true ? true: false,
         },
     });
@@ -69,6 +83,7 @@ export async function EditProject(prevState: any,formData: FormData ) {
             status: submission.value.status,
             isFeatured: submission.value.isFeatured === true ? true: false,
             images: flattenUrls,
+            sourceClientProjectId: submission.value.sourceClientProjectId || null,
         }
     });
 
@@ -398,18 +413,19 @@ function nl2br(s: string) {
 
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
-  return typeof value === "string" ? value.trim() : "";
+  return typeof value === "string" ? sanitizeText(value) : "";
 }
 
 function formDataToSnapshot(formData: FormData) {
   const snapshot: Record<string, string | string[]> = {};
+  const allowedUploadHosts = getAllowedUploadHosts();
 
   for (const key of Array.from(new Set(formData.keys()))) {
     if (key === "company") continue;
 
     const values = formData.getAll(key)
       .map((value) => {
-        if (typeof value === "string") return value.trim();
+        if (typeof value === "string") return sanitizeSnapshotValue(key, value, allowedUploadHosts);
         return value.name ? `[file] ${value.name}` : "[file]";
       })
       .filter(Boolean);
@@ -418,6 +434,76 @@ function formDataToSnapshot(formData: FormData) {
   }
 
   return snapshot;
+}
+
+function sanitizeText(value: string, maxLength = 2000) {
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
+}
+
+function sanitizeSnapshotValue(key: string, value: string, allowedUploadHosts: Set<string>) {
+  const trimmed = sanitizeText(value, 4000);
+
+  if (!trimmed) return "";
+
+  if (key.endsWith("Urls") || /^https?:\/\//i.test(trimmed)) {
+    return isAllowedUploadUrl(trimmed, allowedUploadHosts) ? trimmed : "";
+  }
+
+  return trimmed;
+}
+
+function normalizeEmail(value: string) {
+  return sanitizeText(value, 320).toLowerCase();
+}
+
+function parsePhaseInputs(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as ClientPhaseInput[];
+
+    return parsed
+      .map((phase, index) => ({
+        id: phase.id,
+        title: sanitizeText(phase.title, 160),
+        status: (Object.values(ClientPhaseStatus).includes(phase.status) ? phase.status : "planned") as ClientPhaseStatus,
+        phaseOrder: Number.isFinite(phase.phaseOrder) ? phase.phaseOrder : index,
+        targetDays: typeof phase.targetDays === "number" ? phase.targetDays : null,
+        targetDate: phase.targetDate ? new Date(phase.targetDate) : null,
+        jobs: Array.isArray(phase.jobs) ? phase.jobs.map((job) => sanitizeText(job, 120)).filter(Boolean) : [],
+        notes: phase.notes ? sanitizeText(phase.notes, 4000) : "",
+        images: Array.isArray(phase.images) ? phase.images.filter((image) => isAllowedUploadUrl(image, getAllowedUploadHosts())) : [],
+      }))
+      .filter((phase) => phase.title);
+  } catch {
+    return [];
+  }
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function getAllowedUploadHosts() {
+  const allowedHosts = new Set<string>(["utfs.io"]);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+
+  if (siteUrl) {
+    try {
+      allowedHosts.add(new URL(siteUrl).hostname);
+    } catch {
+      // Ignore invalid site URL env and keep default allow list.
+    }
+  }
+
+  return allowedHosts;
+}
+
+function isAllowedUploadUrl(value: string, allowedHosts: Set<string>) {
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) && allowedHosts.has(parsed.hostname);
+  } catch {
+    return false;
+  }
 }
 
 async function sendEstimatorEmails({
@@ -462,7 +548,7 @@ async function sendEstimatorEmails({
     })
     .join("");
 
-  await sendResendEmail({
+  const adminEmailPromise = sendResendEmail({
     from,
     to,
     subject: `New estimator form submitted by ${fullName}`,
@@ -497,8 +583,7 @@ async function sendEstimatorEmails({
     `,
   });
 
-  try {
-    await sendResendEmail({
+  const clientEmailPromise = sendResendEmail({
       from,
       to: email,
       subject: "We received your 2A Construction estimator request",
@@ -578,8 +663,18 @@ async function sendEstimatorEmails({
         </div>
       `,
     });
-  } catch (clientEmailError) {
+
+  const [adminEmailResult, clientEmailResult] = await Promise.allSettled([
+    adminEmailPromise,
+    clientEmailPromise,
+  ]);
+
+  if (clientEmailResult.status === "rejected") {
     console.warn("Estimator client confirmation email skipped. Verify a Resend domain before sending to client addresses.");
+  }
+
+  if (adminEmailResult.status === "rejected") {
+    throw adminEmailResult.reason;
   }
 }
 
@@ -671,7 +766,7 @@ export async function submitEstimator(formData: FormData) {
   if (honey) return { ok: true, message: "Thanks, your estimator request has been sent." };
 
   const fullName = getFormString(formData, "fullName");
-  const email = getFormString(formData, "email");
+  const email = normalizeEmail(getFormString(formData, "email"));
   const phone = getFormString(formData, "phone");
   const houseNumber = getFormString(formData, "houseNumber");
   const street = getFormString(formData, "street");
@@ -688,86 +783,172 @@ export async function submitEstimator(formData: FormData) {
     return { ok: false, message: "Please complete the required contact details and consent boxes." };
   }
 
+  if (!isValidEmail(email)) {
+    return { ok: false, message: "Please enter a valid email address." };
+  }
+
   const [firstName, ...lastNameParts] = fullName.split(" ");
   const address = [houseNumber, street, postcode].filter(Boolean).join(", ");
   const estimatorData = formDataToSnapshot(formData);
 
   try {
-    const created = await prisma.user.create({
-      data: {
-        id: randomUUID(),
-        email,
-        firstName: firstName || fullName,
-        lastName: lastNameParts.join(" "),
-        profileImage: "",
-        clients: {
-          create: {
-            fullName,
+    const created = await prisma.$transaction(async (tx) => {
+      let user = await tx.user.findFirst({
+        where: { email },
+      });
+
+      if (!user) {
+        user = await tx.user.create({
+          data: {
+            id: randomUUID(),
             email,
-            phone,
-            houseNumber,
-            street,
-            postcode,
-            preferredContact,
-            address,
-            foundUs,
-            startTimeframe,
-            termsAccepted,
-            marketingAccepted,
-            projects: {
-              create: {
-                projectType,
-                status: "review",
-                priceEstimated: budgetRange,
-                finalPrice: null,
-                formData: estimatorData,
-              },
+            firstName: firstName || fullName,
+            lastName: lastNameParts.join(" "),
+            profileImage: "",
+          },
+        });
+      }
+
+      const client = await tx.client.create({
+        data: {
+          userId: user.id,
+          fullName,
+          email,
+          phone,
+          houseNumber,
+          street,
+          postcode,
+          preferredContact,
+          address,
+          foundUs,
+          startTimeframe,
+          termsAccepted,
+          marketingAccepted,
+          projects: {
+            create: {
+              projectType,
+              status: "review",
+              priceEstimated: budgetRange,
+              finalPrice: null,
+              formData: estimatorData,
             },
           },
         },
-      },
-      include: {
-        clients: {
-          include: {
-            projects: true,
-          },
+        include: {
+          projects: true,
         },
-      },
+      });
+
+      return {
+        client,
+        project: client.projects[0],
+      };
     });
 
-    const client = created.clients[0];
-    const clientProject = client.projects[0];
-
-    let emailSent = true;
-
-    try {
-      await sendEstimatorEmails({
-        fullName,
-        email,
-        phone,
-        address,
-        preferredContact,
-        projectType,
-        budgetRange,
-        foundUs,
-        startTimeframe,
-        projectId: clientProject.id,
-        snapshot: estimatorData,
-      });
-    } catch (emailError) {
-      emailSent = false;
+    void sendEstimatorEmails({
+      fullName,
+      email,
+      phone,
+      address,
+      preferredContact,
+      projectType,
+      budgetRange,
+      foundUs,
+      startTimeframe,
+      projectId: created.project.id,
+      snapshot: estimatorData,
+    }).catch((emailError) => {
       console.error("Estimator email failed:", emailError);
-    }
+    });
 
     return {
       ok: true,
-      emailSent,
-      message: emailSent
-        ? "Thanks, your estimator request has been sent."
-        : "Thanks, your estimator request has been saved. Email sending needs SMTP attention.",
+      emailSent: true,
+      message: "Thanks, your estimator request has been saved and the confirmation is on its way.",
     };
   } catch (err) {
     console.error("Estimator submit failed:", err);
     return { ok: false, message: "Sorry, we could not send your estimator request. Please try again or contact us directly." };
   }
+}
+
+export async function saveClientProjectPortal(formData: FormData) {
+  const { getUser } = getKindeServerSession();
+  const user = await getUser();
+  const admins = process.env.ADMIN_EMAILS?.split(",").map((email) => email.trim().toLowerCase()) ?? [];
+
+  if (!user?.email || !admins.includes(user.email.toLowerCase())) {
+    return { ok: false, message: "You are not allowed to update client projects." };
+  }
+
+  const clientProjectId = getFormString(formData, "clientProjectId");
+
+  if (!clientProjectId) {
+    return { ok: false, message: "Missing client project id." };
+  }
+
+  const currentStage = getFormString(formData, "currentStage") as ClientPortalStage;
+  const phasesJson = getFormString(formData, "phasesJson");
+  const parsedPhases = parsePhaseInputs(phasesJson);
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.clientProject.update({
+        where: { id: clientProjectId },
+        data: {
+          dashboardTitle: getFormString(formData, "dashboardTitle") || null,
+          introTitle: getFormString(formData, "introTitle") || null,
+          introMessage: getFormString(formData, "introMessage") || null,
+          currentStage: Object.values(ClientPortalStage).includes(currentStage) ? currentStage : "introduction",
+          siteVisitDate: getDateOrNull(getFormString(formData, "siteVisitDate")),
+          agreementDate: getDateOrNull(getFormString(formData, "agreementDate")),
+          plannedStartDate: getDateOrNull(getFormString(formData, "plannedStartDate")),
+          targetCompletionDate: getDateOrNull(getFormString(formData, "targetCompletionDate")),
+          progressPercent: getBoundedInt(getFormString(formData, "progressPercent"), 0, 100),
+          isPortalVisible: formData.get("isPortalVisible") === "on",
+          adminSummary: getFormString(formData, "adminSummary") || null,
+          clientNotes: getFormString(formData, "clientNotes") || null,
+          priceEstimated: getFormString(formData, "priceEstimated") || null,
+          finalPrice: getFormString(formData, "finalPrice") || null,
+        },
+      });
+
+      await tx.clientProjectPhase.deleteMany({
+        where: { clientProjectId },
+      });
+
+      if (parsedPhases.length > 0) {
+        await tx.clientProjectPhase.createMany({
+          data: parsedPhases.map((phase) => ({
+            clientProjectId,
+            title: phase.title,
+            status: phase.status,
+            phaseOrder: phase.phaseOrder,
+            targetDays: phase.targetDays,
+            targetDate: phase.targetDate,
+            jobs: phase.jobs,
+            notes: phase.notes || null,
+            images: phase.images,
+          })),
+        });
+      }
+    });
+
+    return { ok: true, message: "Client project dashboard updated." };
+  } catch (error) {
+    console.error("Client project portal save failed:", error);
+    return { ok: false, message: "Could not update the client project dashboard." };
+  }
+}
+
+function getDateOrNull(value: string) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getBoundedInt(value: string, min: number, max: number) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) return min;
+  return Math.min(max, Math.max(min, parsed));
 }

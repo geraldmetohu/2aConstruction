@@ -1,6 +1,6 @@
 import { prisma } from "@/app/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BadgeCheck, Clock, Mail, Phone, UserRound } from "lucide-react";
+import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, UserRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +70,13 @@ export default async function ClientsPage() {
                       <summary className="cursor-pointer list-none">
                         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                           <div>
-                            <h3 className="text-base font-bold capitalize">{project.projectType}</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {project.projectType.split(",").map((type) => (
+                                <span key={type} className="rounded-full bg-neutral-900 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-white">
+                                  {type.trim()}
+                                </span>
+                              ))}
+                            </div>
                             <p className="text-sm text-muted-foreground">Project ID: {project.id}</p>
                           </div>
                           <div className="flex flex-wrap gap-2 text-xs font-semibold">
@@ -93,16 +99,43 @@ export default async function ClientsPage() {
                         </div>
                       </summary>
 
-                      <div className="mt-4 overflow-hidden rounded-xl border bg-white">
-                        <dl className="divide-y">
-                          {Object.entries(project.formData as Record<string, string | string[]>).map(([key, value]) => (
+                      {(() => {
+                        const { fileEntries, detailEntries } = splitProjectEntries(project.formData as Record<string, string | string[]>);
+
+                        return (
+                          <div className="mt-4 space-y-4">
+                            {fileEntries.length > 0 && (
+                              <div className="rounded-xl border bg-white p-4">
+                                <div className="mb-4 flex items-center gap-2">
+                                  <FolderOpen className="h-4 w-4 text-amber-700" />
+                                  <h4 className="text-sm font-black uppercase tracking-[0.16em] text-neutral-800">Uploads and attachments</h4>
+                                </div>
+                                <div className="space-y-4">
+                                  {fileEntries.map(([key, value]) => (
+                                    <div key={key} className="space-y-3">
+                                      <p className="text-sm font-semibold text-neutral-700">{humanizeKey(key)}</p>
+                                      <FormValue value={value} />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="overflow-hidden rounded-xl border bg-white">
+                              <dl className="divide-y">
+                                {detailEntries.map(([key, value]) => (
                             <div key={key} className="grid gap-1 p-3 text-sm md:grid-cols-[220px_1fr]">
                               <dt className="font-semibold text-neutral-700">{humanizeKey(key)}</dt>
-                              <dd className="text-neutral-600">{Array.isArray(value) ? value.join(", ") : value}</dd>
+                              <dd className="text-neutral-600">
+                                <FormValue value={value} />
+                              </dd>
                             </div>
-                          ))}
-                        </dl>
-                      </div>
+                                ))}
+                              </dl>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </details>
                   ))}
                 </div>
@@ -129,4 +162,102 @@ function humanizeKey(key: string) {
     .replace(/([A-Z])/g, " $1")
     .replace(/_/g, " ")
     .replace(/^./, (char) => char.toUpperCase());
+}
+
+function FormValue({ value }: { value: string | string[] }) {
+  const values = Array.isArray(value) ? value : [value];
+  const fileUrls = values.filter((item) => looksLikeUrl(item));
+
+  if (fileUrls.length > 0) {
+    return <FileGallery urls={fileUrls} />;
+  }
+
+  return <span>{values.join(", ") || "Not provided"}</span>;
+}
+
+function FileGallery({ urls }: { urls: string[] }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {urls.map((url) => {
+        const image = isImageUrl(url);
+        const pdf = isPdfUrl(url);
+        const fileName = getFileName(url);
+
+        return (
+          <a
+            key={url}
+            href={url}
+            target="_blank"
+            rel="noreferrer"
+            className="overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50 transition hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md"
+          >
+            {image ? (
+              <div className="h-36 bg-neutral-100">
+                <img src={url} alt={fileName} className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="flex h-36 flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 to-white px-4 text-center">
+                <div className="rounded-full bg-white p-3 shadow-sm">
+                  <FileText className="h-7 w-7 text-amber-700" />
+                </div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
+                  {pdf ? "PDF document" : "File attachment"}
+                </p>
+              </div>
+            )}
+            <div className="space-y-2 p-3">
+              <p className="line-clamp-2 text-sm font-semibold text-neutral-800">{fileName}</p>
+              <div className="inline-flex items-center gap-1 text-xs font-bold text-amber-700">
+                Open file
+                <ExternalLink className="h-3.5 w-3.5" />
+              </div>
+            </div>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
+function splitProjectEntries(entries: Record<string, string | string[]>) {
+  return Object.entries(entries).reduce<{
+    fileEntries: [string, string | string[]][];
+    detailEntries: [string, string | string[]][];
+  }>(
+    (accumulator, entry) => {
+      const [, value] = entry;
+      const values = Array.isArray(value) ? value : [value];
+
+      if (values.some((item) => looksLikeUrl(item))) {
+        accumulator.fileEntries.push(entry);
+      } else {
+        accumulator.detailEntries.push(entry);
+      }
+
+      return accumulator;
+    },
+    { fileEntries: [], detailEntries: [] }
+  );
+}
+
+function looksLikeUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function isImageUrl(value: string) {
+  return /\.(png|jpe?g|gif|webp|avif|svg)($|\?)/i.test(value);
+}
+
+function isPdfUrl(value: string) {
+  return /\.pdf($|\?)/i.test(value);
+}
+
+function getFileName(value: string) {
+  const lastSegment = value.split("/").pop() ?? value;
+
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return lastSegment;
+  }
 }

@@ -19,14 +19,16 @@ model User {
 }
 
 model Project {
-  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String
-  description String
-  status      ProjectStatus
-  images      String[]
-  category    Category
-  isFeatured  Boolean?      @default(false)
-  createdAt   DateTime?     @default(now()) @db.Timestamp(6)
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  description           String
+  status                ProjectStatus
+  images                String[]
+  category              Category
+  isFeatured            Boolean?       @default(false)
+  sourceClientProjectId String?        @db.Uuid
+  sourceClientProject   ClientProject? @relation(fields: [sourceClientProjectId], references: [id], onDelete: SetNull)
+  createdAt             DateTime?      @default(now()) @db.Timestamp(6)
 }
 
 model Banner {
@@ -80,16 +82,46 @@ model Client {
 }
 
 model ClientProject {
-  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  clientId       String              @db.Uuid
-  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectType    String
-  status         ClientProjectStatus @default(review)
-  priceEstimated String?
-  finalPrice     String?
-  formData       Json
-  createdAt      DateTime?           @default(now()) @db.Timestamp(6)
-  updatedAt      DateTime?           @updatedAt @db.Timestamp(6)
+  id                    String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId              String               @db.Uuid
+  client                Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectType           String
+  status                ClientProjectStatus  @default(review)
+  dashboardTitle        String?
+  introTitle            String?
+  introMessage          String?
+  currentStage          ClientPortalStage    @default(introduction)
+  siteVisitDate         DateTime?            @db.Timestamp(6)
+  agreementDate         DateTime?            @db.Timestamp(6)
+  plannedStartDate      DateTime?            @db.Timestamp(6)
+  targetCompletionDate  DateTime?            @db.Timestamp(6)
+  progressPercent       Int                  @default(0)
+  isPortalVisible       Boolean              @default(true)
+  adminSummary          String?
+  clientNotes           String?
+  priceEstimated        String?
+  finalPrice            String?
+  formData              Json
+  phases                ClientProjectPhase[]
+  portfolioProjects     Project[]
+  createdAt             DateTime?            @default(now()) @db.Timestamp(6)
+  updatedAt             DateTime?            @updatedAt @db.Timestamp(6)
+}
+
+model ClientProjectPhase {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientProjectId String            @db.Uuid
+  clientProject   ClientProject     @relation(fields: [clientProjectId], references: [id], onDelete: Cascade)
+  title           String
+  status          ClientPhaseStatus @default(planned)
+  phaseOrder      Int               @default(0)
+  targetDays      Int?
+  targetDate      DateTime?         @db.Timestamp(6)
+  jobs            Json
+  notes           String?
+  images          String[]
+  createdAt       DateTime?         @default(now()) @db.Timestamp(6)
+  updatedAt       DateTime?         @updatedAt @db.Timestamp(6)
 }
 
 model HeroVideo {
@@ -148,4 +180,20 @@ enum ClientProjectStatus {
   started
   ongoing
   finished
+}
+
+enum ClientPortalStage {
+  introduction
+  estimator_sent
+  site_visit
+  agreeing_scope
+  start_booked
+  in_progress
+  completed
+}
+
+enum ClientPhaseStatus {
+  planned
+  active
+  completed
 }

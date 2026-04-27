@@ -721,6 +721,10 @@ function isResendEmailConfigured() {
   return !!apiKey && apiKey.startsWith("re_");
 }
 
+function getAdminEmails() {
+  return process.env.ADMIN_EMAILS?.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean) ?? [];
+}
+
 
 export async function CreateHeroVideo(_: any, formData: FormData) {
   const data = Object.fromEntries(formData) as Record<string, string>;
@@ -875,7 +879,7 @@ export async function submitEstimator(formData: FormData) {
 export async function saveClientProjectPortal(formData: FormData) {
   const { getUser } = getKindeServerSession();
   const user = await getUser();
-  const admins = process.env.ADMIN_EMAILS?.split(",").map((email) => email.trim().toLowerCase()) ?? [];
+  const admins = getAdminEmails();
 
   if (!user?.email || !admins.includes(user.email.toLowerCase())) {
     return { ok: false, message: "You are not allowed to update client projects." };
@@ -941,6 +945,67 @@ export async function saveClientProjectPortal(formData: FormData) {
   }
 }
 
+export async function deleteClient(formData: FormData) {
+  const { getUser } = getKindeServerSession();
+  const user = await getUser();
+  const admins = getAdminEmails();
+
+  if (!user?.email || !admins.includes(user.email.toLowerCase())) {
+    return { ok: false, message: "You are not allowed to delete clients." };
+  }
+
+  const clientId = getFormString(formData, "clientId");
+  const confirmation = getFormString(formData, "confirmation").toLowerCase();
+
+  if (!clientId) {
+    return { ok: false, message: "Missing client id." };
+  }
+
+  if (confirmation !== "delete") {
+    return { ok: false, message: "Type delete to remove this client." };
+  }
+
+  try {
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      include: {
+        projects: {
+          include: {
+            phases: true,
+          },
+        },
+      },
+    });
+
+    if (!client) {
+      return { ok: false, message: "Client not found." };
+    }
+
+    const allowedHosts = getAllowedUploadHosts();
+    const urlsToDelete = new Set<string>();
+
+    for (const project of client.projects) {
+      collectUploadUrls(project.formData, allowedHosts).forEach((url) => urlsToDelete.add(url));
+      for (const phase of project.phases) {
+        phase.images
+          .filter((url) => isAllowedUploadUrl(url, allowedHosts))
+          .forEach((url) => urlsToDelete.add(url));
+      }
+    }
+
+    await prisma.client.delete({
+      where: { id: clientId },
+    });
+
+    await Promise.allSettled(Array.from(urlsToDelete).map((url) => deleteFile(url)));
+
+    redirect("/dashboard/clients");
+  } catch (error) {
+    console.error("Delete client failed:", error);
+    return { ok: false, message: "Could not delete this client." };
+  }
+}
+
 function getDateOrNull(value: string) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -951,4 +1016,38 @@ function getBoundedInt(value: string, min: number, max: number) {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return min;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function collectUploadUrls(value: unknown, allowedHosts: Set<string>) {
+  const urls = new Set<string>();
+
+  const visit = (entry: unknown) => {
+    if (typeof entry === "string") {
+      splitPossibleUrls(entry)
+        .filter((item) => isAllowedUploadUrl(item, allowedHosts))
+        .forEach((item) => urls.add(item));
+      return;
+    }
+
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+
+    if (entry && typeof entry === "object") {
+      Object.values(entry as Record<string, unknown>).forEach(visit);
+    }
+  };
+
+  visit(value);
+
+  return Array.from(urls);
+}
+
+function splitPossibleUrls(value: string) {
+  return value
+    .split(/[\n,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item) => /^https?:\/\//i.test(item));
 }

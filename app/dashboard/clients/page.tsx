@@ -1,6 +1,7 @@
 import { prisma } from "@/app/lib/db";
+import { deleteClient } from "@/app/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, UserRound } from "lucide-react";
+import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, Trash2, UserRound } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -138,6 +139,41 @@ export default async function ClientsPage() {
                       })()}
                     </details>
                   ))}
+
+                  <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-full bg-rose-100 p-2 text-rose-700">
+                        <Trash2 className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-black uppercase tracking-[0.16em] text-rose-900">Delete client</h4>
+                        <p className="mt-1 text-sm text-rose-800">
+                          Type <span className="font-bold">delete</span> to remove this client, their estimator submissions, and saved portal phases.
+                        </p>
+                        <form action={deleteClient} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                          <input type="hidden" name="clientId" value={client.id} />
+                          <label className="flex-1 text-sm font-medium text-rose-900">
+                            Confirmation
+                            <input
+                              type="text"
+                              name="confirmation"
+                              required
+                              pattern="delete"
+                              title="Type delete to confirm"
+                              placeholder="Type delete"
+                              className="mt-1 w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-neutral-900 outline-none ring-0 transition focus:border-rose-400"
+                            />
+                          </label>
+                          <button
+                            type="submit"
+                            className="inline-flex h-11 items-center justify-center rounded-xl bg-rose-700 px-4 text-sm font-bold text-white transition hover:bg-rose-800"
+                          >
+                            Delete client
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </details>
@@ -166,7 +202,7 @@ function humanizeKey(key: string) {
 
 function FormValue({ value }: { value: string | string[] }) {
   const values = Array.isArray(value) ? value : [value];
-  const fileUrls = values.filter((item) => looksLikeUrl(item));
+  const fileUrls = Array.from(new Set(values.flatMap(extractUrls)));
 
   if (fileUrls.length > 0) {
     return <FileGallery urls={fileUrls} />;
@@ -228,7 +264,7 @@ function splitProjectEntries(entries: Record<string, string | string[]>) {
       const [, value] = entry;
       const values = Array.isArray(value) ? value : [value];
 
-      if (values.some((item) => looksLikeUrl(item))) {
+      if (values.some((item) => extractUrls(item).length > 0)) {
         accumulator.fileEntries.push(entry);
       } else {
         accumulator.detailEntries.push(entry);
@@ -242,6 +278,13 @@ function splitProjectEntries(entries: Record<string, string | string[]>) {
 
 function looksLikeUrl(value: string) {
   return /^https?:\/\//i.test(value);
+}
+
+function extractUrls(value: string) {
+  return value
+    .split(/[\n,\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => looksLikeUrl(item));
 }
 
 function isImageUrl(value: string) {

@@ -27,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { submitEstimator } from "@/app/actions";
 
-type ProjectType = "extension" | "loft" | "refurbishment" | "roof" | "foundations" | "garden";
+type ProjectType = "extension" | "loft" | "refurbishment" | "roof" | "foundations" | "garden" | "demolition" | "newBuild";
 
 const EstimatorUploadDropzone = dynamic(
   () =>
@@ -54,9 +54,34 @@ const projectTypes: {
   { id: "loft", title: "Loft conversion", summary: "Dormer, hip-to-gable, L-shape or Velux rooflight conversions.", image: "/images/loft.jpg" },
   { id: "refurbishment", title: "Refurbishment", summary: "Full home refresh, kitchens, bathrooms, layouts and finishes.", image: "/images/refurb.jpg" },
   { id: "roof", title: "Roof", summary: "Pitched, flat, repairs, replacements, gutters and fascias.", image: "/images/roof.jpg" },
+  { id: "demolition", title: "Demolition / strip-out", summary: "Take-down, soft strip, waste removal and site clearance before new works.", image: "/images/refurb.jpg" },
+  { id: "newBuild", title: "New build", summary: "A new house, annexe or full shell and fit-out with trade-by-trade questions.", image: "/images/estimator/foundations.jpg" },
   { id: "foundations", title: "Foundations", summary: "New structural bases, underpinning preparation and groundwork.", image: "/images/estimator/foundations.jpg" },
   { id: "garden", title: "Garden / driveway", summary: "Paving, drainage, fencing, landscaping and parking surfaces.", image: "/images/estimator/resin.jpg" },
 ];
+
+const bedroomOptions = ["Studio / none", "1", "2", "3", "4", "5", "6+", "Not sure"];
+
+const roofTypeOptions = ["Pitched roof", "Flat roof"];
+
+const extensionDoorOptions = ["Bi-fold doors", "French doors", "Sliding doors", "Standard patio doors", "Other", "Not sure"];
+
+const floorFinishOptions = ["Laminate", "Vinyl", "Tiling", "Wood floor", "Resin", "Carpet", "Other", "Not sure"];
+
+const electricalFinishOptions = ["Pendant lights", "Spotlights", "LED strip lighting", "Wall lights", "Other", "Not sure"];
+
+const roomCountOptions = Array.from({ length: 21 }, (_, index) => `${index}`);
+
+const bathroomCountOptions = Array.from({ length: 11 }, (_, index) => `${index}`);
+
+const livingCountOptions = Array.from({ length: 6 }, (_, index) => `${index}`);
+
+const refurbishmentFloors = ["Ground floor", "First floor", "Second floor", "Loft level", "Basement", "Whole house"];
+
+const windowTypeOptions = ["uPVC casement", "Sash", "Tilt and turn", "Aluminium", "Timber", "Rooflight", "Other", "Not sure"];
+
+const doorTypeOptions = ["Fire door", "Standard internal door", "Pocket door", "Bi-fold internal door", "Composite front door", "uPVC back door", "French door", "Sliding door", "Other", "Not sure"];
+const uploadAccept = "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.zip";
 
 const roofTiles = [
   { title: "Concrete interlocking", image: "/images/estimator/interlocking.jfif", detail: "Durable and common across UK homes." },
@@ -188,17 +213,26 @@ const finishTierOptions = [
   "Not sure yet",
 ];
 
+const projectStageOptions = [
+  "1. Researching options",
+  "2. Planning and budgeting",
+  "3. Already have the plans",
+  "4. Have the permissions",
+  "5. Looking for the builder to start",
+];
+
 const steps = ["Project", "Measurements", "Details", "Logistics", "Budget", "Contact"];
+const budgetRangeOptions = buildBudgetRangeOptions();
 
 export function EstimatorForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const [step, setStep] = useState(0);
-  const [selectedProjectTypes, setSelectedProjectTypes] = useState<ProjectType[]>(["loft"]);
-  const [budgetFrom, setBudgetFrom] = useState("");
-  const [budgetTo, setBudgetTo] = useState("");
+  const [selectedProjectTypes, setSelectedProjectTypes] = useState<ProjectType[]>([]);
+  const [budgetRange, setBudgetRange] = useState("");
   const [quality, setQuality] = useState(65);
   const [cheap, setCheap] = useState(45);
   const [fast, setFast] = useState(40);
+  const [priorityHistory, setPriorityHistory] = useState<Array<"quality" | "cheap" | "fast">>(["quality", "cheap"]);
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -220,29 +254,60 @@ export function EstimatorForm() {
   }, [step]);
 
   function toggleProjectType(value: ProjectType) {
-    setSelectedProjectTypes((current) =>
-      current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
-    );
+    setSelectedProjectTypes((current) => {
+      if (current.includes(value)) {
+        return current.filter((item) => item !== value);
+      }
+
+      const next = current.filter((item) => {
+        if (value === "loft" && item === "roof") return false;
+        if (value === "roof" && item === "loft") return false;
+        return true;
+      });
+
+      return [...next, value];
+    });
   }
 
   function updateTradeSlider(name: "quality" | "cheap" | "fast", value: number) {
-    if (name === "quality") {
-      setQuality(value);
-      setCheap(Math.max(10, 100 - value + 10));
-      setFast(Math.max(10, Math.round(105 - value * 0.85)));
+    const nextHistory = [...priorityHistory.filter((item) => item !== name), name].slice(-2);
+    const values: Record<"quality" | "cheap" | "fast", number> = {
+      quality,
+      cheap,
+      fast,
+      [name]: value,
+    };
+
+    const otherKeys = (["quality", "cheap", "fast"] as const).filter((key) => key !== name);
+    const secondaryKey = otherKeys.find((key) => nextHistory[nextHistory.length - 2] === key) ?? otherKeys[0];
+    const tertiaryKey = otherKeys.find((key) => key !== secondaryKey) ?? otherKeys[1];
+
+    let secondaryValue = values[secondaryKey];
+    const maxSecondary = Math.max(0, 130 - value);
+
+    if (secondaryValue > maxSecondary) {
+      secondaryValue = maxSecondary;
     }
 
-    if (name === "cheap") {
-      setCheap(value);
-      setQuality(Math.max(10, 100 - value + 15));
-      setFast(Math.max(10, Math.round(value * 0.75)));
-    }
+    values[secondaryKey] = secondaryValue;
 
-    if (name === "fast") {
-      setFast(value);
-      setCheap(Math.max(10, 100 - value + 5));
-      setQuality(Math.min(100, Math.max(20, Math.round(45 + value * 0.45))));
-    }
+    const tertiaryValue = Math.max(0, 130 - value - secondaryValue);
+
+    values[tertiaryKey] = tertiaryValue;
+
+    if (name === "quality") setQuality(value);
+    if (name === "cheap") setCheap(value);
+    if (name === "fast") setFast(value);
+
+    if (secondaryKey === "quality") setQuality(secondaryValue);
+    if (secondaryKey === "cheap") setCheap(secondaryValue);
+    if (secondaryKey === "fast") setFast(secondaryValue);
+
+    if (tertiaryKey === "quality") setQuality(tertiaryValue);
+    if (tertiaryKey === "cheap") setCheap(tertiaryValue);
+    if (tertiaryKey === "fast") setFast(tertiaryValue);
+
+    setPriorityHistory(nextHistory);
   }
 
   async function submitForm(event: FormEvent<HTMLFormElement>) {
@@ -267,7 +332,7 @@ export function EstimatorForm() {
     setSubmitError(result.message);
   }
 
-  function validateCurrentStep() {
+function validateCurrentStep() {
     const currentStep = formRef.current?.querySelector<HTMLElement>(`[data-step="${step}"]`);
     if (!currentStep) return true;
 
@@ -285,6 +350,9 @@ export function EstimatorForm() {
     );
 
     const checkedRadioNames = new Set<string>();
+    const requiredCheckboxGroups = Array.from(
+      currentStep.querySelectorAll<HTMLElement>("[data-required-checkbox-group]")
+    );
 
     for (const field of requiredFields) {
       if (field instanceof HTMLInputElement && field.type === "radio") {
@@ -307,6 +375,17 @@ export function EstimatorForm() {
 
       if (!field.checkValidity()) {
         field.reportValidity();
+        return false;
+      }
+    }
+
+    for (const group of requiredCheckboxGroups) {
+      const hasChecked = !!group.querySelector<HTMLInputElement>('input[type="checkbox"]:checked');
+
+      if (!hasChecked) {
+        const message = group.dataset.requiredCheckboxGroup || "Please choose at least one option.";
+        setSubmitError(message);
+        group.scrollIntoView({ behavior: "smooth", block: "center" });
         return false;
       }
     }
@@ -375,17 +454,23 @@ export function EstimatorForm() {
                 <input type="hidden" name="projectType" value={selectedProjectLabels.join(", ")} />
                 <input type="text" name="company" tabIndex={-1} autoComplete="off" className="hidden" />
                 <div className="mb-8">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <Button type="button" variant="outline" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0} className="h-11 rounded-full border-neutral-300">
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                    <p className="text-right text-sm font-bold uppercase tracking-[0.25em] text-amber-700">Step {step + 1} of {steps.length}</p>
+                  </div>
                   <div className="mb-4 h-2 overflow-hidden rounded-full bg-neutral-200">
                     <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-cyan-400 transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
                   </div>
-                  <p className="text-sm font-bold uppercase tracking-[0.25em] text-amber-700">Step {step + 1} of {steps.length}</p>
                 </div>
 
                 <div data-step="0" className={step === 0 ? "block" : "hidden"}><ProjectStep selectedProjectTypes={selectedProjectTypes} toggleProjectType={toggleProjectType} /></div>
-                <div data-step="1" className={step === 1 ? "block" : "hidden"}><MeasurementStep /></div>
+                <div data-step="1" className={step === 1 ? "block" : "hidden"}><MeasurementStep selectedProjectTypes={selectedProjectTypes} /></div>
                 <div data-step="2" className={step === 2 ? "block" : "hidden"}><ProjectDetailStep selectedProjectTypes={selectedProjectTypes} /></div>
                 <div data-step="3" className={step === 3 ? "block" : "hidden"}><LogisticsStep /></div>
-                <div data-step="4" className={step === 4 ? "block" : "hidden"}><BudgetStep budgetFrom={budgetFrom} budgetTo={budgetTo} setBudgetFrom={setBudgetFrom} setBudgetTo={setBudgetTo} quality={quality} cheap={cheap} fast={fast} tradeMood={tradeMood} updateTradeSlider={updateTradeSlider} /></div>
+                <div data-step="4" className={step === 4 ? "block" : "hidden"}><BudgetStep budgetRange={budgetRange} setBudgetRange={setBudgetRange} quality={quality} cheap={cheap} fast={fast} tradeMood={tradeMood} updateTradeSlider={updateTradeSlider} /></div>
                 <div data-step="5" className={step === 5 ? "block" : "hidden"}><ContactStep /></div>
 
                 <div className="mt-10 flex flex-col gap-3 border-t border-neutral-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -430,53 +515,69 @@ function ProjectStep({
     <StepShell
       eyebrow="Choose your work type"
       title="What jobs are we estimating?"
-      intro="Clients can choose more than one type of work here. We will open all matching question sections in the next step."
+      intro="Choose one or more jobs. We will then show only the trade questions that match your project mix."
     >
       <div className="grid gap-4 md:grid-cols-2">
         {projectTypes.map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            onClick={() => toggleProjectType(item.id)}
-            className={cn(
-              "group overflow-hidden rounded-3xl border text-left transition hover:-translate-y-1 hover:shadow-xl",
-              selectedProjectTypes.includes(item.id) ? "border-amber-500 ring-4 ring-amber-200" : "border-neutral-200"
-            )}
-          >
-            <div className="relative h-40">
-              <Image src={item.image} alt={item.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-              <span className="absolute bottom-4 left-4 rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-neutral-950">
-                {item.title}
-              </span>
-              {selectedProjectTypes.includes(item.id) && (
-                <span className="absolute right-4 top-4 rounded-full bg-amber-400 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-black">
-                  Included
-                </span>
-              )}
-            </div>
-            <p className="p-4 text-sm leading-6 text-neutral-600">{item.summary}</p>
-          </button>
+          (() => {
+            const disabled =
+              (item.id === "roof" && selectedProjectTypes.includes("loft")) ||
+              (item.id === "loft" && selectedProjectTypes.includes("roof"));
+
+            return (
+              <button
+                type="button"
+                key={item.id}
+                disabled={disabled}
+                onClick={() => toggleProjectType(item.id)}
+                className={cn(
+                  "group overflow-hidden rounded-3xl border text-left transition hover:-translate-y-1 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-none",
+                  selectedProjectTypes.includes(item.id) ? "border-amber-500 ring-4 ring-amber-200" : "border-neutral-200"
+                )}
+              >
+                <div className="relative h-40">
+                  <Image src={item.image} alt={item.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                  <span className="absolute bottom-4 left-4 rounded-full bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-neutral-950">
+                    {item.title}
+                  </span>
+                  {selectedProjectTypes.includes(item.id) && (
+                    <span className="absolute right-4 top-4 rounded-full bg-amber-400 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-black">
+                      Included
+                    </span>
+                  )}
+                </div>
+                <div className="p-4">
+                  <p className="text-sm leading-6 text-neutral-600">{item.summary}</p>
+                  {disabled && (
+                    <p className="mt-2 text-xs font-bold uppercase tracking-[0.16em] text-rose-600">
+                      Choose either roof works or loft conversion, not both.
+                    </p>
+                  )}
+                </div>
+              </button>
+            );
+          })()
         ))}
       </div>
       <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
         <p className="text-sm font-black uppercase tracking-[0.16em] text-amber-700">Estimator logic</p>
         <p className="mt-2 text-sm leading-6 text-neutral-600">
-          If someone needs an extension, loft and refurbishment together, the form will now ask for all three scopes in one submission.
+          You can combine jobs like extension, refurbishment and garden works in one submission. Loft conversion and roof-only works stay separate so the brief stays clear.
         </p>
       </div>
     </StepShell>
   );
 }
 
-function MeasurementStep() {
+function MeasurementStep({ selectedProjectTypes }: { selectedProjectTypes: ProjectType[] }) {
   return (
     <StepShell
       eyebrow="Basic measurements"
-      title="Tell us the rough size."
-      intro="Approximate dimensions are enough. If you are not sure, use the not sure options and upload photos later."
+      title="Tell us the rough size and layout."
+      intro="Approximate dimensions are enough. We only show the size fields that matter to the works you selected."
     >
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Field name="houseWidth" label="Rough house width" placeholder="e.g. 6.2 metres or not sure" icon={<Ruler />} required />
         <Field name="houseLength" label="Rough house length" placeholder="e.g. 9.5 metres or not sure" icon={<Ruler />} required />
         <Field name="floorHeight" label="Floor height" placeholder="e.g. 2.4 metres per floor" icon={<Home />} />
@@ -485,6 +586,12 @@ function MeasurementStep() {
       <div className="grid gap-4 md:grid-cols-2">
         <SelectLike name="livingSituation" label="Are you living in the property during works?" options={["Yes", "No", "Partly", "Not sure yet"]} required />
         <SelectLike name="relocationWillingness" label="Would you be willing to relocate during construction?" options={["Yes, if needed", "No, I plan to stay", "Maybe depending on the works", "Not sure yet"]} required />
+      </div>
+      <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-amber-700">Estimator pricing placeholders</p>
+        <p className="mt-2 text-sm leading-6 text-neutral-600">
+          We will save square metre fields and bedroom counts with this request. Example hidden pricing placeholders are included in the form so your formula can be added later without changing the saved data shape.
+        </p>
       </div>
       <TextareaBlock name="measurementNotes" label="Anything unusual about access, structure or measurements?" placeholder="Tell us about narrow alleys, shared walls, sloped ground, previous works, etc." />
     </StepShell>
@@ -499,70 +606,46 @@ function ProjectDetailStep({ selectedProjectTypes }: { selectedProjectTypes: Pro
       intro="This estimator can now cover multiple work types in one go. We start with the decisions people usually skip, then open a section for each selected job."
     >
       <SharedProjectOverview />
-      <PreConstructionQuestions />
-      <SiteSetupQuestions />
 
       {selectedProjectTypes.includes("extension") && <ExtensionQuestions />}
       {selectedProjectTypes.includes("loft") && <LoftQuestions />}
       {selectedProjectTypes.includes("refurbishment") && <RefurbishmentQuestions />}
-      {selectedProjectTypes.includes("roof") && <RoofQuestions />}
+      {selectedProjectTypes.includes("roof") && !selectedProjectTypes.includes("loft") && <RoofQuestions />}
+      {selectedProjectTypes.includes("demolition") && <DemolitionQuestions />}
+      {selectedProjectTypes.includes("newBuild") && <NewBuildQuestions />}
       {selectedProjectTypes.includes("foundations") && <FoundationQuestions />}
       {selectedProjectTypes.includes("garden") && <GardenQuestions />}
-
-      {(selectedProjectTypes.includes("extension") || selectedProjectTypes.includes("refurbishment")) && (
-        <KitchenQuestions />
-      )}
-
-      {(selectedProjectTypes.includes("loft") || selectedProjectTypes.includes("extension") || selectedProjectTypes.includes("refurbishment")) && (
-        <FlooringQuestions />
-      )}
-
-      {(selectedProjectTypes.includes("loft") || selectedProjectTypes.includes("extension") || selectedProjectTypes.includes("refurbishment")) && (
-        <BathroomAndFinishQuestions />
-      )}
-
-      <ProjectTimelineSummary />
     </StepShell>
   );
 }
 
 function SharedProjectOverview() {
+  const [mainPriorities, setMainPriorities] = useState<string[]>(["High quality"]);
+
   return (
     <DetailPanel
       title="Project overview"
-      intro="These answers help us understand who the project is for, what level of finish you expect, and whether there are planning or landlord-style constraints."
+      intro="These answers help us understand what stage you are at, what level of finish you expect, and what matters most for the quote."
     >
       <div className="grid gap-4 md:grid-cols-2">
         <SelectLike name="projectUse" label="Project type / use" options={projectUseOptions} required />
         <SelectLike name="finishTier" label="Finish level" options={finishTierOptions} required />
       </div>
-      <ChoiceGrid
-        title="Which best describes the job?"
-        name="projectCharacter"
-        type="radio"
-        required
-        options={["Structural shell only", "Part-finished build", "Full turn-key project", "Not sure yet"]}
+      <SelectLike name="projectStage" label="What phase are you in?" options={projectStageOptions} required />
+      <CheckboxCardGroup
+        title="What matters most to you?"
+        name="programmeExpectation"
+        options={["High quality", "Low price", "Fast starting date", "Only early budgeting", "Other"]}
+        selected={mainPriorities}
+        onToggle={(value) => setMainPriorities((current) => toggleArrayValue(current, value))}
       />
-      <ChoiceGrid
-        title="Key trades likely involved"
-        name="projectTrades"
-        options={[
-          "Architect",
-          "Structural engineer",
-          "Builder / main contractor",
-          "Groundworkers",
-          "Bricklayers",
-          "Roofers",
-          "Carpenters",
-          "Electricians",
-          "Plumbers",
-          "Plasterers",
-          "Tilers",
-          "Kitchen fitters",
-          "Decorators",
-          "Landscapers",
-        ]}
-      />
+      {mainPriorities.includes("Other") && (
+        <TextareaBlock
+          name="programmeExpectationOther"
+          label="Tell us what else matters most"
+          placeholder="For example: keep the house usable, work around tenants, complete before a move-in date, or phase the work room by room."
+        />
+      )}
       <TextareaBlock
         name="projectOverviewNotes"
         label="Main goals for the project"
@@ -572,225 +655,487 @@ function SharedProjectOverview() {
   );
 }
 
-function PreConstructionQuestions() {
-  return (
-    <DetailPanel
-      title="Pre-construction"
-      intro="This phase is often skipped and it is usually the biggest mistake. It can take 6 to 16 weeks on its own."
-    >
-      <ChoiceGrid
-        title="Who is handling the pre-construction phase?"
-        name="preConstructionSupport"
-        type="radio"
-        required
-        options={[
-          "I already have my own team",
-          "I need 2A Construction to help coordinate it",
-          "Partly arranged, still need support",
-          "Not sure yet",
-        ]}
-      />
-      <ChoiceGrid title="What is already in place?" name="preConstructionScope" options={preConstructionOptions} />
-      <OptionalExtras
-        title="Advanced pre-construction extras"
-        description="These are more specialist items. Only open this if you want to give a more technical brief. It will take a bit more time."
-      >
-        <ChoiceGrid title="Deliverables available or expected" name="preConstructionDeliverables" options={preConstructionDeliverables} />
-      </OptionalExtras>
-      <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-        Measured surveys, drawings, steel design, planning and building regulations can move programme and cost early. Knowing what is done already saves a lot of back and forth later.
-      </div>
-    </DetailPanel>
-  );
-}
-
-function SiteSetupQuestions() {
-  return (
-    <DetailPanel
-      title="Site setup and demolition"
-      intro="We want to know what needs stripping out before the new work starts."
-    >
-      <ChoiceGrid title="Strip-out and setup scope" name="siteSetupScope" options={demolitionOptions} />
-      <OptionalExtras
-        title="Advanced temporary support extras"
-        description="These are usually for clients who already have drawings or know a bit more about how the job will be built."
-      >
-        <ChoiceGrid
-          title="Temporary works likely needed"
-          name="temporaryWorks"
-          options={["Acrow props", "Temporary steel support", "Protection to occupied areas", "Neighbour protection", "Not sure"]}
-        />
-      </OptionalExtras>
-      <TextareaBlock
-        name="siteSetupNotes"
-        label="Anything we should know before site setup?"
-        placeholder="Occupied house, tenants in place, limited storage, neighbour issues, dust sensitivity, access through kitchen, etc."
-      />
-    </DetailPanel>
-  );
-}
-
 function RoofQuestions() {
+  const [roofTypes, setRoofTypes] = useState<string[]>([]);
+
+  const pitchedSelected = roofTypes.includes("Pitched roof");
+  const flatSelected = roofTypes.includes("Flat roof");
+
   return (
-    <DetailPanel title="Roof works" intro="Choose the roof type, finishes and the extra items you want included in the quote.">
-      <ChoiceGrid title="Roof type" name="roofType" options={["Pitched roof", "Flat roof", "Roof repair only", "Not sure"]} />
-      <VisualChoiceGrid title="If flat roof is included, choose preferred system" name="flatRoofSystem" options={flatRoofSystems} />
-      <div>
-        <h3 className="mb-3 text-lg font-black">If pitched roof is included, choose tile style</h3>
-        <div className="grid gap-3 md:grid-cols-2">
-          {roofTiles.map((tile) => (
-            <label key={tile.title} className="flex cursor-pointer gap-3 rounded-2xl border border-neutral-200 p-3 transition hover:border-amber-400 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:shadow-md">
-              <input type="checkbox" name="roofTiles" value={tile.title} className="peer sr-only" />
-              <span className="relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-neutral-100">
-                <Image src={tile.image} alt={tile.title} fill className="object-cover" />
-              </span>
-              <span className="peer-checked:text-amber-800">
-                <span className="block font-bold">{tile.title}</span>
-                <span className="mt-1 block text-sm text-neutral-600">{tile.detail}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-      <ChoiceGrid
-        title="Weatherproofing materials"
-        name="roofWeatherproofing"
-        options={["Breather membrane / felt", "Lead flashing", "New gutters", "New fascia and soffit", "Roof windows", "Drainage connection review", "Not sure"]}
+    <DetailPanel title="Roof works" intro="Choose the roof types you want priced. If you only select one roof type, we only show the questions that matter to that type.">
+      <Field name="roofAreaM2" label="Roof area (m²)" placeholder="e.g. 60 or not sure" />
+      <CheckboxCardGroup
+        title="Which roof areas need work?"
+        name="roofType"
+        options={roofTypeOptions}
+        selected={roofTypes}
+        onToggle={(value) => setRoofTypes((current) => toggleArrayValue(current, value))}
       />
-      <YesNoMaybeGrid items={["Replace joists", "Insulation", "New gutters", "New fascia"]} />
-      <OptionalExtras
-        title="Advanced roof extras"
-        description="Open this if you want to include more technical roof information. Most clients skip this part."
-      >
-        <ChoiceGrid title="Additional roof structure items" name="roofAdvancedScope" options={["Valley work", "Chimney repairs", "Parapet wall detail", "Drainage outlets", "Timber repair", "Not sure"]} />
-      </OptionalExtras>
-      <TextareaBlock name="roofDetails" label="Any other roof details?" placeholder="Leaks, rotten timber, chimney work, rooflights, neighbour access, matching existing tiles..." />
+      <SegmentedField name="roofRepairLevel" label="What do you need?" options={["Full replacement", "Partial renewal", "Repair only", "Not sure"]} defaultValue="Full replacement" />
+      {pitchedSelected && (
+        <div className="space-y-6 rounded-3xl border border-neutral-200 bg-white p-4">
+          <VisualCheckboxGrid title="Pitched roof covering" name="roofTiles" options={roofTiles} />
+          <ChoiceGrid title="Pitched roof extras" name="pitchedRoofExtras" options={["Breather membrane / felt", "Lead flashing", "Rooflights", "Dry ridge system", "Dry verge", "Not sure"]} />
+        </div>
+      )}
+      {flatSelected && (
+        <div className="space-y-6 rounded-3xl border border-neutral-200 bg-white p-4">
+          <VisualChoiceGrid title="Flat roof membrane" name="flatRoofSystem" options={flatRoofSystems} />
+          <ChoiceGrid title="Flat roof extras" name="flatRoofExtras" options={["New decking / boards", "Insulation upgrade", "New outlets", "Parapet detail", "Rooflights", "Not sure"]} />
+        </div>
+      )}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SegmentedField name="roofInsulation" label="Insulation" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="roofJoists" label="Replace joists / timber repairs" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="roofNewGutters" label="New gutters" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="roofNewFascia" label="New fascia / soffit" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      </div>
+      <TextareaBlock name="roofDetails" label="Additional roof details" placeholder="Leaks, moss, rotten timber, chimney work, parapet issues, access, neighbour side, matching tiles..." />
+      <FileDrop name="roofPhotos" label="Upload roof photos, reports or PDFs" accept={uploadAccept} multiple />
+      <SupplyNote area="roof coverings, trims and visible rainwater goods" />
     </DetailPanel>
   );
 }
 
 function LoftQuestions() {
+  const [loftRoofTypes, setLoftRoofTypes] = useState<string[]>([]);
+  const [loftKitchen, setLoftKitchen] = useState("No");
+  const [loftBathroom, setLoftBathroom] = useState("No");
+  const [veluxChoice, setVeluxChoice] = useState("Not sure");
+  const [loftFlooring, setLoftFlooring] = useState<string[]>([]);
+
   return (
-    <DetailPanel title="Loft conversion" intro="These answers help us estimate structure, stairs, rooms, windows and finishing level.">
-      <div>
-        <h3 className="mb-3 text-lg font-black">What type of loft conversion?</h3>
-        <div className="grid gap-3 md:grid-cols-2">
-          {loftTypes.map((loft) => (
-            <label key={loft.title} className="overflow-hidden rounded-2xl border border-neutral-200 transition hover:border-amber-400 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:shadow-lg">
-              <div className="relative h-32">
-                <Image src={loft.image} alt={loft.title} fill className="object-cover" />
-              </div>
-              <span className="flex gap-3 p-3">
-                <input type="radio" name="loftType" value={loft.title} className="mt-1" required />
-                <span>
-                  <span className="block font-bold">{loft.title}</span>
-                  <span className="text-sm text-neutral-600">{loft.detail}</span>
-                </span>
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
+    <DetailPanel title="Loft conversion" intro="This section focuses on the rooms, finishes and trade choices clients usually care about most in a loft conversion.">
+      <VisualChoiceGrid title="Loft type" name="loftType" options={loftTypes} required />
+      <CheckboxCardGroup
+        title="Existing roof types on the loft"
+        name="loftRoofType"
+        options={roofTypeOptions}
+        selected={loftRoofTypes}
+        onToggle={(value) => setLoftRoofTypes((current) => toggleArrayValue(current, value))}
+      />
+      {loftRoofTypes.includes("Pitched roof") && <VisualCheckboxGrid title="Pitched roof covering for the loft" name="loftRoofTiles" options={roofTiles} />}
+      {loftRoofTypes.includes("Flat roof") && <VisualChoiceGrid title="Flat roof membrane for dormer / flat sections" name="loftFlatRoofSystem" options={flatRoofSystems} />}
       <VisualChoiceGrid title="Dormer outside finish" name="dormerFinish" options={dormerFinishes} />
-      <ChoiceGrid title="Planning permission" name="loftPlanning" type="radio" required options={["Yes", "No", "Applied", "Would like help with that"]} />
-      <FileDrop name="loftPlans" label="If yes, upload plans" accept=".pdf,.png,.jpg,.jpeg" />
-      <ChoiceGrid title="Loft structure scope" name="loftStructureScope" options={["Strip roof", "Install steels", "New joists", "Roof alteration", "Timber framing", "Not sure"]} />
-      <OptionalExtras
-        title="Advanced loft extras"
-        description="This is for clients who already know more about the structure or have spoken with a designer or engineer."
-      >
-        <ChoiceGrid title="Loft structure materials likely needed" name="loftStructureMaterials" options={["C24 timber joists", "Structural steel", "OSB / ply sheathing", "Fire-rated plasterboard", "PIR insulation", "Not sure"]} />
-      </OptionalExtras>
-      <YesNoMaybeGrid items={["Need new stairs", "Need RSJs", "Want Velux windows", "Want uPVC windows", "Paint finish"]} />
+      <SegmentedField name="loftPlanning" label="Planning status" options={["Yes", "No", "Applied", "Would like help", "Not sure"]} defaultValue="Not sure" />
+      <FileDrop name="loftPlans" label="Upload loft plans, ideas or PDFs" accept={uploadAccept} multiple />
       <div className="grid gap-4 md:grid-cols-3">
         <SelectLike name="loftRooms" label="Rooms" options={["1", "2", "3", "I don't know"]} icon={<BedDouble />} />
         <SelectLike name="loftBathrooms" label="Bathrooms" options={["1", "2", "I don't know"]} icon={<Bath />} />
         <Field name="currentLoftHeight" label="Current loft height" placeholder="Value or I don't know" icon={<Ruler />} />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        <Field name="veluxWindowCount" label="How many Velux windows?" placeholder="e.g. 2, none, or not sure" />
-        <Field name="upvcWindowCount" label="How many uPVC windows?" placeholder="e.g. 1, none, or not sure" />
+        <SegmentedField name="loftStaircase" label="Do you need a staircase?" options={["Yes", "No", "Not sure"]} defaultValue="Yes" />
+        <SegmentedField name="loftKitchen" label="Kitchen in the loft?" options={["Yes", "No", "Not sure"]} value={loftKitchen} onChange={setLoftKitchen} defaultValue="No" />
+        <SegmentedField name="loftBathroom" label="Bathroom in the loft?" options={["Yes", "No", "Not sure"]} value={loftBathroom} onChange={setLoftBathroom} defaultValue="No" />
+        <SegmentedField name="loftVelux" label="Velux windows?" options={["Yes", "No", "Not sure"]} value={veluxChoice} onChange={setVeluxChoice} defaultValue="Not sure" />
       </div>
-      <TextareaBlock name="loftExtraDetails" label="Anything else about the loft?" placeholder="Existing water tanks, awkward chimney positions, storage needs, ensuite ideas, party wall concerns..." />
+      {loftKitchen === "Yes" && <SegmentedField name="loftKitchenType" label="Kitchen scope" options={["New kitchen", "Move existing kitchen", "Kitchenette", "Not sure"]} defaultValue="New kitchen" />}
+      {loftBathroom === "Yes" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <SegmentedField name="loftBathroomType" label="Bathroom type" options={["Shower room", "Bathroom with bath", "Both bath and shower", "Not sure"]} defaultValue="Shower room" />
+          <SegmentedField name="loftBathroomTiling" label="Bathroom tiling" options={["Fully tiled", "Bath / shower area only", "Client to decide later", "Not sure"]} defaultValue="Bath / shower area only" />
+        </div>
+      )}
+      {veluxChoice === "Yes" && <SelectLike name="veluxWindowCount" label="How many Velux windows?" options={["1", "2", "3", "4", "5+", "Not sure"]} />}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SelectLike name="loftOtherWindows" label="How many other windows?" options={["0", "1", "2", "3", "4+", "Not sure"]} />
+        <SegmentedField name="loftFuseBox" label="New fuse box for the loft?" options={["Yes", "No", "Up to the builder", "Not sure"]} defaultValue="Up to the builder" />
+      </div>
+      <CheckboxCardGroup
+        title="Flooring in the loft"
+        name="loftFlooring"
+        options={floorFinishOptions}
+        selected={loftFlooring}
+        onToggle={(value) => setLoftFlooring((current) => toggleArrayValue(current, value))}
+      />
+      {loftFlooring.includes("Other") && <TextareaBlock name="loftFlooringOther" label="Other loft flooring preference" placeholder="Microcement, parquet, luxury vinyl, reclaimed boards..." />}
+      <ChoiceGrid title="Electrical finish in the loft" name="loftElectricalFinish" options={electricalFinishOptions} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <SegmentedField name="loftFireAlarm" label="Fire alarms" options={["Yes", "No", "Not sure"]} defaultValue="Yes" />
+        <SegmentedField name="loftPainting" label="Painting" options={["Yes", "No", "Not sure"]} defaultValue="Yes" />
+        <SegmentedField name="loftDecorations" label="Decorative finishes" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="loftDrainage" label="Drainage changes" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      </div>
+      <ChoiceGrid title="Joinery and external items" name="loftJoineryItems" options={["Architraves", "Skirting", "Door hanging", "Guttering", "Fascia", "Internal doors", "Fire doors", "Not sure"]} />
+      <TextareaBlock name="loftExtraDetails" label="Additional loft information" placeholder="Storage needs, headroom concerns, awkward chimney positions, preferred layout, party wall notes, ideas for study or bedroom use..." />
+      <FileDrop name="loftIdeaFiles" label="Upload loft inspiration, plans or photos" accept={uploadAccept} multiple />
+      <SupplyNote area="loft bathroom, joinery and decorative finish materials" />
     </DetailPanel>
   );
 }
 
 function ExtensionQuestions() {
+  const [existingExtension, setExistingExtension] = useState("No");
+  const [extensionKitchen, setExtensionKitchen] = useState("Yes");
+  const [rooflights, setRooflights] = useState("Not sure");
+  const [doorChoice, setDoorChoice] = useState("Bi-fold doors");
+  const [extensionRoofTypes, setExtensionRoofTypes] = useState<string[]>([]);
+  const [extensionFlooring, setExtensionFlooring] = useState<string[]>([]);
+  const [extensionElectrical, setExtensionElectrical] = useState<string[]>([]);
+
   return (
-    <DetailPanel title="Extension" intro="This separates shell-only work from full finished living space and highlights the major cost drivers early.">
+    <DetailPanel title="Extension" intro="We ask the extension questions in the order most clients think about the finished space: what it is, what goes in it, and how it should look.">
       <VisualChoiceGrid title="Extension style" name="extensionStyle" options={extensionStyles} required />
-      <ChoiceGrid title="Planning status" name="extensionPlanning" type="radio" required options={["Approved", "Not started", "Applied", "Would like help", "Not sure"]} />
-      <FileDrop name="extensionPlans" label="Upload drawings or planning documents" accept=".pdf,.png,.jpg,.jpeg" />
-      <ChoiceGrid title="Structural works in scope" name="extensionStructuralScope" options={structuralScopeOptions} />
-      <OptionalExtras
-        title="Advanced extension extras"
-        description="These options are more specific. Open them if you already know how the extension is likely to be built."
-      >
-        <ChoiceGrid title="Wall build-up / external system" name="extensionWallBuildUp" options={["Facing brick", "Render system", "Blockwork inner leaf", "Wall ties + insulation", "Timber frame sections", "Not sure"]} />
-        <ChoiceGrid title="Roofing and openings" name="extensionWeatherproofing" options={["New roof structure", "Roof lantern", "Flat roof over part", "Sliding doors", "Bi-fold doors", "Windows and external doors", "Not sure"]} />
-      </OptionalExtras>
-      <YesNoMaybeGrid items={["Kitchen included", "Structural steel / RSJs", "Roof lantern", "Bi-fold or sliding doors", "Underfloor heating", "New drainage"]} />
-      <TextareaBlock name="extensionDetails" label="Anything else for the extension?" placeholder="Open-plan kitchen, utility room, downstairs WC, matching brickwork, skylights, demolition..." />
+      <div className="grid gap-4 md:grid-cols-2">
+        <Field name="extensionWidth" label="Extension width" placeholder="e.g. 3.4 metres or not sure" required />
+        <Field name="extensionLength" label="Extension length" placeholder="e.g. 6.2 metres or not sure" required />
+        <Field name="extensionAreaM2" label="Extension area (m²)" placeholder="e.g. 25 or not sure" />
+      </div>
+      <SegmentedField name="extensionPlanning" label="Planning status" options={["Approved", "Not started", "Applied", "Would like help", "Not sure"]} defaultValue="Not sure" />
+      <SegmentedField name="existingExtensionToRemove" label="Is there an existing extension to demolish?" options={["Yes", "No", "Not sure"]} value={existingExtension} onChange={setExistingExtension} defaultValue="No" />
+      {existingExtension === "Yes" && <TextareaBlock name="extensionDemolitionDetails" label="Existing extension demolition details" placeholder="Single skin lean-to, conservatory, old kitchen extension, asbestos concerns, waste route..." />}
+      <SegmentedField name="extensionKitchen" label="Do you want to install a kitchen?" options={["Yes", "No", "Not sure"]} value={extensionKitchen} onChange={setExtensionKitchen} defaultValue="Yes" />
+      {extensionKitchen === "Yes" && <SegmentedField name="extensionKitchenType" label="Kitchen type" options={["New kitchen", "Move existing kitchen", "Keep existing elsewhere", "Not sure"]} defaultValue="New kitchen" />}
+      <SegmentedField name="extensionRooflights" label="Do you want rooflights?" options={["Yes", "No", "Not sure"]} value={rooflights} onChange={setRooflights} defaultValue="Not sure" />
+      {rooflights === "Yes" && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <SelectLike name="extensionRooflightCount" label="How many rooflights?" options={["1", "2", "3", "4", "5+", "Not sure"]} />
+          <TextareaBlock name="extensionRooflightDetails" label="Rooflight details" placeholder="Large lantern, slimline, opening rooflights, blackout blinds, matching size..." />
+        </div>
+      )}
+      <SegmentedField name="extensionDoorPreference" label="Main rear door style" options={extensionDoorOptions} value={doorChoice} onChange={setDoorChoice} defaultValue="Bi-fold doors" />
+      {doorChoice === "Other" && <TextareaBlock name="extensionDoorOther" label="Tell us the door style" placeholder="Crittall-style, timber doors, oversized pivot, corner slider..." />}
+      <CheckboxCardGroup
+        title="Extension roof types"
+        name="extensionRoofType"
+        options={roofTypeOptions}
+        selected={extensionRoofTypes}
+        onToggle={(value) => setExtensionRoofTypes((current) => toggleArrayValue(current, value))}
+      />
+      {extensionRoofTypes.includes("Pitched roof") && <VisualCheckboxGrid title="Pitched roof covering" name="extensionRoofTiles" options={roofTiles} />}
+      {extensionRoofTypes.includes("Flat roof") && <VisualChoiceGrid title="Flat roof membrane" name="extensionFlatRoofSystem" options={flatRoofSystems} />}
+      <div className="grid gap-4 md:grid-cols-2">
+        <SegmentedField name="extensionWallType" label="Main wall finish" options={["Brickwork", "Blockwork", "Mixed / to be rendered", "Not sure"]} defaultValue="Brickwork" />
+        <SegmentedField name="extensionRender" label="Rendering outside?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="extensionHeating" label="Heating preference" options={["Underfloor heating", "Radiators only", "Both", "Not sure"]} defaultValue="Underfloor heating" />
+        <SegmentedField name="extensionOpenPlan" label="Open-plan layout?" options={["Yes", "No", "Not sure"]} defaultValue="Yes" />
+      </div>
+      <CheckboxCardGroup
+        title="Electrical finish"
+        name="extensionElectricalFinish"
+        options={electricalFinishOptions}
+        selected={extensionElectrical}
+        onToggle={(value) => setExtensionElectrical((current) => toggleArrayValue(current, value))}
+      />
+      {extensionElectrical.includes("Other") && <TextareaBlock name="extensionElectricalOther" label="Other electrical requirements" placeholder="Pendant cluster over island, wall washers, speaker points, garden sockets..." />}
+      <CheckboxCardGroup
+        title="Flooring choice"
+        name="extensionFlooring"
+        options={floorFinishOptions}
+        selected={extensionFlooring}
+        onToggle={(value) => setExtensionFlooring((current) => toggleArrayValue(current, value))}
+      />
+      {extensionFlooring.includes("Other") && <TextareaBlock name="extensionFlooringOther" label="Other flooring preference" placeholder="Microcement, polished concrete, parquet, terrazzo, reclaimed boards..." />}
+      <FileDrop name="extensionFiles" label="Upload extension plans, current photos or ideas" accept={uploadAccept} multiple />
+      <TextareaBlock name="extensionDetails" label="Additional extension details" placeholder="Utility room, WC, pantry wall, island seating, garden connection, structural opening size, matching brick, special requests..." />
+      <SupplyNote area="extension kitchen, flooring and decorative finishes" />
     </DetailPanel>
   );
 }
 
 function RefurbishmentQuestions() {
+  const [refurbTrades, setRefurbTrades] = useState<string[]>([]);
+  const [refurbKitchenScope, setRefurbKitchenScope] = useState("New kitchen");
+  const [frontDoor, setFrontDoor] = useState("No");
+  const [backDoor, setBackDoor] = useState("No");
+  const [chimneyRemoval, setChimneyRemoval] = useState("No");
+  const [wallRemovalCount, setWallRemovalCount] = useState("0");
+  const [newWallCount, setNewWallCount] = useState("0");
+  const [refurbFlooring, setRefurbFlooring] = useState<string[]>([]);
+  const [refurbRendering, setRefurbRendering] = useState("Not sure");
+  const [refurbBathroomDetailCount, setRefurbBathroomDetailCount] = useState("0");
+  const wallDetailCount = Math.min(
+    4,
+    Math.max(Number.parseInt(wallRemovalCount, 10) || 0, Number.parseInt(newWallCount, 10) || 0)
+  );
+  const bathroomDetailCount = Number.parseInt(refurbBathroomDetailCount, 10) || 0;
+
   return (
-    <DetailPanel title="Refurbishment" intro="Use this section for internal upgrades, strip-outs, layout changes and full-house refresh works.">
-      <ChoiceGrid title="Refurbishment size" name="refurbSize" type="radio" required options={["One room", "Kitchen", "Bathroom", "Whole floor", "Whole house", "Not sure"]} />
-      <YesNoMaybeGrid items={["Layout changes", "Kitchen install", "Bathroom install", "New flooring", "Rewiring", "Plumbing upgrades", "Plastering", "Decorating"]} />
-      <ChoiceGrid title="Do you currently have wallpaper?" name="wallpaperPresent" type="radio" required options={["Yes", "No"]} />
-      <ChoiceGrid
-        title="Wallpaper plan"
-        name="wallpaperPlan"
-        type="radio"
-        required
-        options={["Yes, wallpaper needs to be removed", "No, I will keep the wallpaper", "No wallpaper in the property"]}
+    <DetailPanel title="Refurbishment" intro="Use this for room-by-room upgrading, replacing finishes and trade works across an existing home or rental property.">
+      <ChoiceGrid title="Refurbishment size" name="refurbSize" type="radio" required options={["One room", "Kitchen", "Bathroom", "Whole floor", "Whole house", "HMO refresh", "Not sure"]} />
+      <Field name="refurbishmentAreaM2" label="Refurbishment area (m²)" placeholder="e.g. 70 or not sure" />
+      <ChoiceGrid title="Which of the following would you like to carry out?" name="refurbishmentStripOut" options={["Kitchen strip-out", "Bathroom strip-out", "Ceilings removal", "Floor removal", "Remove non-load-bearing walls", "Skips and waste handling", "Scaffolding", "Dust protection", "Not sure"]} />
+      <div data-required-checkbox-group="Please choose at least one refurbishment trade you need before continuing.">
+        <CheckboxCardGroup
+          title="Which trades are needed?"
+          name="refurbTrades"
+          options={["Kitchen", "Bathroom", "Flooring", "Electrical", "Plumbing", "Plastering", "Decorating", "Doors and joinery", "Windows and doors", "Chimney work", "Wall changes", "Not sure"]}
+          selected={refurbTrades}
+          onToggle={(value) => setRefurbTrades((current) => toggleArrayValue(current, value))}
+        />
+      </div>
+      <p className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+        Choose all the trades you need. The matching sections will open below and help you describe each part properly.
+      </p>
+      <ChoiceGrid title="Which floors are included?" name="refurbishmentFloors" options={refurbishmentFloors} />
+      <p className="text-sm font-semibold leading-6 text-neutral-600">
+        Choose below roughly how many spaces are involved so we can size the refurbishment more accurately.
+      </p>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <SelectLike name="refurbBedroomsCount" label="How many bedrooms?" options={roomCountOptions} />
+        <SelectLike name="refurbBathroomsCount" label="How many bathrooms?" options={bathroomCountOptions} />
+        <SelectLike name="refurbKitchensCount" label="How many kitchens?" options={bathroomCountOptions} />
+        <SelectLike name="refurbLivingRoomsCount" label="How many living rooms?" options={livingCountOptions} />
+        <SelectLike name="refurbDiningRoomsCount" label="How many dining rooms?" options={livingCountOptions} />
+        <SelectLike name="refurbStairsCount" label="How many staircases?" options={livingCountOptions} />
+      </div>
+      <SegmentedField name="wallpaperPresent" label="Do you currently have wallpaper?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <SegmentedField name="wallpaperPlan" label="Wallpaper plan" options={["Yes, remove it", "No, keep it", "No wallpaper", "Not sure"]} defaultValue="Not sure" />
+      {refurbTrades.includes("Kitchen") && (
+        <>
+          <SegmentedField name="refurbKitchenScope" label="Kitchen scope" options={["New kitchen", "Move existing kitchen", "Other", "Not sure"]} value={refurbKitchenScope} onChange={setRefurbKitchenScope} defaultValue="New kitchen" />
+          {refurbKitchenScope === "Other" && <TextareaBlock name="refurbKitchenScopeOther" label="Other kitchen scope" placeholder="Tell us what you want done with the kitchen." />}
+          <TextareaBlock name="refurbKitchenNotes" label="Kitchen additional information" placeholder="Layout changes, island, utility, appliances, worktops, splashback, client-supplied items..." />
+        </>
+      )}
+      {refurbTrades.includes("Electrical") && (
+        <>
+          <ChoiceGrid title="Electrical works" name="refurbElectrical" options={["New sockets", "Rewiring", "Spotlights", "LED lights", "Pendants", "Fuse box", "Smoke alarms", "CCTV / cameras", "Not sure"]} />
+          <TextareaBlock name="refurbElectricalNotes" label="Electrical additional information" placeholder="Extra socket locations, lighting zones, cooker feed, exterior points, data or TV points..." />
+        </>
+      )}
+      {refurbTrades.includes("Plumbing") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <ChoiceGrid title="Plumbing works" name="refurbPlumbing" options={["Radiators", "Pipework", "Bathroom plumbing", "Boiler work", "Kitchen first fix", "Drainage", "Underfloor heating", "Not sure"]} />
+          <TextareaBlock name="refurbPlumbingNotes" label="Plumbing additional information" placeholder="Move boiler, add radiators, underfloor heating zones, waste reroutes, pressure issues..." />
+        </div>
+      )}
+      {refurbTrades.includes("Flooring") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <CheckboxCardGroup
+            title="Flooring type"
+            name="refurbFlooring"
+            options={[...sharedFlooringOptions, "Vinyl", "Resin", "Other"]}
+            selected={refurbFlooring}
+            onToggle={(value) => setRefurbFlooring((current) => toggleArrayValue(current, value))}
+          />
+          <ChoiceGrid title="Where is flooring needed?" name="refurbFlooringAreas" options={["Bedrooms", "Hallway / landing", "Living areas", "Kitchen", "Bathroom", "Whole project"]} />
+          {refurbFlooring.includes("Other") && <TextareaBlock name="refurbFlooringOther" label="Other flooring preference" placeholder="Polished concrete, parquet, large-format tiles, microcement..." />}
+          <TextareaBlock name="refurbFlooringNotes" label="Flooring additional information" placeholder="Existing floor condition, preferred finish, underfloor heating, herringbone, tile size..." />
+        </div>
+      )}
+      {refurbTrades.includes("Plastering") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <ChoiceGrid title="Plastering and boarding" name="refurbPlasteringScope" options={["Plasterboard", "Moisture-resistant board", "Fire-rated plasterboard", "Skim coat plaster", "Repairs only", "Full reboard and skim", "Not sure"]} />
+          <TextareaBlock name="refurbPlasteringNotes" label="Plastering additional information" placeholder="Ceilings only, full walls, patch repairs, old lath and plaster, fire upgrades..." />
+        </div>
+      )}
+      {refurbTrades.includes("Decorating") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <ChoiceGrid title="Painting and decorating" name="refurbDecoratingScope" options={["Mist coat and paint", "Walls only", "Walls and ceilings", "Woodwork finish", "Wallpapering", "Feature walls", "Outside paint", "Not sure"]} />
+          <SegmentedField name="refurbishmentExteriorFinish" label="Outside finish" options={["Rendering", "Outside paint", "Keep existing brick finish", "Not sure"]} value={refurbRendering} onChange={setRefurbRendering} defaultValue="Not sure" />
+          <TextareaBlock name="refurbDecoratingNotes" label="Decorating additional information" placeholder="White only, colour by room, feature walls, external masonry paint, woodwork finish..." />
+        </div>
+      )}
+      {refurbTrades.includes("Windows and doors") && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectLike name="newWindowsCount" label="How many new windows?" options={roomCountOptions} />
+            <SelectLike name="newWindowType" label="Window type" options={windowTypeOptions} />
+          </div>
+          <SegmentedField name="frontDoor" label="New front door?" options={["Yes", "No", "Not sure"]} value={frontDoor} onChange={setFrontDoor} defaultValue="No" />
+          {frontDoor === "Yes" && <SelectLike name="frontDoorType" label="Front door type" options={doorTypeOptions} />}
+          <SegmentedField name="backDoor" label="New back door?" options={["Yes", "No", "Not sure"]} value={backDoor} onChange={setBackDoor} defaultValue="No" />
+          {backDoor === "Yes" && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <SelectLike name="backDoorCount" label="How many back doors?" options={livingCountOptions} />
+              <SelectLike name="backDoorType" label="Back door type" options={doorTypeOptions} />
+            </div>
+          )}
+        </>
+      )}
+      {refurbTrades.includes("Chimney work") && (
+        <>
+          <SegmentedField name="chimneyRemoval" label="Chimney demolition?" options={["Yes", "No", "Not sure"]} value={chimneyRemoval} onChange={setChimneyRemoval} defaultValue="No" />
+          {chimneyRemoval === "Yes" && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <SelectLike name="chimneyCount" label="How many chimneys?" options={livingCountOptions} />
+              <SelectLike name="chimneyFloors" label="How many floors?" options={["1", "2", "3", "4+", "Not sure"]} />
+            </div>
+          )}
+        </>
+      )}
+      {refurbTrades.includes("Wall changes") && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectLike name="wallRemovalCount" label="How many walls to remove?" options={livingCountOptions} value={wallRemovalCount} onChange={setWallRemovalCount} />
+            <SelectLike name="newWallCount" label="How many new walls?" options={livingCountOptions} value={newWallCount} onChange={setNewWallCount} />
+          </div>
+          {wallDetailCount > 0 && (
+            <div className="grid gap-4 md:grid-cols-2">
+              {Array.from({ length: wallDetailCount }, (_, index) => {
+                const wallNumber = index + 1;
+
+                return (
+                  <div key={wallNumber} className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+                    <SegmentedField
+                      name={`wall${wallNumber}LoadBearing`}
+                      label={`Wall ${wallNumber} load bearing?`}
+                      options={["Yes", "No", "I don't know"]}
+                      defaultValue="I don't know"
+                    />
+                    <Field
+                      name={`wall${wallNumber}Size`}
+                      label={`Wall ${wallNumber} size`}
+                      placeholder="e.g. 3.2m x 2.4m"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <TextareaBlock
+            name="wallChangesNotes"
+            label="Wall changes additional information"
+            placeholder="Tell us if walls are coming out for open plan, splitting rooms, adding en-suites, forming cupboards, or if any wall sizes are only approximate."
+          />
+        </>
+      )}
+      {refurbTrades.includes("Doors and joinery") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <SelectLike name="internalDoorsCount" label="How many internal doors?" options={roomCountOptions} />
+            <SelectLike name="internalDoorType" label="Door type" options={doorTypeOptions} />
+          </div>
+          <ChoiceGrid title="Door items to include" name="doorItemsIncluded" options={["Frames", "Architraves", "Door stops", "Hinges", "Handles", "Locks", "Not sure"]} />
+          <TextareaBlock name="refurbDoorNotes" label="Doors and joinery additional information" placeholder="Painted vs oak, fire-door requirements, soft-close hinges, black ironmongery, exact room locations..." />
+        </div>
+      )}
+      {refurbTrades.includes("Bathroom") && (
+        <div className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-4">
+          <SelectLike name="refurbBathroomDetailCount" label="How many bathrooms are part of this trade?" options={bathroomCountOptions.slice(0, 6)} value={refurbBathroomDetailCount} onChange={setRefurbBathroomDetailCount} />
+          {Array.from({ length: bathroomDetailCount }, (_, index) => {
+            const bathroomNumber = index + 1;
+
+            return (
+              <div key={bathroomNumber} className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <h4 className="text-base font-black text-neutral-900">Bathroom {bathroomNumber}</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <SelectLike
+                    name={`refurbBathroom${bathroomNumber}Type`}
+                    label={`Bathroom ${bathroomNumber} type`}
+                    options={["Toilet only", "Shower room", "Bathroom with bath", "Walk-in shower", "Both bath and shower", "Not sure"]}
+                  />
+                  <SelectLike
+                    name={`refurbBathroom${bathroomNumber}Finish`}
+                    label={`Bathroom ${bathroomNumber} tiling / finish`}
+                    options={["Fully tiled", "Bath / shower area only", "Client to choose later", "Not sure"]}
+                  />
+                </div>
+                <ChoiceGrid title={`Bathroom ${bathroomNumber} items`} name={`refurbBathroom${bathroomNumber}Items`} options={["Bath", "Shower", "Walk-in shower", "Toilet", "Basin", "Vanity unit", "Towel rail", "Extractor fan", "Not sure"]} />
+                <TextareaBlock name={`refurbBathroom${bathroomNumber}Notes`} label={`Bathroom ${bathroomNumber} additional information`} placeholder="Full tile height, shower tray or wet room, concealed cistern, niches, brassware finish..." />
+              </div>
+            );
+          })}
+          <TextareaBlock name="refurbBathroomNotes" label="Overall bathroom notes" placeholder="Tell us if these are en-suites, family bathrooms, cloakrooms, or if one is much more detailed than the others." />
+        </div>
+      )}
+      <FileDrop name="refurbishmentFiles" label="Upload current photos, snag lists or room plans" accept={uploadAccept} multiple />
+      <TextareaBlock name="refurbishmentNotes" label="Refurbishment notes" placeholder="Damp repairs, match existing skirting, replace internal doors, rental standard upgrades, keep tenants in place..." />
+      <SupplyNote area="refurbishment finish materials and decorative items" />
+    </DetailPanel>
+  );
+}
+
+function DemolitionQuestions() {
+  return (
+    <DetailPanel title="Demolition and strip-out" intro="Use this section when the main job is taking down, clearing out or preparing the site before the new build phase starts.">
+      <Field name="demolitionAreaM2" label="Demolition area (m²)" placeholder="e.g. 22 or not sure" />
+      <ChoiceGrid title="Demolition type" name="demolitionType" type="radio" required options={["Soft strip only", "Rear extension demolition", "Garage / outbuilding demolition", "Internal demolition", "Mixed demolition", "Not sure"]} />
+      <ChoiceGrid title="What needs removing?" name="demolitionScope" options={["Kitchen", "Bathrooms", "Ceilings", "Floors", "Partitions", "Existing extension", "Shed / garage", "Fencing", "Driveway surface", "Not sure"]} />
+      <SegmentedField name="demolitionWasteHandling" label="Waste and skip handling" options={["Contractor to include", "Client will arrange", "Not sure"]} defaultValue="Contractor to include" />
+      <SegmentedField name="demolitionAsbestos" label="Any asbestos concerns?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <SegmentedField name="demolitionNeighbourSensitivity" label="Tight access / sensitive neighbours?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <FileDrop name="demolitionFiles" label="Upload demolition photos, surveys or PDFs" accept={uploadAccept} multiple />
+      <TextareaBlock name="demolitionNotes" label="Demolition notes" placeholder="Shared passage, old roof sheets, noise restrictions, hand-demolition only, keep front wall, protect retained kitchen..." />
+    </DetailPanel>
+  );
+}
+
+function NewBuildQuestions() {
+  const [newBuildType, setNewBuildType] = useState("House");
+  const [newBuildRoofTypes, setNewBuildRoofTypes] = useState<string[]>([]);
+  const [newBuildKitchen, setNewBuildKitchen] = useState("Yes");
+  const [newBuildBathroom, setNewBuildBathroom] = useState("Yes");
+  const [newBuildFlooring, setNewBuildFlooring] = useState<string[]>([]);
+
+  return (
+    <DetailPanel title="New build" intro="This follows a similar path to the extension brief, but covers more of the full house fit-out and the planning stage around it.">
+      <SegmentedField name="newBuildType" label="New build type" options={["House", "Summer house / garden room", "Garage", "Annexe", "Small block / multiple units", "Not sure"]} value={newBuildType} onChange={setNewBuildType} defaultValue="House" required />
+      {newBuildType === "House" && <SelectLike name="newBuildHouseType" label="What type of house?" options={["Detached", "Semi-detached", "Terraced", "Bungalow", "Townhouse", "Not sure"]} />}
+      {newBuildType === "Summer house / garden room" && <SelectLike name="newBuildGardenRoomType" label="What type of summer house?" options={["Garden office", "Gym / studio", "Guest room", "Entertainment room", "Mixed use", "Not sure"]} />}
+      {newBuildType === "Garage" && <SelectLike name="newBuildGarageType" label="What type of garage?" options={["Single garage", "Double garage", "Garage with storage", "Garage with room above", "Workshop garage", "Not sure"]} />}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <SelectLike name="newBuildFloors" label="How many floors?" options={["1", "2", "3", "4+", "Not sure"]} />
+        <SelectLike name="newBuildBedrooms" label="Bedrooms" options={roomCountOptions} />
+        <SelectLike name="newBuildBathrooms" label="Bathrooms" options={bathroomCountOptions} />
+        <Field name="newBuildAreaM2" label="Approximate floor area (m²)" placeholder="e.g. 145" />
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <SegmentedField name="newBuildPlanning" label="Planning permission" options={["Approved", "Applied", "Need help", "Not sure"]} defaultValue="Not sure" />
+        <SegmentedField name="newBuildPlansReady" label="Do you already have plans?" options={["Yes", "No", "Partly", "Not sure"]} defaultValue="Not sure" />
+      </div>
+      <CheckboxCardGroup
+        title="New build roof types"
+        name="newBuildRoofType"
+        options={roofTypeOptions}
+        selected={newBuildRoofTypes}
+        onToggle={(value) => setNewBuildRoofTypes((current) => toggleArrayValue(current, value))}
       />
-      <OptionalExtras
-        title="Advanced refurbishment extras"
-        description="These are for clients who want to give a more technical scope. Most homeowners can leave this collapsed."
-      >
-        <ChoiceGrid title="Refurbishment structural and compliance items" name="refurbStructureCompliance" options={["Load-bearing wall removal", "RSJs / padstones", "Fire upgrades", "Sound insulation", "Consumer unit upgrade", "Boiler / heating changes", "Not sure"]} />
-      </OptionalExtras>
-      <TextareaBlock name="refurbishmentNotes" label="Refurbishment notes" placeholder="Remove walls, match existing finishes, repair damp, replace doors, bespoke storage..." />
+      {newBuildRoofTypes.includes("Pitched roof") && <VisualCheckboxGrid title="Pitched roof covering" name="newBuildRoofTiles" options={roofTiles} />}
+      {newBuildRoofTypes.includes("Flat roof") && <VisualChoiceGrid title="Flat roof membrane" name="newBuildFlatRoofSystem" options={flatRoofSystems} />}
+      <ChoiceGrid title="Main spaces to include" name="newBuildSpaces" options={["Kitchen", "Utility", "Open-plan living", "Separate lounge", "Study", "En-suite", "Walk-in wardrobe", "Garage / storage", "Not sure"]} />
+      <div className="grid gap-4 md:grid-cols-2">
+        <SegmentedField name="newBuildKitchen" label="Kitchen included?" options={["Yes", "No", "Not sure"]} value={newBuildKitchen} onChange={setNewBuildKitchen} defaultValue="Yes" />
+        <SegmentedField name="newBuildBathroom" label="Bathrooms included?" options={["Yes", "No", "Not sure"]} value={newBuildBathroom} onChange={setNewBuildBathroom} defaultValue="Yes" />
+      </div>
+      {newBuildKitchen === "Yes" && <SegmentedField name="newBuildKitchenType" label="Kitchen scope" options={["New kitchen", "Client to choose later", "Shell and first fix only", "Not sure"]} defaultValue="New kitchen" />}
+      {newBuildBathroom === "Yes" && <ChoiceGrid title="Bathroom items" name="newBuildBathroomItems" options={["Bath", "Shower", "Walk-in shower", "Toilet", "Basin", "Vanity unit", "Extractor fan", "Not sure"]} />}
+      <CheckboxCardGroup
+        title="Flooring choice"
+        name="newBuildFlooring"
+        options={floorFinishOptions}
+        selected={newBuildFlooring}
+        onToggle={(value) => setNewBuildFlooring((current) => toggleArrayValue(current, value))}
+      />
+      {newBuildFlooring.includes("Other") && <TextareaBlock name="newBuildFlooringOther" label="Other flooring preference" placeholder="Microcement, engineered parquet, luxury vinyl, polished concrete..." />}
+      <ChoiceGrid title="Electrical finish" name="newBuildElectrical" options={electricalFinishOptions} />
+      <ChoiceGrid title="Plumbing works" name="newBuildPlumbing" options={["Radiators", "Underfloor heating", "Boiler work", "Hot and cold pipework", "Drainage", "Not sure"]} />
+      <ChoiceGrid title="Refurbishment-style internal trades to include" name="newBuildInternalTrades" options={["Flooring", "Plastering", "Decorating", "Doors and joinery", "Windows and doors", "Not sure"]} />
+      <ChoiceGrid title="Main finishes and trade items" name="newBuildFinishes" options={["Rooflights", "Bi-fold / sliding doors", "Underfloor heating", "Radiators", "Brick finish", "Wood flooring", "Tiling", "Decorating", "Outside paint", "Not sure"]} />
+      <FileDrop name="newBuildFiles" label="Upload new build plans, inspiration or PDFs" accept={uploadAccept} multiple />
+      <TextareaBlock name="newBuildNotes" label="New build notes" placeholder="Target layout, frontage look, parking, staircase position, annex use, rental use, preferred door and window style..." />
+      <SupplyNote area="new-build kitchens, bathrooms, flooring and finish materials" />
     </DetailPanel>
   );
 }
 
 function FoundationQuestions() {
   return (
-    <DetailPanel title="Foundations and structural shell" intro="This is where a large share of the budget goes, especially when excavation, concrete and structure all land together.">
-      <ChoiceGrid title="Foundation purpose" name="foundationPurpose" type="radio" required options={["Extension", "Outbuilding", "Retaining wall", "Underpinning", "Not sure"]} />
-      <ChoiceGrid title="Foundation and shell scope" name="foundationShellScope" options={["Excavation", "Concrete footings", "Build up to DPC", "Cavity walls", "Insulation", "Load-bearing openings"]} />
-      <OptionalExtras
-        title="Advanced foundation extras"
-        description="These questions are more technical and are best used when drawings, engineer input or soil concerns are already known."
-      >
-        <ChoiceGrid title="Typical materials expected" name="foundationMaterials" options={["Concrete C25 / C30", "100mm concrete blocks", "140mm concrete blocks", "DPC membrane", "Facing brick", "PIR or mineral wool insulation", "Not sure"]} />
-      </OptionalExtras>
-      <YesNoMaybeGrid items={["Structural drawings available", "Engineer calculations available", "Trial holes done", "Drainage nearby", "Concrete pump likely needed"]} />
-      <TextareaBlock name="foundationNotes" label="Ground conditions or access notes" placeholder="Clay, trees nearby, slope, shared access, existing concrete, drainage runs..." />
+    <DetailPanel title="Foundations and groundwork" intro="Keep this practical. We ask about the groundworks trade items, access and concrete-related preparation rather than detailed engineering.">
+      <ChoiceGrid title="Groundworks purpose" name="foundationPurpose" type="radio" required options={["Extension", "New build", "Garden room / outbuilding", "Retaining wall", "Underpinning / repair", "Not sure"]} />
+      <ChoiceGrid title="Groundworks scope" name="foundationShellScope" options={["Excavation", "Concrete footings", "Drainage runs", "Retaining wall base", "Slab", "DPC level", "Not sure"]} />
+      <SegmentedField name="foundationDrainage" label="Drainage nearby?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <SegmentedField name="foundationConcretePump" label="Concrete pump likely needed?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <FileDrop name="foundationFiles" label="Upload drawings, soil notes or site photos" accept={uploadAccept} multiple />
+      <TextareaBlock name="foundationNotes" label="Ground conditions or access notes" placeholder="Clay, slope, shared access, low wall to remove, trees, manholes, restricted digger access..." />
     </DetailPanel>
   );
 }
 
 function GardenQuestions() {
   return (
-    <DetailPanel title="External works" intro="This helps us price excavation, waste, drainage and the outside finish you want after the main building work.">
+    <DetailPanel title="Garden and driveway" intro="This section is for the finishes and trade items you actually want outside, not technical landscaping language.">
+      <Field name="gardenAreaM2" label="Garden / driveway area (m²)" placeholder="e.g. 48 or not sure" />
       <ChoiceGrid title="Main work" name="gardenWork" type="radio" required options={["Driveway", "Patio", "Garden landscaping", "Fencing", "Drainage", "Mixed works"]} />
       <VisualChoiceGrid title="Preferred finish" name="gardenFinish" options={gardenFinishes} />
-      <ChoiceGrid title="External works scope" name="externalWorksScope" options={["Patio / paving", "Decking", "Fencing", "Turf or artificial grass", "Drainage / soakaways", "Driveway"]} />
-      <OptionalExtras
-        title="Advanced external works extras"
-        description="Open this only if you want to add more technical landscaping or drainage information."
-      >
-        <ChoiceGrid title="Materials likely to be needed" name="externalWorksMaterials" options={["Porcelain slabs", "Natural stone", "Timber decking", "Composite decking", "Topsoil and turf", "Gravel and drainage pipes", "Not sure"]} />
-      </OptionalExtras>
-      <YesNoMaybeGrid items={["Existing surface removal", "New drainage", "Retaining wall", "New steps", "Lighting", "Side gate / fencing"]} />
-      <TextareaBlock name="gardenNotes" label="Garden or driveway notes" placeholder="Parking spaces, levels, water pooling, manholes, planting, edging, access width..." />
+      <ChoiceGrid title="External works scope" name="externalWorksScope" options={["Patio / paving", "Decking", "Fencing", "Turf or artificial grass", "Planters / soft landscaping", "Drainage / soakaways", "Driveway", "Lighting"]} />
+      <SegmentedField name="gardenSurfaceRemoval" label="Remove existing surface first?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <SegmentedField name="gardenDrainage" label="Need new drainage?" options={["Yes", "No", "Not sure"]} defaultValue="Not sure" />
+      <FileDrop name="gardenFiles" label="Upload garden photos, sketches or PDFs" accept={uploadAccept} multiple />
+      <TextareaBlock name="gardenNotes" label="Garden or driveway notes" placeholder="Parking spaces, levels, water pooling, side passage width, manholes, planting style, retaining edges..." />
+      <SupplyNote area="outside finish materials, slabs, fencing and decorative landscape items" />
     </DetailPanel>
   );
 }
@@ -807,63 +1152,6 @@ function KitchenQuestions() {
   );
 }
 
-function FlooringQuestions() {
-  return (
-    <DetailPanel title="Flooring" intro="Flooring questions appear for loft, extension and refurbishment so the client answers them wherever that finish matters.">
-      <ChoiceGrid title="Flooring type" name="flooringType" options={sharedFlooringOptions} />
-      <ChoiceGrid title="Floor build-up / prep" name="flooringBuildUp" options={["Underlay", "Screed", "Floor levelling", "Adhesives", "Acoustic layer", "Client to decide later", "Not sure"]} />
-      <ChoiceGrid title="Where is flooring needed?" name="flooringAreas" options={["Bedrooms", "Hallway / landing", "Living areas", "Kitchen", "Bathroom", "Whole project"]} />
-      <TextareaBlock name="flooringNotes" label="Flooring notes" placeholder="Existing floor condition, underfloor heating, herringbone preference, tile size, skirting replacement..." />
-      <SupplyNote area="flooring finishes" />
-    </DetailPanel>
-  );
-}
-
-function BathroomAndFinishQuestions() {
-  return (
-    <DetailPanel title="Bathrooms, finishes and second fix" intro="This is where the visible finish level becomes clearer and the quote starts to reflect real product choices.">
-      <ChoiceGrid title="Bathroom items" name="bathroomItems" options={["Shower", "Bath", "Sink", "Toilet", "Vanity unit", "Heated towel rail", "Not sure"]} />
-      <ChoiceGrid title="Bathroom ventilation" name="bathroomVentilation" type="radio" options={["Extractor fan", "No fan", "Not sure", "Company to advise"]} />
-      <ChoiceGrid title="Client-supplied finishing materials" name="clientSuppliedFinishes" options={["Bathroom suite", "Tiles", "Flooring", "Light fittings", "Doors", "Ironmongery", "Paint colour / finish coat", "Kitchen units", "None, quote contractor supply", "Not sure"]} />
-      <ChoiceGrid title="Insulation and compliance" name="insulationCompliance" options={["Wall insulation", "Floor insulation", "Roof insulation", "Fire-rated plasterboard", "Sound insulation", "Vapour control layer"]} />
-      <ChoiceGrid title="Do you need electrical works?" name="electricalNeeded" type="radio" options={["Yes", "No", "Not sure"]} />
-      <YesNoMaybeGrid items={["New sockets", "Rewiring", "Lighting", "Electric shower", "Fuse box", "Smoke alarms", "CCTV / cameras"]} />
-      <ChoiceGrid title="Do you need plumbing works?" name="plumbingNeeded" type="radio" options={["Yes", "No", "Not sure"]} />
-      <YesNoMaybeGrid items={["Hot and cold pipework", "Soil and waste changes", "Radiators", "Boiler work", "Underfloor heating", "New bathroom plumbing"]} />
-      <ChoiceGrid title="Plasterboard and plastering" name="plasteringScope" options={["Standard plasterboard", "Moisture-resistant board", "Fire-rated plasterboard", "Skim coat plaster", "Repairs only", "Not sure"]} />
-      <ChoiceGrid title="Doors and joinery" name="doorJoineryScope" options={["Internal doors", "Fire doors", "Door frames", "Skirting boards", "Architraves", "Not sure"]} />
-      <ChoiceGrid title="Decoration scope" name="decorationScope" options={["Mist coat + painting", "Feature walls", "Wallpaper", "Woodwork finish", "Skirting and architraves", "Snagging and touch-ups", "Not sure"]} />
-      <TextareaBlock name="finishIdeas" label="Other requirements or finish ideas" placeholder="Door supplied by client, specific paint colour, bathroom brand, inspiration links..." />
-      <FileDrop name="ideaPhotos" label="Upload pictures or PDFs of ideas you have" accept="image/*,.pdf" multiple />
-      <SupplyNote area="bathroom, electrical, plumbing and final finish materials" />
-    </DetailPanel>
-  );
-}
-
-function ProjectTimelineSummary() {
-  return (
-    <DetailPanel title="How would you like the project to run?" intro="Tell us in plain language what matters most to you so the quote can match the way you want the job managed.">
-      <ChoiceGrid
-        title="Which timeline feels closest?"
-        name="programmeExpectation"
-        type="radio"
-        options={[
-          "I only want early budgeting for now",
-          "I want to start design and approvals soon",
-          "I want to begin building as soon as possible",
-          "I want to phase the works over time",
-          "Need advice on what is realistic",
-        ]}
-      />
-      <TextareaBlock
-        name="criticalOrder"
-        label="Anything important about the order of works?"
-        placeholder="For example: keep kitchen usable as long as possible, make the roof watertight first, finish bedrooms before other spaces, or complete outside works at the end."
-      />
-    </DetailPanel>
-  );
-}
-
 function LogisticsStep() {
   return (
     <StepShell eyebrow="Site logistics" title="How should we allow for access and setup?" intro="These items can move a quote a lot, so we ask them before the budget.">
@@ -876,26 +1164,22 @@ function LogisticsStep() {
         <SelectLike name="startFlexibility" label="How fixed is that start?" options={["Very flexible", "Prefer around that time", "Need that window if possible", "Not sure yet"]} required />
       </div>
       <TextareaBlock name="accessDetails" label="Access details" placeholder="Parking restrictions, narrow roads, rear access, permit needs, working hours..." />
-      <FileDrop name="sitePhotos" label="Upload photos or PDFs of the current space" accept="image/*,.pdf" multiple />
+      <FileDrop name="sitePhotos" label="Upload photos or PDFs of the current space" accept={uploadAccept} multiple />
     </StepShell>
   );
 }
 
 function BudgetStep({
-  budgetFrom,
-  budgetTo,
-  setBudgetFrom,
-  setBudgetTo,
+  budgetRange,
+  setBudgetRange,
   quality,
   cheap,
   fast,
   tradeMood,
   updateTradeSlider,
 }: {
-  budgetFrom: string;
-  budgetTo: string;
-  setBudgetFrom: (value: string) => void;
-  setBudgetTo: (value: string) => void;
+  budgetRange: string;
+  setBudgetRange: (value: string) => void;
   quality: number;
   cheap: number;
   fast: number;
@@ -904,47 +1188,53 @@ function BudgetStep({
 }) {
   return (
     <StepShell eyebrow="Budget and priorities" title="Set expectations early." intro="A budget range lets us recommend the right specification instead of guessing.">
+      <input type="hidden" name="extensionRatePerM2Example" value="2400" />
+      <input type="hidden" name="loftRatePerM2Example" value="2100" />
+      <input type="hidden" name="refurbishmentRatePerM2Example" value="950" />
+      <input type="hidden" name="roofRatePerM2Example" value="180" />
+      <input type="hidden" name="newBuildRatePerM2Example" value="2750" />
+      <input type="hidden" name="gardenRatePerM2Example" value="160" />
+      <input type="hidden" name="demolitionRatePerM2Example" value="85" />
       <div className="grid gap-4 md:grid-cols-2">
         <label className="block">
           <span className="mb-2 block text-sm font-black text-neutral-800">
-            Budget starting from
+            Budget range
             <span className="ml-1 text-amber-700">*</span>
           </span>
           <select
-            name="budgetFrom"
+            name="budgetRange"
             required
-            value={budgetFrom}
-            onChange={(event) => setBudgetFrom(event.target.value)}
+            value={budgetRange}
+            onChange={(event) => setBudgetRange(event.target.value)}
             className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400"
           >
-            <option value="" disabled>Select starting budget</option>
-            {budgetMilestones.map((value) => (
-              <option key={value} value={formatBudgetOption(value)}>{formatBudgetOption(value)}</option>
+            <option value="" disabled>Select your range</option>
+            {budgetRangeOptions.map((option) => (
+              <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </label>
         <label className="block">
           <span className="mb-2 block text-sm font-black text-neutral-800">
-            Budget up to
-            <span className="ml-1 text-amber-700">*</span>
+            Budget privacy
           </span>
           <select
-            name="budgetTo"
-            required
-            value={budgetTo}
-            onChange={(event) => setBudgetTo(event.target.value)}
+            name="budgetPreference"
+            defaultValue="Happy to share range"
             className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400"
           >
-            <option value="" disabled>Select upper budget</option>
-            {budgetMilestones.map((value) => (
-              <option key={value} value={formatBudgetOption(value)}>{formatBudgetOption(value)}</option>
-            ))}
-            <option value="Prefer not to cap budget">Prefer not to cap budget</option>
+            <option value="Happy to share range">Happy to share range</option>
+            <option value="Prefer not to say">Prefer not to say</option>
+            <option value="Need guidance">Need guidance</option>
           </select>
         </label>
-        <input type="hidden" name="budgetRange" value={budgetFrom && budgetTo ? `${budgetFrom} to ${budgetTo}` : ""} />
-        <SelectLike name="budgetPreference" label="Budget preference" options={["Happy to share range", "Prefer not to say", "Need guidance"]} required />
         <SelectLike name="budgetPressure" label="What matters most about budget?" options={["Keep total cost under control", "Balance cost and finish", "Higher finish is more important", "Need advice"]} required />
+      </div>
+      <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-4">
+        <p className="text-sm font-black uppercase tracking-[0.16em] text-amber-700">Saved for pricing logic</p>
+        <p className="mt-2 text-sm leading-6 text-neutral-600">
+          Alongside the client answers, this form also saves bedroom counts, area fields and example `rate per m²` variables for each trade section. You can replace the example values in code when you build the formula.
+        </p>
       </div>
       <div className="rounded-[2rem] border border-neutral-200 bg-neutral-950 p-5 text-white">
         <input type="hidden" name="qualityPriority" value={quality} />
@@ -954,7 +1244,7 @@ function BudgetStep({
           <Sparkles className="mt-1 h-5 w-5 text-amber-300" />
           <div>
             <h3 className="text-xl font-black">The builder triangle</h3>
-            <p className="mt-1 text-sm text-white/70">Quality, cheap and fast are connected. Push one too hard and the others start making faces.</p>
+            <p className="mt-1 text-sm text-white/70">Quality, cheap and fast always share the same fixed pot. Push one up and the other two have to give some ground.</p>
           </div>
         </div>
         <div className="relative mt-5 overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -965,10 +1255,9 @@ function BudgetStep({
               { label: "Cheap", value: cheap, tone: "from-cyan-400 to-sky-300" },
               { label: "Fast", value: fast, tone: "from-emerald-400 to-lime-300" },
             ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-3">
                 <div className="flex items-center justify-between text-sm font-black">
                   <span>{item.label}</span>
-                  <span>{item.value}%</span>
                 </div>
                 <div className="mt-3 h-3 overflow-hidden rounded-full bg-white/10">
                   <div
@@ -979,10 +1268,6 @@ function BudgetStep({
               </div>
             ))}
           </div>
-          <div
-            className="pointer-events-none absolute top-4 h-6 w-6 rounded-full border border-white/40 bg-amber-300/70 blur-[1px] transition-all duration-700 ease-out"
-            style={{ left: `${Math.min(92, Math.max(4, quality * 0.92))}%` }}
-          />
         </div>
         <div className="mt-5 space-y-5">
           <TradeSlider label="Quality" value={quality} onChange={(value) => updateTradeSlider("quality", value)} helper="Nicer finish, stronger specification, higher cost." />
@@ -1138,7 +1423,25 @@ function TextareaBlock({ name, label, placeholder }: { name: string; label: stri
   );
 }
 
-function SelectLike({ name, label, options, icon, required = false, placeholder }: { name: string; label: string; options: string[]; icon?: React.ReactNode; required?: boolean; placeholder?: string }) {
+function SelectLike({
+  name,
+  label,
+  options,
+  icon,
+  required = false,
+  placeholder,
+  value,
+  onChange,
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  icon?: React.ReactNode;
+  required?: boolean;
+  placeholder?: string;
+  value?: string;
+  onChange?: (value: string) => void;
+}) {
   return (
     <label className="block">
       <span className="mb-2 flex items-center gap-2 text-sm font-black text-neutral-800">
@@ -1146,7 +1449,14 @@ function SelectLike({ name, label, options, icon, required = false, placeholder 
         {label}
         {required && <span className="text-amber-700">*</span>}
       </span>
-      <select name={name} required={required} defaultValue={placeholder ? "" : options[0]} className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400">
+      <select
+        name={name}
+        required={required}
+        value={value}
+        onChange={onChange ? (event) => onChange(event.target.value) : undefined}
+        defaultValue={value === undefined ? (placeholder ? "" : options[0]) : undefined}
+        className="h-12 w-full rounded-2xl border border-neutral-300 bg-neutral-50 px-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-amber-400"
+      >
         {placeholder && (
           <option value="" disabled>
             {placeholder}
@@ -1157,6 +1467,134 @@ function SelectLike({ name, label, options, icon, required = false, placeholder 
         ))}
       </select>
     </label>
+  );
+}
+
+function SegmentedField({
+  name,
+  label,
+  options,
+  value,
+  onChange,
+  required = false,
+  defaultValue,
+}: {
+  name: string;
+  label: string;
+  options: string[];
+  value?: string;
+  onChange?: (value: string) => void;
+  required?: boolean;
+  defaultValue?: string;
+}) {
+  const [internalValue, setInternalValue] = useState(defaultValue ?? options[0] ?? "");
+  const selectedValue = value ?? internalValue;
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-black text-neutral-800">
+        {label}
+        {required && <span className="ml-1 text-amber-700">*</span>}
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {options.map((option, index) => (
+          <label
+            key={option}
+            className={cn(
+              "cursor-pointer rounded-2xl border px-3 py-2 text-center text-sm font-bold transition",
+              selectedValue === option ? "border-amber-500 bg-amber-100 text-neutral-950 shadow-sm" : "border-neutral-200 bg-neutral-50 text-neutral-600 hover:border-amber-400"
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={option}
+              checked={selectedValue === option}
+              onChange={() => {
+                setInternalValue(option);
+                onChange?.(option);
+              }}
+              required={required && index === 0}
+              className="sr-only"
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CheckboxCardGroup({
+  title,
+  name,
+  options,
+  selected,
+  onToggle,
+}: {
+  title: string;
+  name: string;
+  options: string[];
+  selected: string[];
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <div>
+      <h3 className="mb-3 text-lg font-black">{title}</h3>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <label
+            key={option}
+            className={cn(
+              "cursor-pointer rounded-2xl border p-3 text-sm font-bold transition",
+              selected.includes(option) ? "border-amber-500 bg-amber-100 shadow-sm" : "border-neutral-200 bg-neutral-50 hover:border-amber-400"
+            )}
+          >
+            <input
+              type="checkbox"
+              name={name}
+              value={option}
+              checked={selected.includes(option)}
+              onChange={() => onToggle(option)}
+              className="sr-only"
+            />
+            {option}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VisualCheckboxGrid({
+  title,
+  name,
+  options,
+}: {
+  title: string;
+  name: string;
+  options: { title: string; image: string; detail: string }[];
+}) {
+  return (
+    <div>
+      <h3 className="mb-3 text-lg font-black">{title}</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        {options.map((option) => (
+          <label key={option.title} className="overflow-hidden rounded-2xl border border-neutral-200 transition hover:border-amber-400 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 has-[:checked]:shadow-lg">
+            <div className="relative h-32">
+              <Image src={option.image} alt={option.title} fill className="object-cover" />
+            </div>
+            <span className="flex gap-3 p-3">
+              <input type="checkbox" name={name} value={option.title} className="mt-1" />
+              <span>
+                <span className="block font-bold">{option.title}</span>
+                <span className="text-sm text-neutral-600">{option.detail}</span>
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1275,7 +1713,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
       return selectedFiles.map((file) => ({
         name: file.name,
         type: file.type,
-        url: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        url: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined,
       }));
     });
   }
@@ -1287,7 +1725,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
         <span className="mt-3 text-base font-black">{label}</span>
         <span className="mt-1 text-sm text-neutral-600">Click to choose {multiple ? "files" : "a file"}.</span>
         <span className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">
-          Images and PDFs supported
+          Images, videos, PDFs, Word, Excel and text files supported
         </span>
         <input type="file" accept={accept} multiple={multiple} onChange={updateFiles} className="sr-only" />
       </label>
@@ -1361,6 +1799,7 @@ function PreviewCard({
   href?: string;
 }) {
   const isImage = !!file.url && (file.type?.startsWith("image/") || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file.url));
+  const isVideo = !!file.url && (file.type?.startsWith("video/") || /\.(mp4|mov|webm|avi|m4v)($|\?)/i.test(file.url));
   const isPdf = file.type === "application/pdf" || /\.pdf($|\?)/i.test(file.url ?? file.name);
   const cardBody = (
     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition hover:shadow-md">
@@ -1368,13 +1807,17 @@ function PreviewCard({
         <div className="relative h-36 bg-neutral-100">
           <Image src={file.url} alt={file.name} fill className="object-cover" unoptimized />
         </div>
+      ) : isVideo && file.url ? (
+        <div className="h-36 bg-neutral-950">
+          <video src={file.url} className="h-full w-full object-cover" controls preload="metadata" />
+        </div>
       ) : (
         <div className="flex h-36 flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 to-neutral-50 px-4 text-center">
           <div className="rounded-full bg-white p-3 shadow-sm">
             <FileText className="h-7 w-7 text-amber-700" />
           </div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
-            {isPdf ? "PDF document" : "File attached"}
+            {isPdf ? "PDF document" : isVideo ? "Video file" : "File attached"}
           </p>
         </div>
       )}
@@ -1386,7 +1829,7 @@ function PreviewCard({
           </span>
           {href && (
             <span className="text-xs font-bold text-amber-700">
-              {isPdf ? "Open PDF" : "Open file"}
+              {isPdf ? "Open PDF" : isVideo ? "Open video" : "Open file"}
             </span>
           )}
         </div>
@@ -1418,9 +1861,8 @@ function TradeSlider({
     <label className="block">
       <span className="flex items-center justify-between gap-4">
         <span className="font-black">{label}</span>
-        <span className="rounded-full bg-white/10 px-3 py-1 text-sm font-black">{value}%</span>
       </span>
-      <input type="range" min="10" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-3 w-full accent-amber-400" />
+      <input type="range" min="0" max="100" value={value} onChange={(event) => onChange(Number(event.target.value))} className="mt-3 w-full accent-amber-400" />
       <span className="mt-1 block text-xs text-white/60">{helper}</span>
     </label>
   );
@@ -1471,10 +1913,34 @@ function getTradeMood(quality: number, cheap: number, fast: number) {
   return "Balanced build: sensible specification, sensible programme, fewer headaches.";
 }
 
-function formatBudgetOption(value: number) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    maximumFractionDigits: 0,
-  }).format(value);
+function buildBudgetRangeOptions() {
+  const ranges: string[] = [];
+
+  for (let start = 1; start < 80; start += 5) {
+    ranges.push(formatBudgetRange(start, start + 5));
+  }
+
+  for (let start = 80; start < 250; start += 10) {
+    ranges.push(formatBudgetRange(start, start + 10));
+  }
+
+  for (let start = 250; start < 500; start += 50) {
+    ranges.push(formatBudgetRange(start, start + 50));
+  }
+
+  for (let start = 500; start < 980; start += 80) {
+    ranges.push(formatBudgetRange(start, Math.min(1000, start + 80)));
+  }
+
+  ranges.push("£980k - £1m+");
+
+  return ranges;
+}
+
+function formatBudgetRange(fromK: number, toK: number) {
+  return `£${fromK}k - £${toK}k`;
+}
+
+function toggleArrayValue(current: string[], value: string) {
+  return current.includes(value) ? current.filter((item) => item !== value) : [...current, value];
 }

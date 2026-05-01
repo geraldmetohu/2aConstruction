@@ -1,7 +1,7 @@
 import { prisma } from "@/app/lib/db";
 import { deleteClient } from "@/app/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, Trash2, UserRound } from "lucide-react";
+import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, Trash2, UserRound, Video } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -216,6 +216,7 @@ function FileGallery({ urls }: { urls: string[] }) {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {urls.map((url) => {
         const image = isImageUrl(url);
+        const video = isVideoUrl(url);
         const pdf = isPdfUrl(url);
         const fileName = getFileName(url);
 
@@ -231,13 +232,17 @@ function FileGallery({ urls }: { urls: string[] }) {
               <div className="h-36 bg-neutral-100">
                 <img src={url} alt={fileName} className="h-full w-full object-cover" />
               </div>
+            ) : video ? (
+              <div className="h-36 bg-neutral-950">
+                <video src={url} className="h-full w-full object-cover" controls preload="metadata" />
+              </div>
             ) : (
               <div className="flex h-36 flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 to-white px-4 text-center">
                 <div className="rounded-full bg-white p-3 shadow-sm">
-                  <FileText className="h-7 w-7 text-amber-700" />
+                  {video ? <Video className="h-7 w-7 text-amber-700" /> : <FileText className="h-7 w-7 text-amber-700" />}
                 </div>
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
-                  {pdf ? "PDF document" : "File attachment"}
+                  {pdf ? "PDF document" : video ? "Video attachment" : "File attachment"}
                 </p>
               </div>
             )}
@@ -289,6 +294,10 @@ function extractUrls(value: string) {
 
 function isImageUrl(value: string) {
   return /\.(png|jpe?g|gif|webp|avif|svg)($|\?)/i.test(value);
+}
+
+function isVideoUrl(value: string) {
+  return /\.(mp4|mov|webm|avi|m4v)($|\?)/i.test(value);
 }
 
 function isPdfUrl(value: string) {

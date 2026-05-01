@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { LoginLink } from "@kinde-oss/kinde-auth-nextjs/components";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
-import { CalendarClock, Camera, CheckCircle2, Clock3, FolderOpen, Hammer, Mail, Phone } from "lucide-react";
+import { CalendarClock, CheckCircle2, Clock3, FileText, FolderOpen, Hammer, Mail, Phone, Video } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -182,11 +182,26 @@ export default async function ClientDashboardPage() {
                                   )}
                                   {phase.images.length > 0 && (
                                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                                      {phase.images.map((image) => (
-                                        <a key={image} href={image} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50">
-                                          <div className="relative h-40">
-                                            <Image src={image} alt={phase.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
-                                          </div>
+                                      {phase.images.map((asset) => (
+                                        <a key={asset} href={asset} target="_blank" rel="noreferrer" className="group overflow-hidden rounded-2xl border border-neutral-200 bg-neutral-50">
+                                          {isImageUrl(asset) ? (
+                                            <div className="relative h-40">
+                                              <Image src={asset} alt={phase.title} fill className="object-cover transition duration-500 group-hover:scale-105" />
+                                            </div>
+                                          ) : isVideoUrl(asset) ? (
+                                            <div className="h-40 bg-neutral-950">
+                                              <video src={asset} className="h-full w-full object-cover" controls preload="metadata" />
+                                            </div>
+                                          ) : (
+                                            <div className="flex h-40 flex-col items-center justify-center gap-3 bg-gradient-to-br from-neutral-100 to-white px-4 text-center">
+                                              <div className="rounded-full bg-white p-3 shadow-sm">
+                                                {isPdfUrl(asset) ? <FileText className="h-7 w-7 text-amber-700" /> : <Video className="h-7 w-7 text-amber-700" />}
+                                              </div>
+                                              <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">
+                                                {isPdfUrl(asset) ? "PDF document" : "Project file"}
+                                              </p>
+                                            </div>
+                                          )}
                                         </a>
                                       ))}
                                     </div>
@@ -297,4 +312,16 @@ function humanizePhaseStatus(value: string) {
 
 function toStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function isImageUrl(value: string) {
+  return /\.(png|jpe?g|gif|webp|avif|svg)($|\?)/i.test(value);
+}
+
+function isVideoUrl(value: string) {
+  return /\.(mp4|mov|webm|avi|m4v)($|\?)/i.test(value);
+}
+
+function isPdfUrl(value: string) {
+  return /\.pdf($|\?)/i.test(value);
 }

@@ -483,7 +483,7 @@ function isValidEmail(value: string) {
 }
 
 function getAllowedUploadHosts() {
-  const allowedHosts = new Set<string>(["utfs.io"]);
+  const allowedHosts = new Set<string>(["utfs.io", "ufs.sh"]);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
 
   if (siteUrl) {
@@ -500,7 +500,12 @@ function getAllowedUploadHosts() {
 function isAllowedUploadUrl(value: string, allowedHosts: Set<string>) {
   try {
     const parsed = new URL(value);
-    return ["http:", "https:"].includes(parsed.protocol) && allowedHosts.has(parsed.hostname);
+    const hostname = parsed.hostname.toLowerCase();
+
+    return ["http:", "https:"].includes(parsed.protocol) && (
+      allowedHosts.has(hostname) ||
+      hostname.endsWith(".ufs.sh")
+    );
   } catch {
     return false;
   }

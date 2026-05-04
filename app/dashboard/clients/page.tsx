@@ -115,7 +115,7 @@ export default async function ClientsPage() {
                                   {fileEntries.map(([key, value]) => (
                                     <div key={key} className="space-y-3">
                                       <p className="text-sm font-semibold text-neutral-700">{humanizeKey(key)}</p>
-                                      <FormValue value={value} />
+                                      <FormValue fieldKey={key} value={value} />
                                     </div>
                                   ))}
                                 </div>
@@ -128,7 +128,7 @@ export default async function ClientsPage() {
                             <div key={key} className="grid gap-1 p-3 text-sm md:grid-cols-[220px_1fr]">
                               <dt className="font-semibold text-neutral-700">{humanizeKey(key)}</dt>
                               <dd className="text-neutral-600">
-                                <FormValue value={value} />
+                                <FormValue fieldKey={key} value={value} />
                               </dd>
                             </div>
                                 ))}
@@ -200,22 +200,22 @@ function humanizeKey(key: string) {
     .replace(/^./, (char) => char.toUpperCase());
 }
 
-function FormValue({ value }: { value: string | string[] }) {
+function FormValue({ fieldKey, value }: { fieldKey: string; value: string | string[] }) {
   const values = Array.isArray(value) ? value : [value];
   const fileUrls = Array.from(new Set(values.flatMap(extractUrls)));
 
   if (fileUrls.length > 0) {
-    return <FileGallery urls={fileUrls} />;
+    return <FileGallery fieldKey={fieldKey} urls={fileUrls} />;
   }
 
   return <span>{values.join(", ") || "Not provided"}</span>;
 }
 
-function FileGallery({ urls }: { urls: string[] }) {
+function FileGallery({ fieldKey, urls }: { fieldKey: string; urls: string[] }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {urls.map((url) => {
-        const image = isImageUrl(url);
+        const image = isImageUrl(url) || isLikelyImageUpload(url, fieldKey);
         const video = isVideoUrl(url);
         const pdf = isPdfUrl(url);
         const fileName = getFileName(url);
@@ -294,6 +294,18 @@ function extractUrls(value: string) {
 
 function isImageUrl(value: string) {
   return /\.(png|jpe?g|gif|webp|avif|svg)($|\?)/i.test(value);
+}
+
+function isLikelyImageUpload(value: string, fieldKey: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    const looksLikeUploadthing = hostname === "utfs.io" || hostname.endsWith(".ufs.sh");
+    const imageField = /(photo|image|picture|idea|inspiration|sketch)/i.test(fieldKey);
+
+    return looksLikeUploadthing && imageField && !isPdfUrl(value) && !isVideoUrl(value);
+  } catch {
+    return false;
+  }
 }
 
 function isVideoUrl(value: string) {

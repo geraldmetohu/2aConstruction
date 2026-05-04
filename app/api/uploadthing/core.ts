@@ -46,11 +46,11 @@ function onComplete({
   file: any;
 }) {
   console.log("Upload complete for:", metadata.userId);
-  console.log("File URL:", file?.url);
+  console.log("File URL:", file?.url ?? file?.ufsUrl);
 
   return {
     uploadedBy: metadata.userId,
-    url: file?.url,
+    url: file?.url ?? file?.ufsUrl,
   };
 }
 
@@ -136,7 +136,10 @@ export type OurFileRouter = typeof ourFileRouter;
 -------------------------------------------- */
 export const deleteFile = async (url: string) => {
   try {
-    const key = url.split("/f/")[1];
+    const parsed = new URL(url);
+    const key = parsed.pathname.startsWith("/f/")
+      ? parsed.pathname.slice(3)
+      : url.split("/f/")[1];
 
     if (!key) {
       throw new UploadThingError("Invalid file URL");

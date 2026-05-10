@@ -228,6 +228,32 @@ export default async function ClientDashboardPage() {
                             </CardContent>
                           </Card>
 
+                          {extractProjectUploadUrls(project.formData).length > 0 && (
+                            <Card className="rounded-3xl border-neutral-200">
+                              <CardHeader>
+                                <CardTitle className="text-xl font-black text-neutral-950">Uploaded files</CardTitle>
+                                <CardDescription>
+                                  Files and photos submitted with your estimator are available here as direct links.
+                                </CardDescription>
+                              </CardHeader>
+                              <CardContent>
+                                <div className="space-y-3">
+                                  {extractProjectUploadUrls(project.formData).map((url) => (
+                                    <a
+                                      key={url}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="block rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-sm font-semibold text-neutral-700 transition hover:border-amber-300 hover:text-amber-800"
+                                    >
+                                      {getUploadLabel(url)}
+                                    </a>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+
                           {leadPortfolio && (
                             <Card className="rounded-3xl border-neutral-200 bg-neutral-950 text-white">
                               <CardHeader>
@@ -324,4 +350,42 @@ function isVideoUrl(value: string) {
 
 function isPdfUrl(value: string) {
   return /\.pdf($|\?)/i.test(value);
+}
+
+function extractProjectUploadUrls(value: unknown) {
+  const urls = new Set<string>();
+
+  const visit = (entry: unknown) => {
+    if (typeof entry === "string") {
+      entry
+        .split(/[\n,\s]+/)
+        .map((item) => item.trim())
+        .filter((item) => /^https?:\/\//i.test(item))
+        .forEach((item) => urls.add(item));
+      return;
+    }
+
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+
+    if (entry && typeof entry === "object") {
+      Object.values(entry as Record<string, unknown>).forEach(visit);
+    }
+  };
+
+  visit(value);
+
+  return Array.from(urls);
+}
+
+function getUploadLabel(value: string) {
+  const lastSegment = value.split("/").pop() ?? value;
+
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    return lastSegment;
+  }
 }

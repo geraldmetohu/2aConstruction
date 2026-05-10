@@ -1708,19 +1708,16 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
     const selectedFiles = Array.from(event.target.files ?? []);
 
     setFiles((currentFiles) => {
-      currentFiles.forEach((file) => {
-        if (file.url) URL.revokeObjectURL(file.url);
-      });
-
-      return selectedFiles.map((file) => ({
+      const nextFiles = selectedFiles.map((file) => ({
         name: file.name,
         type: file.type,
         url: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined,
       }));
+
+      return mergePreviewFiles(currentFiles, nextFiles, multiple);
     });
 
     if (selectedFiles.length === 0) {
-      setUploadedFiles([]);
       setUploadError("");
       return;
     }
@@ -1733,18 +1730,18 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
         files: selectedFiles,
       });
 
-      setUploadedFiles(
-        uploaded.map((file) => ({
+      const nextUploadedFiles = uploaded.map((file) => ({
           name: file.name,
           url: file.url ?? file.ufsUrl,
           type: file.type,
-        }))
-      );
+        }));
+
+      setUploadedFiles((currentFiles) => mergeUploadedFiles(currentFiles, nextUploadedFiles, multiple));
     } catch (error) {
-      setUploadedFiles([]);
       setUploadError(error instanceof Error ? error.message : "Upload failed.");
     } finally {
       setIsUploading(false);
+      event.target.value = "";
     }
   }
 
@@ -1793,7 +1790,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
         <EstimatorUploadDropzone
           onComplete={(res) => {
             setUploadError("");
-            setUploadedFiles(res);
+            setUploadedFiles((currentFiles) => mergeUploadedFiles(currentFiles, res, multiple));
           }}
           onError={setUploadError}
         />
@@ -1874,6 +1871,53 @@ function PreviewCard({
       {cardBody}
     </a>
   );
+}
+
+function mergeUploadedFiles(
+  currentFiles: { name: string; url: string; type?: string }[],
+  nextFiles: { name: string; url: string; type?: string }[],
+  multiple: boolean
+) {
+  if (!multiple) return nextFiles.slice(0, 1);
+
+  const merged = [...currentFiles];
+
+  for (const nextFile of nextFiles) {
+    if (!merged.some((file) => file.url === nextFile.url)) {
+      merged.push(nextFile);
+    }
+  }
+
+  return merged;
+}
+
+function mergePreviewFiles(
+  currentFiles: { name: string; url?: string; type: string }[],
+  nextFiles: { name: string; url?: string; type: string }[],
+  multiple: boolean
+) {
+  if (!multiple) {
+    currentFiles.forEach((file) => {
+      if (file.url) URL.revokeObjectURL(file.url);
+    });
+
+    return nextFiles.slice(0, 1);
+  }
+
+  const merged = [...currentFiles];
+
+  for (const nextFile of nextFiles) {
+    const existingIndex = merged.findIndex((file) => file.name === nextFile.name && file.type === nextFile.type);
+
+    if (existingIndex >= 0) {
+      if (merged[existingIndex]?.url) URL.revokeObjectURL(merged[existingIndex].url!);
+      merged[existingIndex] = nextFile;
+    } else {
+      merged.push(nextFile);
+    }
+  }
+
+  return merged;
 }
 
 function TradeSlider({

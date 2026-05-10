@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { uploadFiles } from "@/app/lib/uploadthing";
 import { cn } from "@/lib/utils";
 import { submitEstimator } from "@/app/actions";
 
@@ -1693,6 +1694,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
   const [files, setFiles] = useState<{ name: string; url?: string; type: string }[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string; type?: string }[]>([]);
   const [uploadError, setUploadError] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -1702,7 +1704,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
     };
   }, [files]);
 
-  function updateFiles(event: ChangeEvent<HTMLInputElement>) {
+  async function updateFiles(event: ChangeEvent<HTMLInputElement>) {
     const selectedFiles = Array.from(event.target.files ?? []);
 
     setFiles((currentFiles) => {
@@ -1716,6 +1718,34 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
         url: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined,
       }));
     });
+
+    if (selectedFiles.length === 0) {
+      setUploadedFiles([]);
+      setUploadError("");
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError("");
+
+    try {
+      const uploaded = await uploadFiles("estimatorUploader", {
+        files: selectedFiles,
+      });
+
+      setUploadedFiles(
+        uploaded.map((file) => ({
+          name: file.name,
+          url: file.url ?? file.ufsUrl,
+          type: file.type,
+        }))
+      );
+    } catch (error) {
+      setUploadedFiles([]);
+      setUploadError(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   return (
@@ -1757,7 +1787,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
             <p className="text-xs text-neutral-500">Uploaded files will be attached to the estimator and visible in the admin dashboard.</p>
           </div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
-            Fast upload
+            {isUploading ? "Uploading..." : "Fast upload"}
           </span>
         </div>
         <EstimatorUploadDropzone

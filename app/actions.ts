@@ -411,6 +411,38 @@ function nl2br(s: string) {
   return s.replace(/\n/g, "<br/>");
 }
 
+function humanizeEmailKey(key: string) {
+  return key
+    .replace(/Urls$/, "")
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .replace(/^./, (char) => char.toUpperCase())
+    .trim();
+}
+
+function formatEmailFieldValueHtml(key: string, value: string | string[]) {
+  const values = Array.isArray(value) ? value : [value];
+  const urls = Array.from(new Set(values.flatMap(splitPossibleUrls)));
+
+  if (urls.length > 0) {
+    return urls
+      .map((url, index) => {
+        const label = `${humanizeEmailKey(key)} ${index + 1}`;
+        return `<div style="margin:0 0 6px 0;"><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer" style="color:#0f766e;text-decoration:underline;">${escapeHtml(label)}</a></div>`;
+      })
+      .join("");
+  }
+
+  return escapeHtml(values.join(", "));
+}
+
+function formatEmailUploadText(key: string, value: string | string[]) {
+  const values = Array.isArray(value) ? value : [value];
+  const urls = Array.from(new Set(values.flatMap(splitPossibleUrls)));
+
+  return urls.map((url, index) => `${humanizeEmailKey(key)} ${index + 1}: ${url}`);
+}
+
 function getFormString(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? sanitizeText(value) : "";
@@ -545,11 +577,12 @@ async function sendEstimatorEmails({
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://2aconstruction.co.uk";
   const portfolioUrl = `${siteUrl}/portfolio/all`;
   const logoUrl = `${siteUrl}/2a_l.png`;
+  const uploadSummaryLines = Object.entries(snapshot)
+    .flatMap(([key, value]) => formatEmailUploadText(key, value));
   const detailsRows = Object.entries(snapshot)
     .map(([key, value]) => {
-      const readableKey = key.replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase());
-      const readableValue = Array.isArray(value) ? value.join(", ") : value;
-      return `<tr><td style="padding:6px;border:1px solid #ddd;"><b>${escapeHtml(readableKey)}</b></td><td style="padding:6px;border:1px solid #ddd;">${escapeHtml(readableValue)}</td></tr>`;
+      const readableKey = humanizeEmailKey(key);
+      return `<tr><td style="padding:6px;border:1px solid #ddd;"><b>${escapeHtml(readableKey)}</b></td><td style="padding:6px;border:1px solid #ddd;">${formatEmailFieldValueHtml(key, value)}</td></tr>`;
     })
     .join("");
 
@@ -571,6 +604,9 @@ async function sendEstimatorEmails({
       budgetRange ? `Budget range: ${budgetRange}` : null,
       foundUs ? `Where they found us: ${foundUs}` : null,
       startTimeframe ? `Looking to start: ${startTimeframe}` : null,
+      uploadSummaryLines.length > 0 ? "" : null,
+      uploadSummaryLines.length > 0 ? "Uploads:" : null,
+      ...uploadSummaryLines,
     ].filter(Boolean).join("\n"),
     html: `
       <div style="font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto; color:#171717;">

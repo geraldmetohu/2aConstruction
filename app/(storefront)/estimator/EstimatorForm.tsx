@@ -24,7 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { uploadFiles } from "@/app/lib/uploadthing";
+import { useUploadThing } from "@/app/lib/uploadthing";
 import { cn } from "@/lib/utils";
 import { submitEstimator } from "@/app/actions";
 
@@ -85,17 +85,17 @@ const doorTypeOptions = ["Fire door", "Standard internal door", "Pocket door", "
 const uploadAccept = "image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.rtf,.odt,.ods,.zip";
 
 const roofTiles = [
-  { title: "Concrete interlocking", image: "/images/estimator/interlocking.jfif", detail: "Durable and common across UK homes." },
-  { title: "Clay plain tiles", image: "/images/estimator/clay_plain_tiles.jfif", detail: "Traditional look with strong kerb appeal." },
+  { title: "Concrete interlocking", image: "/images/estimator/interlocking1.jpg", detail: "Durable and common across UK homes." },
+  { title: "Clay plain tiles", image: "/images/estimator/clay_plain_tiles1.jpg", detail: "Traditional look with strong kerb appeal." },
   { title: "Slate tiles", image: "/images/estimator/slate_tiles.jpg", detail: "Premium finish for period and modern roofs." },
   { title: "Pantiles", image: "/images/estimator/pantile.jpg", detail: "Curved profile, often used for character roofs." },
 ];
 
 const flatRoofSystems = [
-  { title: "Felt roof", image: "/images/estimator/flat_roof.jfif", detail: "Cost-effective layered system for sheds, garages and flat roofs." },
-  { title: "Fibreglass GRP", image: "/images/estimator/fiberglass.jfif", detail: "Seamless rigid finish with a clean modern appearance." },
+  { title: "Felt roof", image: "/images/estimator/felt_roof2.webp", detail: "Cost-effective layered system for sheds, garages and flat roofs." },
+  { title: "Fibreglass GRP", image: "/images/estimator/fiberglass1.jpeg", detail: "Seamless rigid finish with a clean modern appearance." },
   { title: "EPDM rubber", image: "/images/estimator/rubber.jpg", detail: "Flexible membrane system, popular for extensions and dormers." },
-  { title: "Not sure", image: "/images/estimator/other_flat.jfif", detail: "We can advise after seeing photos and roof access." },
+  { title: "Not sure", image: "/images/estimator/other_flat1.jpeg", detail: "We can advise after seeing photos and roof access." },
 ];
 
 const loftTypes = [
@@ -114,10 +114,10 @@ const extensionStyles = [
 ];
 
 const dormerFinishes = [
-  { title: "Tile hanging", image: "/images/estimator/tile_hanging_loft.jfif", detail: "Classic UK dormer finish, often matched to roof tiles." },
+  { title: "Tile hanging", image: "/images/estimator/tile_hanging_l.jpg", detail: "Classic UK dormer finish, often matched to roof tiles." },
   { title: "Rendering", image: "/images/estimator/rendering_loft.jpg", detail: "Clean rendered finish, usually coloured or painted." },
   { title: "Cladding", image: "/images/estimator/cladding_loft.jpg", detail: "Modern look with composite, timber-style or metal cladding." },
-  { title: "Not sure", image: "/images/estimator/other_loft.jfif", detail: "Let us suggest the best finish for the property." },
+  { title: "Not sure", image: "/images/estimator/not_sure_dormer.jpg", detail: "Let us suggest the best finish for the property." },
 ];
 
 const gardenFinishes = [
@@ -126,8 +126,8 @@ const gardenFinishes = [
   { title: "Resin", image: "/images/estimator/resin.jpg", detail: "Smooth driveway finish when the base is suitable." },
   { title: "Tarmac", image: "/images/estimator/tarmac.jpg", detail: "Practical surface for parking areas." },
   { title: "Decking", image: "/images/estimator/decking.jpg", detail: "Raised or flush timber/composite decking for outdoor living areas." },
-  { title: "Turf / planting", image: "/images/estimator/turf.jfif", detail: "Soft landscaping for gardens." },
-  { title: "Not sure", image: "/images/estimator/other_garden.jfif", detail: "We can recommend after seeing levels and drainage." },
+  { title: "Turf / planting", image: "/images/estimator/turf1.jpg", detail: "Soft landscaping for gardens." },
+  { title: "Not sure", image: "/images/estimator/othergarden.webp", detail: "We can recommend after seeing levels and drainage." },
 ];
 
 const finishDefaults = [
@@ -1694,7 +1694,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
   const [files, setFiles] = useState<{ name: string; url?: string; type: string }[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; url: string; type?: string }[]>([]);
   const [uploadError, setUploadError] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
+  const { startUpload, isUploading } = useUploadThing("estimatorUploader");
 
   useEffect(() => {
     return () => {
@@ -1722,25 +1722,25 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
       return;
     }
 
-    setIsUploading(true);
     setUploadError("");
 
     try {
-      const uploaded = await uploadFiles("estimatorUploader", {
-        files: selectedFiles,
-      });
+      const uploaded = await startUpload(selectedFiles);
+
+      if (!uploaded || uploaded.length === 0) {
+        throw new Error("No files were uploaded. Please try again.");
+      }
 
       const nextUploadedFiles = uploaded.map((file) => ({
-          name: file.name,
-          url: file.url ?? file.ufsUrl,
-          type: file.type,
-        }));
+        name: file.name,
+        url: file.url ?? file.ufsUrl,
+        type: file.type,
+      }));
 
       setUploadedFiles((currentFiles) => mergeUploadedFiles(currentFiles, nextUploadedFiles, multiple));
     } catch (error) {
       setUploadError(error instanceof Error ? error.message : "Upload failed.");
     } finally {
-      setIsUploading(false);
       event.target.value = "";
     }
   }

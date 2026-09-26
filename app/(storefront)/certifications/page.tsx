@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function CertificationsPage() {
   const policies = [
@@ -102,8 +103,49 @@ export default function CertificationsPage() {
             px-6 py-4
             flex flex-wrap gap-4 justify-center
           "
+
         >
+          {/* FMB */}
+<a
+  href="https://www.fmb.org.uk/"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="
+    text-sm font-semibold text-black hover:text-[#bd0738]
+    transition-colors duration-300
+    border-b-2 border-transparent hover:border-[#bd0738]
+  "
+>
+  FMB
+</a>
+
+{/* SafeContractor */}
+<a
+  href="https://www.safecontractor.com/en-gb/"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="
+    text-sm font-semibold text-black hover:text-blue-700
+    transition-colors duration-300
+    border-b-2 border-transparent hover:border-blue-700
+  "
+>
+  SafeContractor
+</a>
+
+{/* Certifications */}
+<Link
+  href="#certifications"
+  className="
+    text-sm font-semibold text-black hover:text-[#ffc92e]
+    transition-colors duration-300
+    border-b-2 border-transparent hover:border-[#ffc92e]
+  "
+>
+  Certifications
+</Link>
           {policies.map((p) => (
+            
             <Link
               key={p.id}
               href={`#${p.id}`}
@@ -117,21 +159,128 @@ export default function CertificationsPage() {
             </Link>
           ))}
 
-          {/* Placeholder link for certifications */}
-          <Link
-            href="#certifications"
-            className="
-              text-sm font-semibold text-black hover:text-[#ffc92e]
-              transition-colors duration-300
-              border-b-2 border-transparent hover:border-[#ffc92e]
-            "
-          >
-            Certifications
-          </Link>
+
         </motion.div>
       {/* ---------------------- */}
 {/*  CERTIFICATIONS */}
 {/* ---------------------- */}
+
+{/* ---------------------- */}
+{/*  FMB MEMBERSHIP */}
+{/* ---------------------- */}
+
+<motion.section
+  id="fmb-membership"
+  initial={{ opacity: 0, y: 40 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  viewport={{ once: true }}
+  transition={{ duration: 0.6 }}
+  className="
+    max-w-4xl mx-auto space-y-6
+    bg-[#fff5f7]
+    border border-[#f1c4d0]
+    rounded-2xl
+    shadow-2xl
+    p-8
+  "
+>
+  {/* Title & Description */}
+  <div className="space-y-5 px-4">
+    <div className="flex items-center gap-4">
+      <div className="w-2 h-12 bg-[#bd0738] rounded-full shadow-md" />
+
+      <div>
+        <p className="text-sm font-bold uppercase tracking-[0.15em] text-[#bd0738]">
+          Professional Membership
+        </p>
+
+        <h2 className="text-3xl font-bold text-neutral-900">
+          Federation of Master Builders
+        </h2>
+      </div>
+    </div>
+
+    <div className="flex justify-center py-4">
+      <div className="relative h-52 w-44">
+        <Image
+          src="/images/fmb-logo.png"
+          alt="Federation of Master Builders"
+          fill
+          className="object-contain"
+          sizes="176px"
+        />
+      </div>
+    </div>
+
+    <p className="text-neutral-700 text-lg leading-relaxed pl-5 border-l-2 border-[#bd0738]/30">
+      2A Construction's membership of the Federation of Master Builders
+      reflects our commitment to professional standards, quality workmanship
+      and responsible construction practices.
+    </p>
+  </div>
+
+  {/* Certificate Viewer */}
+  <div className="bg-white p-6 shadow-2xl rounded-2xl border border-[#f1c4d0]">
+    <div className="mb-4">
+      <h3 className="text-lg font-bold text-neutral-900">
+        FMB Membership Certificate
+      </h3>
+
+      <p className="mt-1 text-sm text-neutral-600">
+        View the official membership certificate below.
+      </p>
+    </div>
+
+    <div className="overflow-hidden rounded-xl border border-neutral-200 shadow-inner">
+      <iframe
+        src="/pdf/FMB-Membership-Certificate.pdf#zoom=65"
+        title="Federation of Master Builders Membership Certificate"
+        className="w-full h-[500px] md:h-[700px] bg-white"
+      />
+    </div>
+  </div>
+
+  {/* Actions */}
+  <div className="flex flex-wrap gap-4 justify-center pt-4">
+    <a
+      href="/pdf/FMB-Membership-Certificate.pdf"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="
+        px-6 py-3
+        rounded-lg
+        bg-[#bd0738]
+        text-white
+        font-semibold
+        text-sm
+        hover:bg-[#a80531]
+        transition
+      "
+    >
+      Open Membership Certificate
+    </a>
+
+    <a
+      href="https://www.fmb.org.uk/"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="
+        px-6 py-3
+        rounded-lg
+        border
+        border-[#bd0738]
+        text-[#bd0738]
+        font-semibold
+        text-sm
+        hover:bg-[#bd0738]
+        hover:text-white
+        transition
+      "
+    >
+      Visit FMB Website
+    </a>
+  </div>
+</motion.section>
 <motion.section
   id="certifications"
   initial={{ opacity: 0, y: 40 }}

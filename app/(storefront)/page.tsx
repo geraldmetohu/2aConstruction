@@ -17,6 +17,7 @@ import { Hero } from "../componets/storefront/Hero";
 import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
 import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
 import { EstimatorOverview } from "../componets/storefront/EstimatorOverview";
+import { FMBMembershipSection } from "../componets/storefront/FMBMembershipSection";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -30,6 +31,10 @@ export default function IndexPage() {
       <Hero/>
       {/* SAFE CONTRACTOR – TRUST SECTION */}
       <SafeContractorBadgeSection />
+      {/* FEDERATION OF MASTER BUILDERS – TRUST SECTION */}
+<Reveal>
+  <FMBMembershipSection />
+</Reveal>
       <Reveal>
         <EstimatorOverview />
       </Reveal>

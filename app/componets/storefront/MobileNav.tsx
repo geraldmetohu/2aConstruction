@@ -277,24 +277,39 @@ export default function MobileNav({
           })}
         </nav>
 
-        {/* Authentication footer */}
-        <div className="border-t border-black/[0.06] bg-neutral-50/70 p-5">
-          {!isAuthenticated ? (
-            <div className="grid grid-cols-2 gap-2">
-              <LoginLink
-                authUrlParams={{ prompt: "login" }}
-                postLoginRedirectURL="/api/auth/creation"
-                className="flex h-11 items-center justify-center rounded-full bg-[#f5b400] px-4 text-sm font-semibold text-black transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-[#ffc52e] hover:shadow-lg active:translate-y-0"
-              >
-                Sign in
-              </LoginLink>
+       {/* Authentication footer */}
+<div className="border-t border-black/[0.06] bg-neutral-50/70 p-5">
+  {!isAuthenticated ? (
+    <div className="grid grid-cols-2 gap-2">
+      <LoginLink
+        authUrlParams={{ prompt: "login" }}
+        postLoginRedirectURL="/api/auth/creation"
+        className="group relative flex h-11 items-center justify-center overflow-hidden rounded-none border border-black/90 bg-transparent px-4 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+      >
+        <span className="relative z-10 flex items-center gap-2">
+          <span>Sign in</span>
+          <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+            →
+          </span>
+        </span>
 
-              <RegisterLink
-                className="flex h-11 items-center justify-center rounded-full border border-black/[0.10] bg-white px-4 text-sm font-medium text-neutral-800 transition-all duration-300 ease-out hover:border-[#f5b400] hover:bg-[#fff8df] active:scale-[0.98]"
-              >
-                Create account
-              </RegisterLink>
-            </div>
+        <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+      </LoginLink>
+
+      <RegisterLink
+        className="group relative flex h-11 items-center justify-center overflow-hidden rounded-none border border-black/90 bg-transparent px-4 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+      >
+        <span className="relative z-10 flex items-center gap-2">
+          <span>Create account</span>
+          <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+            →
+          </span>
+        </span>
+
+        <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+      </RegisterLink>
+    </div>
+  
           ) : (
             <div className="space-y-3">
               <div className="text-sm text-neutral-500">

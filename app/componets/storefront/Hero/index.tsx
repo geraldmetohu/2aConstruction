@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/app/lib/db";
 import HeroClient, {
   type HeroSlide,
 } from "./HeroClient";
@@ -31,7 +31,7 @@ export default async function Hero() {
   try {
     const videos = await prisma.heroVideo.findMany({
       where: {
-        active: true,
+        isActive: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -46,10 +46,7 @@ export default async function Hero() {
       videoUrl: video.videoUrl,
       ctaText: video.ctaText ?? "View Projects",
       ctaHref: video.ctaHref ?? "/portfolio/all",
-      durationSec: Math.min(
-        Math.max(video.durationSec ?? 7, 6),
-        8
-      ),
+      durationSec: 7,
     }));
   } catch (error) {
     console.error(

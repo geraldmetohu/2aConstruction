@@ -78,24 +78,40 @@ export async function NavBar() {
         <div className="hidden items-center gap-2 md:flex">
           {!user ? (
             <>
-              <Button
-                asChild
-                className="rounded-full bg-[#f5b400] px-5 text-black shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#ffc52e] hover:shadow-md"
-              >
-                <LoginLink
-                  authUrlParams={{ prompt: "login" }}
-                  postLoginRedirectURL="/api/auth/creation"
-                >
-                  Sign in
-                </LoginLink>
-              </Button>
+<Button
+  asChild
+  className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+>
+  <LoginLink
+    authUrlParams={{ prompt: "login" }}
+    postLoginRedirectURL="/api/auth/creation"
+  >
+    <span className="relative z-10 flex items-center gap-4">
+      <span>Sign in</span>
+      <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+        →
+      </span>
+    </span>
 
-              <Button
-                asChild
-                className="rounded-full border border-black/[0.10] bg-white px-5 text-neutral-900 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#f5b400] hover:bg-[#fff8df] hover:shadow-md"
-              >
-                <RegisterLink>Create account</RegisterLink>
-              </Button>
+    <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+  </LoginLink>
+</Button>
+
+<Button
+  asChild
+  className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+>
+  <RegisterLink>
+    <span className="relative z-10 flex items-center gap-4">
+      <span>Create account</span>
+      <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+        →
+      </span>
+    </span>
+
+    <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+  </RegisterLink>
+</Button>
             </>
           ) : (
             <>

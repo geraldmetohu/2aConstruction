@@ -13,11 +13,12 @@ import { CTAQuote } from "../componets/storefront/CTAQuote";
 import { StickyContactBar } from "../componets/storefront/StickyContactBar";
 import { BeforeAfterGallery } from "../componets/storefront/BeforeAfterGallery";
 import { Reveal, RevealStagger } from "@/components/ui/Reveal";
-import { Hero } from "../componets/storefront/Hero";
+
 import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
 import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
 import { EstimatorOverview } from "../componets/storefront/EstimatorOverview";
 import { FMBMembershipSection } from "../componets/storefront/FMBMembershipSection";
+import Hero from "../componets/storefront/Hero";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)

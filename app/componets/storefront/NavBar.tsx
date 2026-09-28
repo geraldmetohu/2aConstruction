@@ -5,7 +5,11 @@ import MobileNav from "./MobileNav";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/app/lib/db";
-import { LoginLink, LogoutLink, RegisterLink } from "@kinde-oss/kinde-auth-nextjs/components";
+import {
+  LoginLink,
+  LogoutLink,
+  RegisterLink,
+} from "@kinde-oss/kinde-auth-nextjs/components";
 
 const ADMIN_EMAILS = new Set([
   "geraldmetohu@gmail.com",
@@ -16,8 +20,15 @@ const ADMIN_EMAILS = new Set([
 export async function NavBar() {
   const { getUser } = getKindeServerSession();
   const user = await getUser();
+
   const isAdmin = !!user?.email && ADMIN_EMAILS.has(user.email);
-  const displayName = user?.given_name || user?.family_name || user?.email || "User";
+
+  const displayName =
+    user?.given_name ||
+    user?.family_name ||
+    user?.email ||
+    "User";
+
   const dbUser = user?.id
     ? await prisma.user.findUnique({
         where: {
@@ -28,85 +39,100 @@ export async function NavBar() {
         },
       })
     : null;
+
   const hasClientDashboard = (dbUser?.clients.length ?? 0) > 0;
-  const dashboardHref = isAdmin ? "/dashboard" : hasClientDashboard ? "/client-dashboard" : null;
+
+  const dashboardHref = isAdmin
+    ? "/dashboard"
+    : hasClientDashboard
+      ? "/client-dashboard"
+      : null;
 
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-amber-500/20 bg-black text-white">
-      {/* Full-bleed container with NO left padding so the logo sits flush left */}
-      <div className="w-full pr-4 sm:pr-6 lg:pr-6 py-2.5 flex items-center justify-between">
-        {/* Left: Logo + Desktop links */}
-        <div className="flex items-center gap-3">
-          {/* Logo flush to the absolute left edge */}
+    <nav className="sticky top-0 z-50 w-full border-b border-black/[0.08] bg-white text-neutral-900 shadow-sm">
+      <div className="mx-auto flex h-[76px] w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+        {/* Logo */}
+        <div className="flex items-center">
           <Link
             href="/"
-            className="flex items-center gap-3 pl-5 ml-0 pr-28"
             aria-label="Go to homepage"
+            className="group flex items-center"
           >
             <Image
-              src="/2a_l.png"
+              src="/2a_logo_dark.svg"
               alt="2A Construction Logo"
-              width={148}
-              height={148}
-              className="h-15 w-auto object-contain"
+              width={150}
+              height={70}
               priority
+              className="h-14 w-auto object-contain transition-transform duration-300 group-hover:scale-[1.03]"
             />
           </Link>
-
-          {/* Desktop links — trim inner paddings/borders via child selectors */}
-          <div
-            className={`
-              hidden md:flex items-center
-              /* tighten spacing between items */
-              gap-1
-              /* lighten/trim link paddings + remove heavy borders from children */
-              [&_a]:px-3 [&_a]:py-2
-              [&_a]:rounded-lg
-              [&_a]:border-0
-              /* if your items are <li><a/></li>, also tighten li margins */
-              [&_li]:mx-0 [&_li]:px-0
-              /* subtle hover to replace thick borders */
-              [&_a:hover]:bg-white/10
-              /* optional: active state look without borders */
-              [&_.active]:bg-white/15
-            `}
-          >
-            <NavbarLinks />
-          </div>
         </div>
 
-        {/* Right: Auth + Mobile */}
-        <div className="flex items-center gap-2">
-          {/* Desktop auth controls */}
-          <div className="hidden md:flex items-center gap-2">
-            {!user ? (
-              <>
-                <Button asChild className="bg-amber-500 text-black hover:bg-amber-300">
-                  <LoginLink authUrlParams={{ prompt: "login" }} postLoginRedirectURL="/api/auth/creation">
-                    Sign in
-                  </LoginLink>
-                </Button>
-                <Button asChild className="bg-amber-500 text-black hover:bg-amber-300">
-                  <RegisterLink>Create account</RegisterLink>
-                </Button>
-              </>
-            ) : (
-              <>
-                {dashboardHref && (
-                  <Button asChild className="bg-amber-500 text-black hover:bg-amber-300">
-                    <Link href={dashboardHref}>{isAdmin ? "Admin Dashboard" : "My Dashboard"}</Link>
-                  </Button>
-                )}
-                <span className="text-sm opacity-90">Hi, {displayName}</span>
-                <Button asChild variant="ghost" className="text-white hover:bg-white/10">
-                  <LogoutLink>Sign out</LogoutLink>
-                </Button>
-              </>
-            )}
-          </div>
+        {/* Desktop navigation */}
+        <div className="hidden md:flex md:flex-1 md:justify-center">
+          <NavbarLinks />
+        </div>
 
-          {/* Mobile menu trigger */}
-          <MobileNav dashboardHref={dashboardHref} dashboardLabel={isAdmin ? "Admin Dashboard" : "My Dashboard"} />
+        {/* Desktop authentication */}
+        <div className="hidden items-center gap-2 md:flex">
+          {!user ? (
+            <>
+              <Button
+                asChild
+                className="rounded-full bg-[#f5b400] px-5 text-black shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#ffc52e] hover:shadow-md"
+              >
+                <LoginLink
+                  authUrlParams={{ prompt: "login" }}
+                  postLoginRedirectURL="/api/auth/creation"
+                >
+                  Sign in
+                </LoginLink>
+              </Button>
+
+              <Button
+                asChild
+                className="rounded-full border border-black/[0.10] bg-white px-5 text-neutral-900 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:border-[#f5b400] hover:bg-[#fff8df] hover:shadow-md"
+              >
+                <RegisterLink>Create account</RegisterLink>
+              </Button>
+            </>
+          ) : (
+            <>
+              {dashboardHref && (
+                <Button
+                  asChild
+                  className="rounded-full bg-[#f5b400] px-5 text-black shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#ffc52e] hover:shadow-md"
+                >
+                  <Link href={dashboardHref}>
+                    {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+                  </Link>
+                </Button>
+              )}
+
+              <span className="max-w-[160px] truncate px-2 text-sm text-neutral-600">
+                Hi, {displayName}
+              </span>
+
+              <Button
+                asChild
+                variant="ghost"
+                className="rounded-full text-neutral-700 transition-all duration-300 hover:bg-neutral-100 hover:text-black"
+              >
+                <LogoutLink>Sign out</LogoutLink>
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Mobile navigation */}
+        <div className="md:hidden">
+          <MobileNav
+            dashboardHref={dashboardHref}
+            dashboardLabel={
+              isAdmin ? "Admin Dashboard" : "My Dashboard"
+            }
+          />
         </div>
       </div>
     </nav>

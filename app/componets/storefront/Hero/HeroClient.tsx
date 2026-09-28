@@ -1,338 +1,367 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type HeroSlide = {
   id: string;
-  title?: string | null;
-  subtitle?: string | null;
+  title: string;
+  subtitle: string;
   videoUrl: string;
-  ctaText?: string | null;
-  ctaHref?: string | null;
+  ctaText?: string;
+  ctaHref?: string;
   durationSec?: number;
 };
 
-export function HeroClient({ videos }: { videos: HeroSlide[] }) {
-  const slides = useMemo(() => videos ?? [], [videos]);
+type HeroClientProps = {
+  videos: HeroSlide[];
+};
 
-  const [idx, setIdx] = useState(0);
+export default function HeroClient({ videos }: HeroClientProps) {
+  const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState<1 | -1>(1);
+  const [isPaused, setIsPaused] = useState(false);
 
-  // Stores the native aspect ratio of the current video.
-  // Default is 16:9 until the browser reads the actual MP4 dimensions.
-  const [videoRatio, setVideoRatio] = useState(16 / 9);
+  const touchStartX = useRef<number | null>(null);
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const slides = videos.filter((video) => video.videoUrl);
 
-  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const active = slides[index] ?? slides[0];
 
   /*
-   * Change slide.
+   * Move to a specific slide.
    */
-  const go = useCallback(
-    (n: number) => {
+  const goToSlide = useCallback(
+    (nextIndex: number, nextDirection?: 1 | -1) => {
       if (!slides.length) return;
 
-      setIdx((current) => {
-        return ((n % slides.length) + slides.length) % slides.length;
-      });
+      const normalizedIndex =
+        (nextIndex + slides.length) % slides.length;
+
+      setDirection(nextDirection ?? (normalizedIndex > index ? 1 : -1));
+      setIndex(normalizedIndex);
     },
-    [slides.length]
+    [index, slides.length]
   );
 
   /*
    * Next slide.
    */
   const next = useCallback(() => {
-    go(idx + 1);
-  }, [go, idx]);
+    if (slides.length <= 1) return;
+
+    setDirection(1);
+    setIndex((current) => (current + 1) % slides.length);
+  }, [slides.length]);
 
   /*
-   * Automatically move to the next slide.
+   * Previous slide.
+   */
+  const previous = useCallback(() => {
+    if (slides.length <= 1) return;
+
+    setDirection(-1);
+    setIndex(
+      (current) => (current - 1 + slides.length) % slides.length
+    );
+  }, [slides.length]);
+
+  /*
+   * Automatic slideshow.
    */
   useEffect(() => {
-    if (!slides.length) return;
+    if (slides.length <= 1 || isPaused) return;
 
     const duration =
-      (slides[idx]?.durationSec ?? 6) * 1000;
+      Math.max(active?.durationSec ?? 7, 3) * 1000;
 
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    timerRef.current = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       next();
     }, duration);
 
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-
-      timerRef.current = null;
-    };
-  }, [idx, slides, next]);
+    return () => window.clearTimeout(timer);
+  }, [active, isPaused, next, slides.length]);
 
   /*
    * Keyboard navigation.
    */
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight") {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowRight") {
         next();
       }
 
-      if (e.key === "ArrowLeft") {
-        go(idx - 1);
+      if (event.key === "ArrowLeft") {
+        previous();
       }
     };
 
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [idx, go, next]);
+  }, [next, previous]);
 
   /*
-   * Mobile swipe navigation.
+   * Touch / swipe navigation.
    */
-  useEffect(() => {
-    const el = wrapRef.current;
-
-    if (!el) return;
-
-    let startX = 0;
-
-    const onTouchStart = (e: TouchEvent) => {
-      startX = e.changedTouches[0]?.clientX ?? 0;
-    };
-
-    const onTouchEnd = (e: TouchEvent) => {
-      const endX = e.changedTouches[0]?.clientX ?? 0;
-      const difference = endX - startX;
-
-      // Swipe right
-      if (difference > 40) {
-        go(idx - 1);
-      }
-
-      // Swipe left
-      if (difference < -40) {
-        next();
-      }
-    };
-
-    el.addEventListener("touchstart", onTouchStart, {
-      passive: true,
-    });
-
-    el.addEventListener("touchend", onTouchEnd, {
-      passive: true,
-    });
-
-    return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [idx, go, next]);
-
-  /*
-   * Read the native dimensions of the active MP4.
-   *
-   * Example:
-   *
-   * 1920 x 1080
-   * ratio = 1920 / 1080
-   * ratio = 1.777...
-   *
-   * The container then uses that ratio so the entire
-   * video is displayed without cropping.
-   */
-  const handleVideoMetadata = (
-    event: React.SyntheticEvent<HTMLVideoElement>
+  const handleTouchStart = (
+    event: React.TouchEvent<HTMLDivElement>
   ) => {
-    const video = event.currentTarget;
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  };
 
-    if (
-      video.videoWidth > 0 &&
-      video.videoHeight > 0
-    ) {
-      const ratio =
-        video.videoWidth / video.videoHeight;
+  const handleTouchEnd = (
+    event: React.TouchEvent<HTMLDivElement>
+  ) => {
+    if (touchStartX.current === null) return;
 
-      setVideoRatio(ratio);
+    const endX = event.changedTouches[0]?.clientX ?? 0;
+    const difference = touchStartX.current - endX;
+
+    touchStartX.current = null;
+
+    if (Math.abs(difference) < 50) return;
+
+    if (difference > 0) {
+      next();
+    } else {
+      previous();
     }
   };
 
-  /*
-   * No slides.
-   */
   if (!slides.length) {
     return null;
   }
 
-  const active = slides[idx];
+  /*
+   * Animation direction.
+   */
+  const videoVariants = {
+    enter: (slideDirection: 1 | -1) => ({
+      x: slideDirection === 1 ? "8%" : "-8%",
+      opacity: 0,
+      scale: 1.025,
+      filter: "blur(8px)",
+    }),
+
+    center: {
+      x: "0%",
+      opacity: 1,
+      scale: 1,
+      filter: "blur(0px)",
+    },
+
+    exit: (slideDirection: 1 | -1) => ({
+      x: slideDirection === 1 ? "-8%" : "8%",
+      opacity: 0,
+      scale: 0.985,
+      filter: "blur(5px)",
+    }),
+  };
 
   return (
     <section
-      ref={wrapRef}
-      aria-label="Hero video slideshow"
-      className="relative w-full overflow-hidden bg-black"
-      style={{
-        /*
-         * This is the important part.
-         *
-         * Width = 100%
-         * Height = calculated automatically from
-         * the actual MP4 dimensions.
-         */
-        aspectRatio: `${videoRatio}`,
-      }}
+      className="relative min-h-screen w-full overflow-hidden"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
     >
       {/* =========================================================
-          VIDEO
+          PERMANENT HERO BACKGROUND
           ========================================================= */}
+      <div className="absolute inset-0">
+        <Image
+          src="/images/hero_background.jpg"
+          alt=""
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
+        />
 
-      <div className="absolute inset-0 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.video
-            key={active.id}
-            initial={{
-              opacity: 0,
-              scale: 1,
-            }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-            }}
-            exit={{
-              opacity: 0,
-              scale: 1,
-            }}
-            transition={{
-              opacity: {
-                duration: 0.6,
-                ease: "easeInOut",
-              },
-            }}
-            className="absolute inset-0 h-full w-full object-contain"
-            src={active.videoUrl}
-            autoPlay
-            muted
-            playsInline
-            loop={false}
-            preload="metadata"
-            onLoadedMetadata={handleVideoMetadata}
-          />
-        </AnimatePresence>
+        {/* Background opacity */}
+        <div className="absolute inset-0 bg-black/35" />
       </div>
 
       {/* =========================================================
-          DARK GRADIENT FOR TEXT LEGIBILITY
+          HERO CONTENT
           ========================================================= */}
-
       <div
-        className="
-          pointer-events-none
-          absolute
-          inset-0
-          bg-gradient-to-t
-          from-black/50
-          via-black/20
-          to-transparent
-        "
-      />
-
-      {/* =========================================================
-          TEXT + CTA
-          ========================================================= */}
-
-      <div
-        className="
-          absolute
-          inset-x-0
-          bottom-0
-          p-5
-          sm:p-6
-          md:p-8
-          text-white
-        "
+        className="relative z-10 flex min-h-screen w-full flex-col items-center justify-center px-4 py-24 sm:px-6 lg:px-10"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
-        {(active.title || active.subtitle) && (
-          <div className="max-w-3xl">
-            {active.title && (
-              <h2
-                className="
-                  text-2xl
-                  font-bold
-                  leading-tight
-                  sm:text-3xl
-                  md:text-4xl
-                "
+        {/* =====================================================
+            CENTERED VIDEO SLIDESHOW
+            ===================================================== */}
+        <div className="relative w-full max-w-5xl">
+          <div className="relative w-full overflow-hidden rounded-sm shadow-2xl">
+            <AnimatePresence
+              initial={false}
+              custom={direction}
+              mode="sync"
+            >
+              <motion.div
+                key={active.id}
+                custom={direction}
+                variants={videoVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{
+                  duration: 0.75,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className="relative w-full"
               >
-                {active.title}
-              </h2>
-            )}
-
-            {active.subtitle && (
-              <p
-                className="
-                  mt-2
-                  text-sm
-                  opacity-90
-                  sm:text-base
-                "
-              >
-                {active.subtitle}
-              </p>
-            )}
+                <video
+                  key={active.videoUrl}
+                  src={active.videoUrl}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="block h-auto w-full"
+                  onEnded={next}
+                />
+              </motion.div>
+            </AnimatePresence>
           </div>
-        )}
 
-        {/* CTA */}
-        {active.ctaHref && active.ctaText && (
-          <div className="mt-4">
-            <Link href={active.ctaHref}>
-              <Button size="lg">
-                {active.ctaText}
-              </Button>
-            </Link>
-          </div>
-        )}
-
-        {/* =======================================================
-            SLIDE INDICATORS
-            ======================================================= */}
-
-        <div className="mt-5 flex gap-2">
-          {slides.map((slide, i) => (
-            <button
-              key={slide.id}
-              type="button"
-              onClick={() => go(i)}
-              className={`
-                h-2
-                w-6
-                rounded-full
-                transition
-                duration-200
-                ${
-                  i === idx
-                    ? "bg-amber-500"
-                    : "bg-white/40 hover:bg-white/70"
-                }
-              `}
-              aria-label={`Go to slide ${i + 1}`}
-              aria-current={
-                i === idx ? "true" : undefined
-              }
-            />
-          ))}
+          {/* Subtle video edge */}
+          <div className="pointer-events-none absolute inset-0 rounded-sm ring-1 ring-white/20" />
         </div>
+
+        {/* =====================================================
+            TEXT + CTA
+            ===================================================== */}
+        <AnimatePresence mode="wait">
+          {(active.title || active.subtitle || active.ctaText) && (
+            <motion.div
+              key={active.id}
+              initial={{
+                opacity: 0,
+                y: 24,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                y: -16,
+              }}
+              transition={{
+                duration: 0.6,
+                delay: 0.15,
+                ease: "easeOut",
+              }}
+              className="mt-7 flex w-full max-w-5xl flex-col items-center text-center"
+            >
+              {/* Title */}
+              {active.title && (
+                <h1
+                  className="max-w-3xl text-3xl font-semibold tracking-[-0.02em] text-white drop-shadow-[0_3px_12px_rgba(0,0,0,0.45)] sm:text-4xl md:text-5xl lg:text-6xl"
+                  style={{
+                    fontFamily:
+                      '"Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+                  }}
+                >
+                  {active.title}
+                </h1>
+              )}
+
+              {/* Subtitle */}
+              {active.subtitle && (
+                <p
+                  className="mt-3 max-w-2xl text-sm font-light leading-relaxed tracking-wide text-white/95 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] sm:text-base md:text-lg"
+                  style={{
+                    fontFamily:
+                      '"Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+                  }}
+                >
+                  {active.subtitle}
+                </p>
+              )}
+
+              {/* CTA */}
+              {active.ctaHref && active.ctaText && (
+                <a
+                  href={active.ctaHref}
+                  className="group relative mt-6 inline-flex items-center gap-4 overflow-hidden border border-white/90 px-6 py-3 text-sm font-medium tracking-wide text-white transition-all duration-300 hover:text-black"
+                  style={{
+                    fontFamily:
+                      '"Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+                  }}
+                >
+                  {/* White sweep */}
+                  <span className="absolute inset-y-0 left-0 w-full origin-left scale-x-0 bg-white transition-transform duration-500 ease-out group-hover:scale-x-100" />
+
+                  {/* Text */}
+                  <span className="relative z-10">
+                    {active.ctaText}
+                  </span>
+
+                  {/* Arrow */}
+                  <span className="relative z-10 text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+                    →
+                  </span>
+                </a>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* =====================================================
+            SLIDE INDICATORS
+            ===================================================== */}
+        {slides.length > 1 && (
+          <div className="mt-8 flex items-center gap-3">
+            {slides.map((slide, slideIndex) => (
+              <button
+                key={slide.id}
+                type="button"
+                aria-label={`Go to slide ${slideIndex + 1}`}
+                onClick={() =>
+                  goToSlide(
+                    slideIndex,
+                    slideIndex > index ? 1 : -1
+                  )
+                }
+                className="group relative h-1 overflow-hidden rounded-full bg-white/30 transition-all duration-300"
+              >
+                <span
+                  className={`block h-full rounded-full bg-white transition-all duration-500 ${
+                    slideIndex === index
+                      ? "w-10"
+                      : "w-4 group-hover:w-6"
+                  }`}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Slide number */}
+        {slides.length > 1 && (
+          <div className="mt-3 text-[10px] tracking-[0.3em] text-white/70">
+            {String(index + 1).padStart(2, "0")} /{" "}
+            {String(slides.length).padStart(2, "0")}
+          </div>
+        )}
       </div>
+
+      {/* =========================================================
+          DIAGONAL BOTTOM EDGE
+          ========================================================= */}
+      <div
+        className="pointer-events-none absolute bottom-0 left-0 z-20 h-16 w-full bg-white sm:h-20 lg:h-24"
+        style={{
+          clipPath:
+            "polygon(0 100%, 100% 0, 100% 100%)",
+        }}
+      />
     </section>
   );
 }

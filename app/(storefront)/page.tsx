@@ -18,6 +18,8 @@ import { TrustSection } from "../componets/storefront/TrustSection";
 import CurvedNavy from "../componets/storefront/CurvedNavy";
 import CurvedNavyInverted from "../componets/storefront/CurvedNavyInverted";
 import { ServicesPortfolio } from "../componets/storefront/ServicesPortfolio";
+import { ProjectProcess } from "../componets/storefront/ProjectProcess";
+import CurvedBlack from "../componets/storefront/CurvedBlack";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -37,7 +39,18 @@ export default function IndexPage() {
       <CurvedNavy/>
       <ServicesPortfolio />
       <CurvedNavyInverted/>
+      
       <Reveal>
+        <CurvedBlack/>
+        <ProjectProcess
+          beforeAfter={{
+          before: "/images/refurb.jpg",
+          after: "/images/ext.jpeg",
+            }}
+        />
+      </Reveal>
+      <Reveal>
+
         <ReviewsWidgets />
       </Reveal>
       <section className="py-20 bg-white">
@@ -67,11 +80,6 @@ export default function IndexPage() {
       {/* Services overview (fast paths) */}
 
 
-      <Reveal>
-      <InteractiveProof
-          beforeAfter={{ before: "/images/refurb.jpg", after: "/images/ext.jpeg" }}
-        />
-      </Reveal>
 
       {/* Latest work (scroll-snap gallery) */}
       <Reveal>
@@ -94,19 +102,6 @@ export default function IndexPage() {
       <Reveal>
         <FeaturedProject />
       </Reveal>
-
-      <Reveal>
-        <ProcessLifeline
-          steps={[
-            { title: "Site Visit", text: "Measure, inspect and capture your brief.", img: "/images/site_insp.jpg" },
-            { title: "Fixed Quote", text: "Scope, inclusions and schedule—no surprises.", img: "/images/quote.jpg" },
-            { title: "Build & Protect", text: "Daily protection, tidy site, clear updates.", img: "/images/build.jpg" },
-            { title: "Clean Handover", text: "Deep clean, snag-free finish, warranties.", img: "/images/handover.jpg" },
-          ]}
-        />
-      </Reveal>
-
-
 
       {/* Social proof */}
       <Reveal>

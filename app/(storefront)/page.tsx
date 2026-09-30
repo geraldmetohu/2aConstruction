@@ -3,10 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import Script from "next/script";
 // app/(storefront)/page.tsx
-import { ServicesOverview } from "../componets/storefront/ServicesOverview";
-
 import { FeaturedProject } from "../componets/storefront/FeaturedProject";
-import { AnimatedCategorySelection } from "../componets/storefront/AnimatedCategorySelection";
 import { InteractiveProof } from "../componets/storefront/StatsBar";
 import { ProcessLifeline } from "../componets/storefront/ProcessSection";
 import { CTAQuote } from "../componets/storefront/CTAQuote";
@@ -14,12 +11,13 @@ import { StickyContactBar } from "../componets/storefront/StickyContactBar";
 import { BeforeAfterGallery } from "../componets/storefront/BeforeAfterGallery";
 import { Reveal, RevealStagger } from "@/components/ui/Reveal";
 
-import { SafeContractorBadgeSection } from "../componets/storefront/SafeContractorBadgeSection";
 import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
 import { EstimatorOverview } from "../componets/storefront/EstimatorOverview";
-import { FMBMembershipSection } from "../componets/storefront/FMBMembershipSection";
 import Hero from "../componets/storefront/Hero";
 import { TrustSection } from "../componets/storefront/TrustSection";
+import CurvedNavy from "../componets/storefront/CurvedNavy";
+import CurvedNavyInverted from "../componets/storefront/CurvedNavyInverted";
+import { ServicesPortfolio } from "../componets/storefront/ServicesPortfolio";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -32,10 +30,13 @@ export default function IndexPage() {
     <>
       <Hero/>
       {/* SAFE CONTRACTOR – TRUST SECTION */}
-<TrustSection />
+      <TrustSection />
       <Reveal>
         <EstimatorOverview />
       </Reveal>
+      <CurvedNavy/>
+      <ServicesPortfolio />
+      <CurvedNavyInverted/>
       <Reveal>
         <ReviewsWidgets />
       </Reveal>
@@ -64,13 +65,7 @@ export default function IndexPage() {
         </div>
       </section>
       {/* Services overview (fast paths) */}
-      <RevealStagger>
-        <ServicesOverview />
-      </RevealStagger>
 
-      <Reveal>
-        <AnimatedCategorySelection />
-      </Reveal>
 
       <Reveal>
       <InteractiveProof

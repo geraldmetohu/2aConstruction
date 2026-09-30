@@ -2,7 +2,8 @@
 import { type ReactNode } from "react";
 import { NavBar } from "../componets/storefront/NavBar";
 import Footer from "../componets/storefront/Footer";
-//import LoadingOverlay from "../componets/storefront/LoadingOverlay";
+
+//import LoadingOverlay from "../components/storefront/LoadingOverlay";
 
 export default function StoreFrontLayout({ children }: { children: ReactNode }) {
   return (

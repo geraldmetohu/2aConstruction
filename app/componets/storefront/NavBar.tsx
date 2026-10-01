@@ -1,7 +1,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { NavbarLinks } from "./NavBarLinks";
-import { portalEnabled } from "@/app/lib/customer-portal/access";
+
+// TEMPORARILY DISABLED — customer portal is not ready yet.
+// import { portalEnabled } from "@/app/lib/customer-portal/access";
+
 import MobileNav from "./MobileNav";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { Button } from "@/components/ui/button";
@@ -43,17 +46,36 @@ export async function NavBar() {
 
   const hasClientDashboard = (dbUser?.clients.length ?? 0) > 0;
 
+  /*
+   * CUSTOMER PORTAL TEMPORARILY DISABLED
+   *
+   * The customer portal/access module is not ready yet and is currently
+   * causing the Vercel production build to fail.
+   *
+   * Previously:
+   *
+   * const dashboardHref = isAdmin
+   *   ? "/dashboard"
+   *   : portalEnabled()
+   *     ? "/my-projects"
+   *     : hasClientDashboard
+   *     ? "/client-dashboard"
+   *     : null;
+   *
+   * For now, admins can access /dashboard and existing database
+   * client users can access /client-dashboard.
+   */
+
   const dashboardHref = isAdmin
     ? "/dashboard"
-    : portalEnabled()
-      ? "/my-projects"
-      : hasClientDashboard
+    : hasClientDashboard
       ? "/client-dashboard"
       : null;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-black/[0.08] bg-white text-neutral-900 shadow-sm">
       <div className="mx-auto flex h-[76px] w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+
         {/* Logo */}
         <div className="flex items-center">
           <Link
@@ -81,40 +103,42 @@ export async function NavBar() {
         <div className="hidden items-center gap-2 md:flex">
           {!user ? (
             <>
-<Button
-  asChild
-  className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
->
-  <LoginLink
-    authUrlParams={{ prompt: "login" }}
-    postLoginRedirectURL="/api/auth/creation"
-  >
-    <span className="relative z-10 flex items-center gap-4">
-      <span>Sign in</span>
-      <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
-        →
-      </span>
-    </span>
+              <Button
+                asChild
+                className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+              >
+                <LoginLink
+                  authUrlParams={{ prompt: "login" }}
+                  postLoginRedirectURL="/api/auth/creation"
+                >
+                  <span className="relative z-10 flex items-center gap-4">
+                    <span>Sign in</span>
 
-    <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-  </LoginLink>
-</Button>
+                    <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </span>
 
-<Button
-  asChild
-  className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
->
-  <RegisterLink>
-    <span className="relative z-10 flex items-center gap-4">
-      <span>Create account</span>
-      <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
-        →
-      </span>
-    </span>
+                  <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+                </LoginLink>
+              </Button>
 
-    <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-  </RegisterLink>
-</Button>
+              <Button
+                asChild
+                className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
+              >
+                <RegisterLink>
+                  <span className="relative z-10 flex items-center gap-4">
+                    <span>Create account</span>
+
+                    <span className="text-lg leading-none transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </span>
+
+                  <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
+                </RegisterLink>
+              </Button>
             </>
           ) : (
             <>

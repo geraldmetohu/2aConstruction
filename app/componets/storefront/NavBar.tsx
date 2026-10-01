@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { NavbarLinks } from "./NavBarLinks";
+import { portalEnabled } from "@/app/lib/customer-portal/access";
 import MobileNav from "./MobileNav";
 import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,9 @@ export async function NavBar() {
 
   const dashboardHref = isAdmin
     ? "/dashboard"
-    : hasClientDashboard
+    : portalEnabled()
+      ? "/my-projects"
+      : hasClientDashboard
       ? "/client-dashboard"
       : null;
 

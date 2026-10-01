@@ -461,429 +461,467 @@ export function ServicesPortfolio() {
           MOBILE
       ========================================================== */}
 
-      <div
-        ref={mobileTrackRef}
-        className="
-          relative
-          m-0
-          lg:hidden
-        "
-        style={{
-          /*
-           * This is ONLY the scroll mechanism.
-           *
-           * It deliberately has NO background.
-           */
-          height: "500svh",
-        }}
-      >
-        {/* ========================================================
-            100SVH STICKY VISUAL STAGE
-        ======================================================== */}
+ {/* ==========================================================
+    MOBILE
+========================================================== */}
 
-        <div
+<div
+  ref={mobileTrackRef}
+  className="
+    relative
+    m-0
+    lg:hidden
+  "
+  style={{
+    height: `${SERVICES.length * 100}svh`,
+  }}
+>
+  {/* ========================================================
+      FIXED / STICKY VISUAL STAGE
+
+      The track above gives us the scrolling distance.
+
+      This stage stays inside one viewport and the content
+      changes as the user moves through the track.
+  ======================================================== */}
+
+  <div
+    className="
+      sticky
+      top-0
+      h-[100svh]
+      w-full
+      overflow-hidden
+      bg-[#071a33]
+    "
+  >
+    <MobileBackground />
+
+    {/* ======================================================
+        MOBILE CONTENT GRID
+
+        Instead of positioning everything independently,
+        divide the viewport into controlled areas:
+
+        TOP    = heading
+        MIDDLE = image
+        BOTTOM = active service
+    ====================================================== */}
+
+    <div
+      className="
+        relative
+        z-20
+        grid
+        h-full
+        w-full
+        grid-rows-[36svh_32svh_32svh]
+        px-5
+      "
+    >
+      {/* ====================================================
+          TOP / HEADING
+      ==================================================== */}
+
+      <div
+        className="
+          flex
+          min-h-0
+          flex-col
+          justify-end
+          pb-[4svh]
+        "
+      >
+        <div className="flex items-center gap-3">
+          <span className="h-px w-7 bg-white/60" />
+
+          <span
+            className="
+              text-[9px]
+              font-semibold
+              uppercase
+              tracking-[0.28em]
+              text-white/60
+            "
+          >
+            What we build
+          </span>
+        </div>
+
+        <h2
           className="
-            sticky
-            top-0
-            h-[100svh]
-            w-full
-            overflow-hidden
-            bg-[#071a33]
+            mt-3
+            max-w-[350px]
+            text-[2.05rem]
+            font-semibold
+            leading-[0.94]
+            tracking-[-0.045em]
+            text-white
+            min-[390px]:text-[2.2rem]
           "
         >
-          <MobileBackground />
+          Projects built
+          <br />
+          around the way
+          <br />
+          <span className="text-white/40">
+            you live.
+          </span>
+        </h2>
 
-          {/* ======================================================
-              HEADING
-          ====================================================== */}
+        <p
+          className="
+            mt-3
+            max-w-[355px]
+            text-[10px]
+            leading-[1.55]
+            text-white/55
+            min-[390px]:text-[11px]
+          "
+        >
+          From extensions and loft conversions to complete
+          refurbishments and roofing, we deliver carefully
+          managed construction projects across London and
+          the Home Counties.
+        </p>
+      </div>
 
+      {/* ====================================================
+          MIDDLE / IMAGE
+
+          The image now belongs to its own grid row.
+
+          It can therefore NEVER overlap the heading above
+          or the service content below.
+      ==================================================== */}
+
+      <div
+        className="
+          relative
+          min-h-0
+          self-center
+        "
+      >
+        <div
+          className="
+            absolute
+            inset-x-0
+            top-1/2
+            h-[26svh]
+            -translate-y-1/2
+            overflow-hidden
+            bg-black
+          "
+        >
+          {/* Architectural outer frame */}
           <div
+            aria-hidden="true"
             className="
+              pointer-events-none
               absolute
-              inset-x-0
-              top-0
-              z-20
-              px-5
-              pt-[27svh]
+              -left-2
+              -top-2
+              z-50
+              h-full
+              w-full
+              border
+              border-white/25
             "
-          >
-            <div className="flex items-center gap-3">
-              <span className="h-px w-7 bg-white/60" />
+          />
 
-              <span
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={active.slug}
+              className="absolute inset-0"
+              initial={{
+                opacity: 0,
+                x: reducedMotion ? 0 : 28,
+                scale: reducedMotion ? 1 : 1.025,
+              }}
+              animate={{
+                opacity: 1,
+                x: 0,
+                scale: 1,
+              }}
+              exit={{
+                opacity: 0,
+                x: reducedMotion ? 0 : -20,
+                scale: reducedMotion ? 1 : 0.99,
+              }}
+              transition={{
+                duration: reducedMotion ? 0.2 : 0.55,
+                ease: EASE,
+              }}
+            >
+              <Image
+                src={active.image}
+                alt={`${active.title} project`}
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover object-center"
+              />
+
+              {/* Image fade */}
+              <div
                 className="
-                  text-[9px]
-                  font-semibold
-                  uppercase
-                  tracking-[0.28em]
-                  text-white/60
+                  absolute
+                  inset-0
+                  bg-gradient-to-t
+                  from-[#071a33]
+                  via-[#071a33]/15
+                  to-transparent
+                "
+              />
+
+              <div
+                className="
+                  absolute
+                  inset-0
+                  bg-[#071a33]/10
+                  mix-blend-multiply
+                "
+              />
+
+              {/* Image label */}
+              <div
+                className="
+                  absolute
+                  bottom-0
+                  left-0
+                  right-0
+                  z-20
+                  p-4
                 "
               >
-                What we build
-              </span>
-            </div>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span className="h-px w-6 bg-white/70" />
 
-            <h2
-              className="
-                mt-4
-                max-w-[330px]
-                text-[2.35rem]
-                font-semibold
-                leading-[0.94]
-                tracking-[-0.045em]
-                text-white
-              "
-            >
-              Projects built
-              <br />
-              around the way
-              <br />
-              <span className="text-white/45">
-                you live.
-              </span>
-            </h2>
-
-            <p
-              className="
-                mt-4
-                max-w-[340px]
-                text-[11px]
-                leading-5
-                text-white/60
-              "
-            >
-              From extensions and loft conversions to complete
-              refurbishments and roofing, we deliver carefully
-              managed construction projects across London and
-              the Home Counties.
-            </p>
-          </div>
-
-          {/* ======================================================
-              CENTER IMAGE
-          ====================================================== */}
-
-          <div
-            className="
-              absolute
-              left-5
-              right-5
-              top-1/2
-              z-30
-              h-[23svh]
-              -translate-y-1/2
-              overflow-hidden
-              bg-black
-            "
-          >
-            <div
-              aria-hidden="true"
-              className="
-                pointer-events-none
-                absolute
-                -left-2
-                -top-2
-                z-40
-                h-full
-                w-full
-                border
-                border-white/25
-              "
-            />
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={active.slug}
-                className="absolute inset-0"
-                initial={{
-                  opacity: 0,
-                  x: reducedMotion ? 0 : 25,
-                  scale: reducedMotion ? 1 : 1.025,
-                }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  scale: 1,
-                }}
-                exit={{
-                  opacity: 0,
-                  x: reducedMotion ? 0 : -20,
-                  scale: reducedMotion ? 1 : 0.99,
-                }}
-                transition={{
-                  duration: reducedMotion ? 0.2 : 0.55,
-                  ease: EASE,
-                }}
-              >
-                <Image
-                  src={active.image}
-                  alt={`${active.title} project`}
-                  fill
-                  priority
-                  sizes="100vw"
-                  className="object-cover object-center"
-                />
-
-                <div
-                  className="
-                    absolute
-                    inset-0
-                    bg-gradient-to-t
-                    from-[#071a33]
-                    via-[#071a33]/10
-                    to-transparent
-                  "
-                />
-
-                <div className="absolute inset-0 bg-[#071a33]/10 mix-blend-multiply" />
-
-                <div
-                  className="
-                    absolute
-                    bottom-0
-                    left-0
-                    right-0
-                    z-20
-                    p-4
-                  "
-                >
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <span className="h-px w-6 bg-white/70" />
-
-                    <span
-                      className="
-                        text-[8px]
-                        font-semibold
-                        uppercase
-                        tracking-[0.25em]
-                        text-white/70
-                      "
-                    >
-                      Featured work
-                    </span>
-                  </div>
-
-                  <h3
+                  <span
                     className="
-                      text-lg
+                      text-[8px]
                       font-semibold
-                      tracking-[-0.02em]
-                      text-white
-                    "
-                  >
-                    {active.title}
-                  </h3>
-
-                  <p
-                    className="
-                      mt-1
-                      max-w-[330px]
-                      text-[10px]
-                      leading-4
+                      uppercase
+                      tracking-[0.25em]
                       text-white/70
                     "
                   >
-                    {active.description}
-                  </p>
+                    Featured work
+                  </span>
                 </div>
-              </motion.div>
-            </AnimatePresence>
 
-            {/* Counter */}
+                <h3
+                  className="
+                    text-lg
+                    font-semibold
+                    tracking-[-0.02em]
+                    text-white
+                  "
+                >
+                  {active.title}
+                </h3>
+              </div>
+            </motion.div>
+          </AnimatePresence>
 
-            <div
-              className="
-                absolute
-                right-3
-                top-3
-                z-40
-                text-[9px]
-                font-semibold
-                tracking-[0.22em]
-                text-white/60
-              "
-            >
-              {active.number} / 0{SERVICES.length}
-            </div>
-
-            {/* Progress */}
-
-            <motion.div
-              className="
-                absolute
-                bottom-0
-                left-0
-                z-40
-                h-[3px]
-                bg-white
-              "
-              animate={{
-                width: `${((activeIndex + 1) / SERVICES.length) * 100}%`,
-              }}
-              transition={{
-                duration: 0.4,
-                ease: EASE,
-              }}
-            />
-          </div>
-
-          {/* ======================================================
-              ACTIVE SERVICE
-          ====================================================== */}
-
+          {/* Counter */}
           <div
             className="
               absolute
-              inset-x-5
-              bottom-[4svh]
-              z-30
+              right-3
+              top-3
+              z-50
+              text-[9px]
+              font-semibold
+              tracking-[0.22em]
+              text-white/60
             "
           >
-            <div
-              className="
-                mb-2
-                flex
-                items-center
-                justify-between
-                border-b
-                border-white/15
-                pb-2
-              "
-            >
-              <span
-                className="
-                  text-[8px]
-                  font-semibold
-                  uppercase
-                  tracking-[0.25em]
-                  text-white/45
-                "
-              >
-                Our services
-              </span>
-
-              <span
-                className="
-                  text-[8px]
-                  uppercase
-                  tracking-[0.18em]
-                  text-white/30
-                "
-              >
-                Scroll to explore
-              </span>
-            </div>
-
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={active.slug}
-                initial={{
-                  opacity: 0,
-                  y: reducedMotion ? 0 : 10,
-                }}
-                animate={{
-                  opacity: 1,
-                  y: 0,
-                }}
-                exit={{
-                  opacity: 0,
-                  y: reducedMotion ? 0 : -10,
-                }}
-                transition={{
-                  duration: 0.35,
-                  ease: EASE,
-                }}
-              >
-                <Link
-                  href={active.href}
-                  className="
-                    group
-                    relative
-                    block
-                    w-full
-                    border-b
-                    border-white/15
-                    py-3
-                  "
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="
-                        relative
-                        flex
-                        h-9
-                        w-9
-                        shrink-0
-                        items-center
-                        justify-center
-                        border
-                        border-white/20
-                        bg-white/[0.04]
-                        text-white
-                      "
-                    >
-                      <active.Icon
-                        className="h-4 w-4"
-                        strokeWidth={1.6}
-                      />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <h3
-                        className="
-                          text-xs
-                          font-semibold
-                          uppercase
-                          tracking-[0.07em]
-                          text-white
-                        "
-                      >
-                        {active.title}
-                      </h3>
-
-                      <p
-                        className="
-                          mt-1
-                          max-w-[330px]
-                          text-[9px]
-                          leading-4
-                          text-white/55
-                        "
-                      >
-                        {active.description}
-                      </p>
-                    </div>
-
-                    <div
-                      className="
-                        flex
-                        h-8
-                        w-8
-                        shrink-0
-                        items-center
-                        justify-center
-                        border
-                        border-white/25
-                        text-white
-                      "
-                    >
-                      <ArrowRight
-                        className="
-                          h-3.5
-                          w-3.5
-                          transition-transform
-                          duration-300
-                          group-hover:translate-x-1
-                        "
-                      />
-                    </div>
-                  </div>
-                </Link>
-              </motion.div>
-            </AnimatePresence>
+            {active.number} / 0{SERVICES.length}
           </div>
+
+          {/* Progress */}
+          <motion.div
+            className="
+              absolute
+              bottom-0
+              left-0
+              z-50
+              h-[3px]
+              bg-white
+            "
+            animate={{
+              width: `${((activeIndex + 1) / SERVICES.length) * 100}%`,
+            }}
+            transition={{
+              duration: 0.4,
+              ease: EASE,
+            }}
+          />
         </div>
       </div>
+
+      {/* ====================================================
+          BOTTOM / ACTIVE SERVICE
+      ==================================================== */}
+
+      <div
+        className="
+          flex
+          min-h-0
+          flex-col
+          justify-start
+          pt-[3svh]
+        "
+      >
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            border-b
+            border-white/15
+            pb-2
+          "
+        >
+          <span
+            className="
+              text-[8px]
+              font-semibold
+              uppercase
+              tracking-[0.25em]
+              text-white/45
+            "
+          >
+            Our services
+          </span>
+
+          <span
+            className="
+              text-[8px]
+              uppercase
+              tracking-[0.18em]
+              text-white/30
+            "
+          >
+            Scroll to explore
+          </span>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={active.slug}
+            initial={{
+              opacity: 0,
+              y: reducedMotion ? 0 : 10,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            exit={{
+              opacity: 0,
+              y: reducedMotion ? 0 : -10,
+            }}
+            transition={{
+              duration: 0.35,
+              ease: EASE,
+            }}
+            className="min-h-0"
+          >
+            <Link
+              href={active.href}
+              className="
+                group
+                flex
+                w-full
+                items-center
+                gap-3
+                border-b
+                border-white/15
+                py-3
+              "
+            >
+              {/* Icon */}
+              <div
+                className="
+                  flex
+                  h-9
+                  w-9
+                  shrink-0
+                  items-center
+                  justify-center
+                  border
+                  border-white/20
+                  bg-white/[0.04]
+                  text-white
+                "
+              >
+                <active.Icon
+                  className="h-4 w-4"
+                  strokeWidth={1.6}
+                />
+              </div>
+
+              {/* Text */}
+              <div className="min-w-0 flex-1">
+                <h3
+                  className="
+                    text-xs
+                    font-semibold
+                    uppercase
+                    tracking-[0.07em]
+                    text-white
+                  "
+                >
+                  {active.title}
+                </h3>
+
+                <p
+                  className="
+                    mt-1
+                    line-clamp-2
+                    max-w-[330px]
+                    text-[9px]
+                    leading-4
+                    text-white/50
+                  "
+                >
+                  {active.description}
+                </p>
+              </div>
+
+              {/* Arrow */}
+              <div
+                className="
+                  flex
+                  h-8
+                  w-8
+                  shrink-0
+                  items-center
+                  justify-center
+                  border
+                  border-white/25
+                  text-white
+                "
+              >
+                <ArrowRight
+                  className="
+                    h-3.5
+                    w-3.5
+                    transition-transform
+                    duration-300
+                    group-hover:translate-x-1
+                  "
+                />
+              </div>
+            </Link>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  </div>
+</div>
 
       {/* ==========================================================
           DESKTOP

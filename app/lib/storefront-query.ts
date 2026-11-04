@@ -11,7 +11,8 @@ export async function storefrontQuery<T>(
     if (
       error instanceof Prisma.PrismaClientInitializationError ||
       (error instanceof Prisma.PrismaClientKnownRequestError &&
-        ["P1001", "P1002", "P1011", "P1017"].includes(error.code))
+        // P2024 = waited too long for a free connection, P2037 = the database has no connection slots left.
+        ["P1001", "P1002", "P1011", "P1017", "P2024", "P2037"].includes(error.code))
     ) {
       // Avoid forwarding a Prisma error object (including connection details)
       // into the development browser console.

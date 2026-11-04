@@ -1,4 +1,5 @@
 import { prisma } from "@/app/lib/db";
+import { storefrontQuery } from "@/app/lib/storefront-query";
 import HeroClient, {
   type HeroSlide,
 } from "./HeroClient";
@@ -26,34 +27,25 @@ const localSlides: HeroSlide[] = [
 ];
 
 export default async function Hero() {
-  let databaseSlides: HeroSlide[] = [];
+  const videos = await storefrontQuery("Hero videos", () => prisma.heroVideo.findMany({
+    where: {
+      isActive: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 8,
+  }));
 
-  try {
-    const videos = await prisma.heroVideo.findMany({
-      where: {
-        isActive: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      take: 8,
-    });
-
-    databaseSlides = videos.map((video) => ({
-      id: String(video.id),
-      title: video.title ?? "",
-      subtitle: video.subtitle ?? "",
-      videoUrl: video.videoUrl,
-      ctaText: video.ctaText ?? "View Projects",
-      ctaHref: video.ctaHref ?? "/portfolio/all",
-      durationSec: 7,
-    }));
-  } catch (error) {
-    console.error(
-      "Failed to load hero videos:",
-      error
-    );
-  }
+  const databaseSlides: HeroSlide[] = videos.map((video) => ({
+    id: String(video.id),
+    title: video.title ?? "",
+    subtitle: video.subtitle ?? "",
+    videoUrl: video.videoUrl,
+    ctaText: video.ctaText ?? "View Projects",
+    ctaHref: video.ctaHref ?? "/portfolio/all",
+    durationSec: 7,
+  }));
 
   /*
    * Local slides are always available.

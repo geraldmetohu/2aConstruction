@@ -4,11 +4,10 @@ import { defineConfig } from "prisma/config";
 
 const databaseUrl = process.env.DATABASE_URL;
 
-export default defineConfig({
+const baseConfig = {
   schema: path.join("prisma", "schema.prisma"),
   migrations: {
     path: path.join("prisma", "migrations"),
   },
-  engine: "classic",
-  ...(databaseUrl ? { datasource: { url: databaseUrl } } : {}),
-});
+};
+export default defineConfig(databaseUrl ? { ...baseConfig, engine: "classic", datasource: { url: databaseUrl } } : baseConfig);

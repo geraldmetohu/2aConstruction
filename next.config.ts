@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdfkit"],
+  outputFileTracingIncludes: { "/api/quotes/**": ["./app/lib/quotes/fonts/*"] },
   images: {
     remotePatterns: [
       {
@@ -19,13 +21,17 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.uploadthing.com", // optional — allows subdomains like sea1.ingest.uploadthing.com
       },
+      {
+        protocol: "https",
+        hostname: "*.ufs.sh", // uploadthing v7 file URLs
+      },
     ],
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 };
 

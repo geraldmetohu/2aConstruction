@@ -15,6 +15,7 @@ import { ReviewsWidgets } from "../componets/storefront/ReviewsWidgets";
 import { EstimatorOverview } from "../componets/storefront/EstimatorOverview";
 import Hero from "../componets/storefront/Hero";
 import { TrustSection } from "../componets/storefront/TrustSection";
+import { BuildSequence } from "../componets/storefront/site/BuildSequence";
 import CurvedNavy from "../componets/storefront/CurvedNavy";
 import CurvedNavyInverted from "../componets/storefront/CurvedNavyInverted";
 import { ServicesPortfolio } from "../componets/storefront/ServicesPortfolio";
@@ -51,6 +52,17 @@ export default function IndexPage() {
         />
       </Reveal>
     
+      {/* How a build comes together: the scroll-driven section drawing */}
+      <section className="border-y-2 border-[#071a33] bg-white">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-end justify-between gap-6 px-5 py-12 sm:px-8 lg:px-10">
+          <div>
+            <h2 className="text-3xl font-semibold tracking-[-0.03em] text-[#071a33] md:text-5xl">How a build comes together</h2>
+            <p className="mt-3 max-w-2xl text-lg text-[#071a33]/70">A rear extension with a loft dormer, drawn in section. Keep scrolling and watch it go up, from the survey to the lights coming on.</p>
+          </div>
+        </div>
+      </section>
+      <BuildSequence />
+
       <Reveal>
         <FeaturedProject />
       </Reveal>
@@ -71,46 +83,7 @@ export default function IndexPage() {
 
       <StickyContactBar />
 
-      {/* Local Business JSON-LD (SEO) */}
-      <script
-        type="application/ld+json"
-        // update companyNo, vatID, telephone & url/logo paths
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            name: "2A Construction",
-            image: "https://2aconstruction.co.uk/2a_l.png",
-            url: "https://2aconstruction.co.uk",
-            telephone: "+44 790 3095 967",
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: "London",
-              addressCountry: "GB",
-            },
-            openingHoursSpecification: [
-              {
-                "@type": "OpeningHoursSpecification",
-                dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-                opens: "08:00",
-                closes: "18:00",
-              },
-              {
-                "@type": "OpeningHoursSpecification",
-                dayOfWeek: "Saturday",
-                opens: "08:00",
-                closes: "18:00",
-              },
-            ],
-            priceRange: "££",
-            sameAs: [
-              "https://www.facebook.com/profile.php?id=100095250444954",
-              "https://www.instagram.com/2a.construction.ltd/",
-              "https://uk.linkedin.com/company/2a-construction-ltd",
-            ],
-          }),
-        }}
-      />
+      {/* Business details for search engines are in the root layout (one source of truth). */}
     </>
   );
   

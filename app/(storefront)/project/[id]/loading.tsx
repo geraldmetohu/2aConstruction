@@ -1,21 +1,14 @@
-import { Skeleton } from "@/components/ui/skeleton";
-
-export default function ProjectLoadingRoute() {
+export default function Loading() {
   return (
-    <div className="grid md:grid-cols-2 gap-6 items-start lg:gap-x-24 py-8">
-      <div>
-        <Skeleton className="w-full h-[420px] md:h-[520px] rounded-2xl" />
-        <div className="grid grid-cols-5 gap-3 mt-6">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-[76px] rounded-lg" />
-          ))}
+    <div aria-busy="true" aria-label="Loading project">
+      <div className="h-[78svh] animate-pulse bg-[#071a33]" />
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-20 sm:px-8 lg:grid-cols-12 lg:px-10">
+        <div className="h-4 w-24 animate-pulse bg-neutral-200 lg:col-span-3" />
+        <div className="space-y-3 lg:col-span-9">
+          <div className="h-8 w-full animate-pulse bg-neutral-200" />
+          <div className="h-8 w-5/6 animate-pulse bg-neutral-200" />
+          <div className="h-8 w-2/3 animate-pulse bg-neutral-200" />
         </div>
-      </div>
-      <div>
-        <Skeleton className="w-72 h-10 rounded-lg" />
-        <Skeleton className="w-64 h-8 mt-4 rounded-lg" />
-        <Skeleton className="w-full h-40 mt-5 rounded-lg" />
-        <Skeleton className="w-48 h-10 mt-6 rounded-lg" />
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 "use client";
+import { normalizeUploadedFile } from "@/app/lib/uploaded-file";
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -395,12 +396,12 @@ function validateCurrentStep() {
   }
 
   return (
-    <section className="relative overflow-hidden bg-neutral-950 text-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.24),transparent_34rem),linear-gradient(135deg,rgba(255,255,255,0.08)_0_1px,transparent_1px_18px)]" />
+    <section className="relative overflow-hidden bg-[#071a33] text-white">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(245,180,0,0.22),transparent_34rem),linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[length:auto,28px_28px,28px_28px]" />
       <div className="relative mx-auto max-w-7xl px-4 py-10 md:py-16">
         <div className="grid gap-8 lg:grid-cols-[0.86fr_1.14fr]">
           <aside className="lg:sticky lg:top-28 lg:self-start">
-            <div className="overflow-hidden rounded-[2rem] border border-amber-400/25 bg-white/10 shadow-2xl backdrop-blur">
+            <div className="overflow-hidden rounded-2xl border border-amber-400/25 bg-white/10 shadow-2xl backdrop-blur">
               <div className="relative h-64">
                 <Image src={selectedProject.image} alt={selectedProject.title} fill className="object-cover" priority />
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
@@ -447,7 +448,7 @@ function validateCurrentStep() {
             </div>
           </aside>
 
-          <form ref={formRef} onSubmit={submitForm} noValidate className="rounded-[2rem] border border-white/10 bg-white p-4 text-neutral-950 shadow-2xl md:p-8">
+          <form ref={formRef} onSubmit={submitForm} noValidate className="rounded-2xl border border-white/10 bg-white p-4 text-neutral-950 shadow-2xl md:p-8">
             {sent ? (
               <SuccessState emailSent={emailSent} />
             ) : (
@@ -463,7 +464,7 @@ function validateCurrentStep() {
                     <p className="text-right text-sm font-bold uppercase tracking-[0.25em] text-amber-700">Step {step + 1} of {steps.length}</p>
                   </div>
                   <div className="mb-4 h-2 overflow-hidden rounded-full bg-neutral-200">
-                    <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-cyan-400 transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
+                    <div className="h-full rounded-full bg-[#f5b400] transition-all" style={{ width: `${((step + 1) / steps.length) * 100}%` }} />
                   </div>
                 </div>
 
@@ -1237,7 +1238,7 @@ function BudgetStep({
           Alongside the client answers, this form also saves bedroom counts, area fields and example `rate per m²` variables for each trade section. You can replace the example values in code when you build the formula.
         </p>
       </div>
-      <div className="rounded-[2rem] border border-neutral-200 bg-neutral-950 p-5 text-white">
+      <div className="rounded-2xl border border-neutral-200 bg-neutral-950 p-5 text-white">
         <input type="hidden" name="qualityPriority" value={quality} />
         <input type="hidden" name="cheapPriority" value={cheap} />
         <input type="hidden" name="fastPriority" value={fast} />
@@ -1346,7 +1347,7 @@ function DetailPanel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[2rem] border border-neutral-200 bg-neutral-50/80 p-5 md:p-6">
+    <section className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-5 md:p-6">
       <div className="max-w-3xl">
         <h3 className="text-2xl font-black tracking-tight text-neutral-950">{title}</h3>
         <p className="mt-2 text-sm leading-6 text-neutral-600">{intro}</p>
@@ -1731,11 +1732,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
         throw new Error("No files were uploaded. Please try again.");
       }
 
-      const nextUploadedFiles = uploaded.map((file) => ({
-        name: file.name,
-        url: file.url ?? file.ufsUrl,
-        type: file.type,
-      }));
+      const nextUploadedFiles = uploaded.map(normalizeUploadedFile);
 
       setUploadedFiles((currentFiles) => mergeUploadedFiles(currentFiles, nextUploadedFiles, multiple));
     } catch (error) {
@@ -1747,7 +1744,7 @@ function FileDrop({ name, label, accept, multiple = false }: { name: string; lab
 
   return (
     <div className="space-y-4">
-      <label className="flex cursor-pointer flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-amber-300 bg-gradient-to-br from-amber-50 to-white p-6 text-center transition hover:border-amber-400 hover:bg-amber-100">
+      <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-amber-300 bg-gradient-to-br from-amber-50 to-white p-6 text-center transition hover:border-amber-400 hover:bg-amber-100">
         <Upload className="h-8 w-8 text-amber-700" />
         <span className="mt-3 text-base font-black">{label}</span>
         <span className="mt-1 text-sm text-neutral-600">Click to choose {multiple ? "files" : "a file"}.</span>
@@ -1944,7 +1941,7 @@ function TradeSlider({
 
 function SuccessState({ emailSent }: { emailSent: boolean }) {
   return (
-    <div className="grid min-h-[620px] place-items-center rounded-[2rem] bg-gradient-to-br from-amber-50 to-white p-8 text-center">
+    <div className="grid min-h-[620px] place-items-center rounded-2xl bg-gradient-to-br from-amber-50 to-white p-8 text-center">
       <div className="max-w-xl">
         <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-green-500 text-white">
           <Check className="h-10 w-10" />

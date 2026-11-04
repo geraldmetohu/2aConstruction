@@ -59,9 +59,8 @@ const config = {
   		}
   	}
   },
-  corePlugins: {
-    aspectRatio: false, 
-  },
+  // Tailwind's built-in aspect-* utilities (aspect-[4/3], aspect-video...) are used across the site;
+  // the @tailwindcss/aspect-ratio plugin below only adds aspect-w-*/aspect-h-*, so both can stay on.
   plugins: [require("tailwindcss-animate"), require('@tailwindcss/aspect-ratio'),
   ],
 } satisfies Config;

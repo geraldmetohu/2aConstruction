@@ -1,31 +1,22 @@
-import { CreateProjectForm } from "@/app/componets/dashboard/CreateProjectForm";
-import { prisma } from "@/app/lib/db";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { ProjectEditor } from "@/app/componets/dashboard/ProjectEditor";
+import { projectAdmin } from "../access";
+import { clientProjectOptions, editorDetail, photoSources } from "../editor-data";
 
+export const metadata: Metadata = { title: "New project" };
 export const dynamic = "force-dynamic";
 
-async function getSourceOptions() {
-  const clientProjects = await prisma.clientProject.findMany({
-    orderBy: {
-      updatedAt: "desc",
-    },
-    include: {
-      client: true,
-      phases: {
-        orderBy: {
-          phaseOrder: "asc",
-        },
-      },
-    },
-  });
-
-  return clientProjects.map((project) => ({
-    id: project.id,
-    label: `${project.client.fullName} • ${project.projectType}`,
-    images: project.phases.flatMap((phase) => phase.images),
-  }));
-}
-
 export default async function ProjectCreatePage() {
-  const sourceOptions = await getSourceOptions();
-  return <CreateProjectForm sourceOptions={sourceOptions} />;
+  if (!(await projectAdmin())) redirect("/");
+  const [sources, clientProjects, { ready, detail }] = await Promise.all([photoSources(), clientProjectOptions(), editorDetail(null)]);
+  return (
+    <ProjectEditor
+      project={{ id: null, name: "", description: "", status: "draft", category: "extention", isFeatured: false, images: [], sourceClientProjectId: null }}
+      detail={detail}
+      sources={sources}
+      detailsReady={ready}
+      clientProjects={clientProjects}
+    />
+  );
 }

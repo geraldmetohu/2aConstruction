@@ -1,6 +1,7 @@
 "use client";
 
 import { UploadDropzone } from "@/app/lib/uploadthing";
+import { normalizeUploadedFile } from "@/app/lib/uploaded-file";
 
 type UploadedFile = {
   name: string;
@@ -20,16 +21,11 @@ export function EstimatorUploadDropzone({
       endpoint="estimatorUploader"
       onClientUploadComplete={(res) => {
         onError("");
-        onComplete(
-          res.map((file) => ({
-            name: file.name,
-            url: file.url ?? file.ufsUrl,
-            type: file.type,
-          }))
-        );
+        try { onComplete(res.map(normalizeUploadedFile)); }
+        catch { onError("The uploaded file details could not be read. Please try again."); }
       }}
       onUploadError={(error) => {
-        onError(error.message);
+        onError(error instanceof Error ? error.message : "Upload failed. Please try again.");
       }}
       config={{
         mode: "auto",

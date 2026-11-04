@@ -39,7 +39,7 @@ export const navbarLinks = [
       },
       {
         id: 15,
-        name: "Extention",
+        name: "Extension",
         href: "/portfolio/extention",
       },
       {
@@ -91,7 +91,7 @@ export const navbarLinks = [
   },
   {
     id: 21,
-    name: "Certifiations and Compilance",
+    name: "Certifications and Compliance",
     href: "/certifications",
   },
 ];
@@ -137,6 +137,7 @@ export function NavbarLinks() {
       {navbarLinks.map((item) => {
         const isActive =
           pathname === item.href ||
+          (item.href.startsWith("/portfolio") && (pathname.startsWith("/portfolio") || pathname.startsWith("/project/"))) ||
           (item.children?.some(
             (child) => child.href === pathname
           ) ??
@@ -270,4 +271,4 @@ export function NavbarLinks() {
       })}
     </nav>
   );
-}
+}

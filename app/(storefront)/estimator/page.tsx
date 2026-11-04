@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { EstimatorForm } from "./EstimatorForm";
 
 export const metadata: Metadata = {
-  title: "Project Estimator",
+  title: "Project Estimator – Extensions, Lofts & Refurbishments in London",
   description:
-    "Share your project details with 2A Construction for an early cost estimate and 3D rendering preparation.",
+    "Tell 2A Construction about your extension, loft conversion, refurbishment or roofing project in London or the South East and get an early cost estimate and 3D rendering preparation.",
   alternates: {
     canonical: "/estimator",
   },

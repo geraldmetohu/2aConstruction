@@ -1,6 +1,7 @@
 // app/componets/storefront/FeaturedProject.tsx
 
 import { prisma } from "@/app/lib/db";
+import { storefrontQuery } from "@/app/lib/storefront-query";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ArrowRight, Sparkles } from "lucide-react";
@@ -13,7 +14,7 @@ import { GridStagger, ItemFade } from "./GridStagger";
 ================================================================ */
 
 async function getFeaturedRows() {
-  return prisma.project.findMany({
+  return storefrontQuery("Featured projects", () => prisma.project.findMany({
     where: { status: "published", isFeatured: true },
     select: {
       id: true,
@@ -24,7 +25,7 @@ async function getFeaturedRows() {
     },
     orderBy: { createdAt: "desc" },
     take: 3,
-  });
+  }));
 }
 
 /* ================================================================

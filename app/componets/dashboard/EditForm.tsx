@@ -41,7 +41,7 @@ interface iAppProps {
     status: $Enums.ProjectStatus;
     images: string[];
     category: $Enums.Category;
-    isFeatured: boolean;
+    isFeatured: boolean | null;
     sourceClientProjectId: string | null;
   };
   sourceOptions: {
@@ -54,6 +54,7 @@ interface iAppProps {
 export function EditForm({ data, sourceOptions }: iAppProps) {
   const [images, setImages] = useState<string[]>(data.images);
   const [sourceClientProjectId, setSourceClientProjectId] = useState(data.sourceClientProjectId ?? "");
+  const selectedSource = sourceOptions.find((item) => item.id === sourceClientProjectId);
   const [lastResult, action] = useActionState(EditProject, undefined);
   const [form, fields] = useForm({
     lastResult,
@@ -125,7 +126,7 @@ await deleteFile(urlToDelete), {
               <Switch
                 key={fields.isFeatured.key}
                 name={fields.isFeatured.name}
-                defaultChecked={data.isFeatured}
+                defaultChecked={data.isFeatured ?? false}
               />
               <p className="text-red-500">{fields.isFeatured.errors}</p>
             </div>
@@ -230,4 +231,3 @@ await deleteFile(urlToDelete), {
     </form>
   );
 }
-  const selectedSource = sourceOptions.find((item) => item.id === sourceClientProjectId);

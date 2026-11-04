@@ -1,267 +1,121 @@
-// app/contact/page.tsx
-import { ContactForm } from "@/app/componets/storefront/ContactForm";
+import type { Metadata } from "next";
 import Image from "next/image";
-import Link from "next/link";
-import { Mail, Phone, MapPin, ShieldCheck, Clock, CheckCircle2, MessageSquare } from "lucide-react";
+import { Mail, MessageCircle, Phone } from "lucide-react";
+import { Eyebrow, PageHero } from "@/app/componets/storefront/site/ui";
+import { COMPANY } from "@/app/componets/storefront/site/brand";
+import { EnquiryForm } from "./EnquiryForm";
+import { STOCK } from "@/app/componets/storefront/site/stock-photos";
 
-export default function ContactPage() {
+export const metadata: Metadata = {
+  title: "Contact",
+  description: "Book a free site visit with 2A Construction. Call, WhatsApp or send us the details of your extension, loft, refurbishment or roofing project.",
+  alternates: { canonical: "/contact" },
+};
+
+const SERVICE_LABEL: Record<string, string> = {
+  extention: "House extension", loft: "Loft conversion", refurbishment: "Refurbishment", roof: "Roofing", general: "General building",
+  painting: "Painting & decorating", flooring: "Flooring", plumbing: "Plumbing & heating", electrical: "Electrical",
+};
+
+const NEXT = [
+  { t: "We call you back", d: "Usually within one working day, to understand the project and book a time." },
+  { t: "Free site visit", d: "We measure up, look at access and structure, and talk through options and budget." },
+  { t: "Itemised quotation", d: "A full written quotation with programme, payment stages and what you'd supply." },
+];
+
+export default async function ContactPage({ searchParams }: { searchParams: Promise<{ service?: string; project?: string }> }) {
+  const sp = await searchParams;
+  const service = SERVICE_LABEL[sp.service ?? ""] ?? "";
+  const reference = (sp.project ?? "").slice(0, 200);
+
   return (
-    <div className="w-full">
-      {/* HERO */}
-      <section className="relative h-[42vh] md:h-[50vh] overflow-hidden text-white">
-        <Image
-          src="/roof.jpg"
-          alt="Get a free quote"
-          fill
-          className="object-cover"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/55 to-black/80" />
-        <div className="relative z-10 h-full max-w-7xl mx-auto px-4 flex items-end pb-10">
-          <div>
-            <h1 className="text-3xl md:text-5xl font-extrabold leading-tight">Let’s plan your project</h1>
-            <p className="mt-2 text-white/90">Free, no-obligation site visit and a clear, itemised quotation.</p>
-
-            {/* Trust strip */}
-            <div className="mt-5 flex flex-wrap items-center gap-4 text-sm text-white/85">
-              <span className="inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-amber-400" /> Fully insured</span>
-              <span className="inline-flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-amber-400" /> 10-year structural guarantee</span>
-              <span className="inline-flex items-center gap-2"><Clock className="h-4 w-4 text-amber-400" /> Quick turnaround</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CONTENT */}
-      <section className="py-16 bg-white">
-        <div className="max-w-7xl mx-auto px-4 grid lg:grid-cols-5 gap-10">
-          {/* Left: Contact options + Details */}
-          <aside className="lg:col-span-2 space-y-6">
-            {/* Quick contact cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <ContactCard
-                icon={<Phone className="h-5 w-5" />}
-                title="Call us"
-                subtitle="Mon–Fri 8am–6pm"
-                href="tel:+447903095967"
-                badge="Fastest"
-              />
-              <ContactCard
-                icon={<Mail className="h-5 w-5" />}
-                title="Email us"
-                subtitle="Reply in 1–2 days"
-                href="mailto:2a.construction.uk@gmail.com"
-              />
-              <ContactCard
-                icon={<MessageSquare className="h-5 w-5" />}
-                title="WhatsApp"
-                subtitle="Share photos & plans"
-                href="https://wa.me/447903095967"
-                external
-              />
-              <ContactCard
-                icon={<MapPin className="h-5 w-5" />}
-                title="London, UK"
-                subtitle="We cover Greater London"
-                href="#map"
-              />
-            </div>
-
-            {/* Contact details panel */}
-            <div className="p-6 rounded-lg border border-amber-500/20">
-              <h2 className="text-xl font-bold">Contact Details</h2>
-
-              <ul className="mt-5 space-y-4 text-neutral-900">
-                <li className="flex gap-3">
-                  <Mail className="h-5 w-5 text-amber-500 shrink-0" />
-                  <div>
-                    <div className="text-sm font-medium text-neutral-600">Email</div>
-                    <Link href="mailto:2a.construction.uk@gmail.com" className="underline underline-offset-2">
-                      2a.construction.uk@gmail.com
-                    </Link>
-                  </div>
-                </li>
-
-                <li className="flex gap-3">
-                  <Phone className="h-5 w-5 text-amber-500 shrink-0" />
-                  <div>
-                    <div className="text-sm font-medium text-neutral-600">Phone</div>
-                    <Link href="tel:+447903095967" className="underline underline-offset-2">
-                      +44 790 3095 967
-                    </Link>
-                  </div>
-                </li>
-
-                <li className="flex gap-3">
-                  <MapPin className="h-5 w-5 text-amber-500 shrink-0" />
-                  <div>
-                    <div className="text-sm font-medium text-neutral-600">Location</div>
-                    <p>London, UK</p>
-                  </div>
-                </li>
-              </ul>
-
-              <div className="mt-6 text-sm text-neutral-700">
-                <div className="font-medium mb-1">Opening hours</div>
-                Mon–Fri: 8am–6pm • Sat: 9am–2pm • Sun: Closed
-              </div>
-
-              {/* Accreditations / KPIs */}
-              <div className="mt-6 grid grid-cols-3 gap-3 text-center">
-                <KPI label="Projects" value="240+" />
-                <KPI label="Avg. Rating" value="4.9/5" />
-                <KPI label="Years" value="12" />
-              </div>
-            </div>
-
-            {/* Map block */}
-            <div id="map" className="rounded-lg border border-amber-500/20 overflow-hidden">
-              <iframe
-                title="Map - 2A Construction London"
-                width="100%"
-                height="100%"
-                style={{ border: 0, display: "block", minHeight: 280 }}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d19815.02994456684!2d-0.127758!3d51.507351!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x48761b3330b2b7af%3A0x3fa0!2sLondon!5e0!3m2!1sen!2suk!4v1680000000000"
-                allowFullScreen
-              />
-            </div>
-
-            {/* Why choose us */}
-            <div className="p-6 rounded-lg border border-amber-500/20">
-              <h3 className="text-lg font-semibold">Why choose us?</h3>
-              <ul className="mt-4 space-y-2 text-neutral-800">
-                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-amber-500 mt-0.5" /> Dedicated project manager from day one</li>
-                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-amber-500 mt-0.5" /> Clear, itemised quotations</li>
-                <li className="flex items-start gap-2"><CheckCircle2 className="h-5 w-5 text-amber-500 mt-0.5" /> Accredited trades & tidy sites</li>
-              </ul>
-            </div>
-          </aside>
-
-          {/* Right: Form Card */}
-          <div className="lg:col-span-3">
-            <div className="p-6 rounded-lg border border-amber-500/20">
-              <h2 className="text-xl font-bold">Request a Free Quote</h2>
-              <p className="mt-2 text-neutral-600">Tell us a bit about your project. We’ll get back within 1–2 working days.</p>
-
-              <div className="mt-6">
-                <ContactForm />
-              </div>
-
-              {/* Reassurance */}
-              <p className="mt-4 text-xs text-neutral-500">
-                We respect your privacy. Your details are used only to respond to your enquiry.
-              </p>
-
-              {/* Mini FAQ under form */}
-              <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FAQItem q="How soon can you visit?" a="Site visits are typically available within 3–7 days depending on location and scope." />
-                <FAQItem q="Do you handle approvals?" a="Yes — drawings, structural calcs, planning and building control where required." />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA stripe */}
-      <section className="py-10 bg-gradient-to-r from-amber-50 to-white border-t border-amber-500/20">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <div className="text-lg font-semibold">Prefer to talk?</div>
-            <div className="text-neutral-700">Call us now and we can book your site visit today.</div>
-          </div>
-          <div className="flex gap-3">
-            <Link href="tel:+447903095967" className="px-5 py-3 bg-amber-500 text-black font-medium rounded-md hover:opacity-90">
-              Call +44 790 3095 967
-            </Link>
-            <Link href="/portfolio/all" className="px-5 py-3 rounded-md border border-amber-500/50 font-medium hover:bg-amber-50 text-amber-700">
-              View Projects
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ContactPoint JSON-LD (SEO) */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            name: "2A Construction",
-            url: "https://your-domain.com",
-            contactPoint: [
-              {
-                "@type": "ContactPoint",
-                telephone: "+44 790 3095 967",
-                contactType: "customer service",
-                areaServed: "GB",
-                availableLanguage: ["en"],
-                hoursAvailable: [
-                  { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday","Tuesday","Wednesday","Thursday","Friday"], opens: "08:00", closes: "18:00" },
-                  { "@type": "OpeningHoursSpecification", dayOfWeek: "Saturday", opens: "09:00", closes: "14:00" }
-                ]
-              }
-            ]
-          })
-        }}
+    <>
+      <PageHero
+        image={STOCK.contactHero}
+        imageAlt="Builder reviewing drawings on site"
+        size="sm"
+        eyebrow="Contact"
+        title="Let's talk about"
+        accent="your project."
+        lead="Tell us what you have in mind. We'll arrange a free site visit and follow it with a clear, itemised quotation."
+        crumbs={[{ label: "Home", href: "/" }, { label: "Contact" }]}
       />
-    </div>
-  );
-}
 
-/* ----------------- Small components ----------------- */
+      <section className="mx-auto grid max-w-7xl gap-16 px-5 py-16 sm:px-8 md:py-24 lg:grid-cols-12 lg:px-10">
+        {/* Direct contact */}
+        <aside className="lg:col-span-4">
+          <Eyebrow>Speak to us</Eyebrow>
+          <ul className="mt-8 divide-y divide-[#071a33]/10 border-y border-[#071a33]/10">
+            <ContactRow href={COMPANY.phoneHref} icon={<Phone className="h-5 w-5" />} label="Call" value={COMPANY.phone} note="Quickest way to reach us" />
+            <ContactRow href={COMPANY.whatsapp} external icon={<MessageCircle className="h-5 w-5" />} label="WhatsApp" value="Message us" note="Send photos or drawings" />
+            <ContactRow href={COMPANY.emailHref} icon={<Mail className="h-5 w-5" />} label="Email" value={COMPANY.email} note="We reply within one working day" />
+          </ul>
 
-function ContactCard({
-  icon,
-  title,
-  subtitle,
-  href,
-  badge,
-  external,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  href: string;
-  badge?: string;
-  external?: boolean;
-}) {
-  const C = external ? "a" : Link;
-  return (
-    <C
-      href={href}
-      target={external ? "_blank" : undefined}
-      rel={external ? "noopener noreferrer" : undefined}
-      className="group p-4 rounded-lg border border-amber-500/20 bg-white hover:shadow-lg transition-shadow"
-    >
-      <div className="flex items-center justify-between">
-        <div className="inline-flex items-center gap-2 text-neutral-900">
-          <span className="text-amber-500">{icon}</span>
-          <span className="font-semibold">{title}</span>
+          <div className="mt-12">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-500">Office hours</p>
+            <dl className="mt-4 space-y-2 text-sm">
+              {COMPANY.hours.map(h => (
+                <div key={h.days} className="flex justify-between gap-6 border-b border-dashed border-[#071a33]/10 pb-2"><dt className="text-neutral-600">{h.days}</dt><dd className="font-medium text-[#071a33]">{h.time}</dd></div>
+              ))}
+            </dl>
+          </div>
+
+          <div className="mt-12">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-500">Areas we cover</p>
+            <p className="mt-4 text-sm leading-relaxed text-neutral-700">{COMPANY.areas.join(" · ")}, and the rest of Greater London.</p>
+          </div>
+
+          <div className="relative mt-12 hidden aspect-[4/3] overflow-hidden bg-neutral-200 lg:block">
+            <Image src={STOCK.contactSide} alt="Tiler cutting a tile on site" fill sizes="30vw" className="object-cover" />
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-1 bg-[#f5b400]" />
+          </div>
+        </aside>
+
+        {/* Form */}
+        <div id="enquiry" className="scroll-mt-28 lg:col-span-7 lg:col-start-6">
+          <div id="quote" className="scroll-mt-28 border-t-4 border-[#f5b400] bg-white p-6 shadow-[0_30px_80px_-40px_rgba(7,26,51,0.35)] ring-1 ring-[#071a33]/10 sm:p-10">
+            <h2 className="text-3xl font-semibold tracking-[-0.025em] text-[#071a33] md:text-4xl">Request a site visit</h2>
+            <p className="mt-3 text-neutral-600">A few details help us come prepared. Only the starred fields are required.</p>
+            <div className="mt-10"><EnquiryForm service={service} reference={reference} /></div>
+          </div>
         </div>
-        {badge && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500 text-black">{badge}</span>}
-      </div>
-      <div className="mt-1 text-sm text-neutral-600">{subtitle}</div>
-    </C>
+      </section>
+
+      {/* What happens next */}
+      <section className="bg-[#071a33] text-white">
+        <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 md:py-20 lg:px-10">
+          <Eyebrow tone="light">What happens next</Eyebrow>
+          <ol className="mt-10 grid gap-10 md:grid-cols-3">
+            {NEXT.map((s, i) => (
+              <li key={s.t} className="group">
+                <div className="relative mb-6 aspect-[16/10] overflow-hidden bg-white/5">
+                  <Image src={STOCK.contactSteps[i]} alt="" fill sizes="(min-width: 768px) 33vw, 100vw" className="object-cover opacity-90 transition-all duration-[1.2s] ease-out group-hover:scale-105 group-hover:opacity-100" />
+                </div>
+                <div className="border-t border-white/15 pt-6">
+                <span className="font-mono text-xs text-[#f5b400]">{String(i + 1).padStart(2, "0")}</span>
+                <h3 className="mt-4 text-xl font-semibold">{s.t}</h3>
+                <p className="mt-2 leading-relaxed text-white/70">{s.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+    </>
   );
 }
 
-function KPI({ label, value }: { label: string; value: string }) {
+function ContactRow({ href, icon, label, value, note, external }: { href: string; icon: React.ReactNode; label: string; value: string; note: string; external?: boolean }) {
   return (
-    <div className="p-3 rounded-md border border-amber-500/20 bg-white">
-      <div className="text-lg font-extrabold text-amber-600">{value}</div>
-      <div className="text-xs text-neutral-600">{label}</div>
-    </div>
-  );
-}
-
-function FAQItem({ q, a }: { q: string; a: string }) {
-  return (
-    <div className="p-4 rounded-lg border border-amber-500/20 bg-white">
-      <div className="font-medium text-neutral-900">{q}</div>
-      <p className="mt-1 text-sm text-neutral-600">{a}</p>
-    </div>
+    <li>
+      <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="group flex items-center gap-5 py-5">
+        <span className="grid h-12 w-12 shrink-0 place-items-center bg-[#071a33] text-[#f5b400] transition-colors group-hover:bg-[#f5b400] group-hover:text-[#071a33]">{icon}</span>
+        <span className="min-w-0">
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.22em] text-neutral-500">{label}</span>
+          <span className="block truncate text-lg font-semibold text-[#071a33]">{value}</span>
+          <span className="block text-xs text-neutral-500">{note}</span>
+        </span>
+      </a>
+    </li>
   );
 }

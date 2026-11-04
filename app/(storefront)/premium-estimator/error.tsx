@@ -1,0 +1,2 @@
+"use client";
+export default function PremiumError({ reset }: { reset: () => void }) { return <main className="mx-auto max-w-3xl px-4 py-20"><h1 className="text-3xl font-black">We could not load the estimator</h1><p className="mt-4">Please try again. Returning to this page does not take another payment.</p><button className="mt-6 rounded-full bg-neutral-950 px-6 py-3 font-bold text-white" onClick={reset}>Try again</button></main>; }

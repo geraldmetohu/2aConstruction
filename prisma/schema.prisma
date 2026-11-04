@@ -29,6 +29,39 @@ model Project {
   sourceClientProjectId String?        @db.Uuid
   sourceClientProject   ClientProject? @relation(fields: [sourceClientProjectId], references: [id], onDelete: SetNull)
   createdAt             DateTime?      @default(now()) @db.Timestamp(6)
+  detail                ProjectDetail?
+}
+
+/// Public write-up for a portfolio project (added table; Project itself is unchanged).
+model ProjectDetail {
+  projectId         String   @id @db.Uuid
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subtitle          String   @default("")
+  location          String   @default("")
+  propertyType      String   @default("")
+  completedOn       String   @default("")
+  duration          String   @default("")
+  floorArea         String   @default("")
+  valueBand         String   @default("")
+  showValue         Boolean  @default(false)
+  brief             String   @default("")
+  approach          String   @default("")
+  outcome           String   @default("")
+  scope             String[] @default([])
+  highlights        String[] @default([])
+  materials         String[] @default([])
+  coverImage        String   @default("")
+  beforeImage       String   @default("")
+  afterImage        String   @default("")
+  captions          Json     @default("{}")
+  testimonial       String   @default("")
+  testimonialName   String   @default("")
+  testimonialRating Int?
+  sourceQuoteId     String?  @db.Uuid
+  sortOrder         Int      @default(0)
+  seoDescription    String   @default("")
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @db.Timestamptz(6)
 }
 
 model Banner {
@@ -196,4 +229,987 @@ enum ClientPhaseStatus {
   planned
   active
   completed
+}
+
+// Estimating foundation: independent new tables only. Existing models above
+// are deliberately unchanged. Custom CHECK constraints and history guards
+// are defined in the accompanying SQL migration.
+
+enum EstimateItemType {
+  MATERIAL
+  LABOUR
+  PLANT
+  WASTE
+  PRELIMINARY
+  ASSEMBLY
+  OTHER
+}
+
+enum EstimateItemRole {
+  MAIN
+  SUPPORTING
+  BOTH
+}
+
+enum EstimateFixStage {
+  FIRST_FIX
+  SECOND_FIX
+  BOTH
+  NOT_APPLICABLE
+}
+
+enum EstimateWorkCondition {
+  NEW_BUILD
+  NEW_INSTALLATION
+  REFURBISHMENT
+  REPAIR
+  MAKE_GOOD
+  REDECORATION
+}
+
+enum EstimateRateBasis {
+  HOURLY
+  DAILY
+}
+
+enum EstimateDimensionKind {
+  COUNT
+  LENGTH
+  AREA
+  VOLUME
+  TIME
+  MASS
+  CUSTOM
+}
+
+enum EstimateCostBucket {
+  MATERIAL
+  SUPPORTING_MATERIAL
+  LABOUR
+  PLANT
+  WASTE
+  OTHER
+}
+
+enum EstimatePriceConfidence {
+  UNVERIFIED
+  INDICATIVE
+  VERIFIED
+}
+
+model ItemCategory {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String   @unique
+  name       String
+  parentId   String?  @db.Uuid
+  parent     ItemCategory? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  children   ItemCategory[] @relation("CategoryHierarchy")
+  items      ConstructionItem[]
+  sortOrder  Int      @default(0)
+  revision   Int      @default(1)
+  archivedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@index([parentId, sortOrder])
+}
+
+model ItemUnit {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String @unique
+  label           String
+  dimensionKind   EstimateDimensionKind
+  canonicalFactor Decimal? @db.Decimal(18, 6)
+  quantityScale   Int @default(3)
+  revision        Int @default(1)
+  archivedAt      DateTime? @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  items           ConstructionItem[]
+  supplierPrices  SupplierPriceReference[]
+}
+
+model ConstructionItem {
+  id                   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                 String @unique
+  name                 String
+  description          String @default("")
+  categoryId           String @db.Uuid
+  category             ItemCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  unitId               String @db.Uuid
+  unit                 ItemUnit @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  itemType             EstimateItemType
+  itemRole             EstimateItemRole @default(MAIN)
+  fixStage             EstimateFixStage @default(NOT_APPLICABLE)
+  defaultQuantity      Decimal @default(1) @db.Decimal(18, 6)
+  defaultDurationHours Decimal? @db.Decimal(18, 6)
+  defaultDimensions    Json?
+  active               Boolean @default(true)
+  revision             Int @default(1)
+  archivedAt           DateTime? @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  prices               ItemPriceVersion[]
+  options              ItemOption[]
+  recipes              ItemRecipeVersion[]
+  supportingFor        ItemSupportingItem[]
+  supplierPrices       SupplierPriceReference[]
+
+  @@index([categoryId, active])
+  @@index([unitId])
+  @@index([name])
+}
+
+model TaxCode {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String @unique
+  label      String
+  active     Boolean @default(true)
+  revision   Int @default(1)
+  archivedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  rates      TaxRateVersion[]
+  prices     ItemPriceVersion[]
+  settings   CompanySettingsVersion[]
+}
+
+model TaxRateVersion {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taxCodeId     String @db.Uuid
+  taxCode       TaxCode @relation(fields: [taxCodeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  rate          Decimal @db.Decimal(7, 4)
+  effectiveFrom DateTime @db.Timestamptz(6)
+  reason        String
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([taxCodeId, effectiveFrom])
+}
+
+model ItemPriceVersion {
+  id               String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId           String @db.Uuid
+  item             ConstructionItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versionNumber    Int
+  materialUnitCost Decimal @db.Decimal(19, 4)
+  // Null derives labour from the selected recipe; zero is an explicit override.
+  labourUnitCost   Decimal? @db.Decimal(19, 4)
+  plantUnitCost    Decimal @default(0) @db.Decimal(19, 4)
+  wasteUnitCost    Decimal @default(0) @db.Decimal(19, 4)
+  otherUnitCost    Decimal @default(0) @db.Decimal(19, 4)
+  currency         String @default("GBP") @db.Char(3)
+  taxCodeId        String? @db.Uuid
+  taxCode          TaxCode? @relation(fields: [taxCodeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  effectiveFrom    DateTime @db.Timestamptz(6)
+  source           String
+  sourceDate       DateTime? @db.Timestamptz(6)
+  confidence       EstimatePriceConfidence @default(UNVERIFIED)
+  notes            String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(6)
+  optionVersions   ItemOptionVersion[]
+
+  @@unique([itemId, versionNumber])
+  @@unique([itemId, currency, effectiveFrom])
+  @@index([taxCodeId])
+}
+
+model ItemOption {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId     String @db.Uuid
+  item       ConstructionItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  groupCode  String
+  code       String
+  label      String
+  sortOrder  Int @default(0)
+  active     Boolean @default(true)
+  revision   Int @default(1)
+  archivedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  versions   ItemOptionVersion[]
+
+  @@unique([itemId, groupCode, code])
+}
+
+model ItemOptionVersion {
+  id                   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  optionId             String @db.Uuid
+  option               ItemOption @relation(fields: [optionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versionNumber        Int
+  effectiveFrom        DateTime @db.Timestamptz(6)
+  ruleSchemaVersion    Int @default(1)
+  rule                 Json
+  specification        Json
+  sourcePriceVersionId String? @db.Uuid
+  sourcePriceVersion   ItemPriceVersion? @relation(fields: [sourcePriceVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([optionId, versionNumber])
+  @@unique([optionId, effectiveFrom])
+  @@index([sourcePriceVersionId])
+}
+
+model ItemRecipeVersion {
+  id                String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  itemId            String @db.Uuid
+  item              ConstructionItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versionNumber     Int
+  condition         EstimateWorkCondition
+  effectiveFrom     DateTime @db.Timestamptz(6)
+  ruleSchemaVersion Int @default(1)
+  quantityRule      Json
+  assumptions       Json
+  // Children are assembled as a draft. Publishing freezes parent AND children.
+  publishedAt       DateTime? @db.Timestamptz(6)
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  supportingItems   ItemSupportingItem[]
+  labour            ItemLabour[]
+
+  @@unique([itemId, condition, versionNumber])
+  @@unique([itemId, condition, effectiveFrom])
+}
+
+model ItemSupportingItem {
+  id                String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipeVersionId   String @db.Uuid
+  recipeVersion     ItemRecipeVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  supportingItemId  String @db.Uuid
+  supportingItem    ConstructionItem @relation(fields: [supportingItemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleSchemaVersion Int @default(1)
+  quantityRule      Json
+  mandatory         Boolean @default(false)
+  defaultSelected   Boolean @default(true)
+  costBucket        EstimateCostBucket @default(SUPPORTING_MATERIAL)
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([recipeVersionId, supportingItemId])
+  @@index([supportingItemId])
+}
+
+model LabourRole {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String @unique
+  name       String
+  revision   Int @default(1)
+  archivedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  rates      LabourRateVersion[]
+  itemLabour ItemLabour[]
+}
+
+model LabourRateVersion {
+  id                    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  labourRoleId          String @db.Uuid
+  labourRole            LabourRole @relation(fields: [labourRoleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versionNumber         Int
+  hourlyCost            Decimal @db.Decimal(19, 4)
+  dailyCost             Decimal? @db.Decimal(19, 4)
+  productiveHoursPerDay Decimal @db.Decimal(18, 6)
+  defaultTeamSize       Int @default(1)
+  currency              String @default("GBP") @db.Char(3)
+  effectiveFrom         DateTime @db.Timestamptz(6)
+  source                String
+  notes                 String?
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([labourRoleId, versionNumber])
+  @@unique([labourRoleId, currency, effectiveFrom])
+}
+
+model ItemLabour {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipeVersionId String @db.Uuid
+  recipeVersion   ItemRecipeVersion @relation(fields: [recipeVersionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  labourRoleId    String @db.Uuid
+  labourRole      LabourRole @relation(fields: [labourRoleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  hoursPerUnit    Decimal @db.Decimal(18, 6)
+  teamSize        Int @default(1)
+  rateBasis       EstimateRateBasis @default(HOURLY)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([recipeVersionId, labourRoleId])
+  @@index([labourRoleId])
+}
+
+model Supplier {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String @unique
+  name       String
+  email      String?
+  phone      String?
+  website    String?
+  revision   Int @default(1)
+  archivedAt DateTime? @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  prices     SupplierPriceReference[]
+}
+
+model SupplierPriceReference {
+  id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  supplierId     String @db.Uuid
+  supplier       Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  itemId         String @db.Uuid
+  item           ConstructionItem @relation(fields: [itemId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  unitId         String @db.Uuid
+  unit           ItemUnit @relation(fields: [unitId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  supplierCode   String?
+  sourceUrl      String?
+  referencePrice Decimal @db.Decimal(19, 4)
+  currency       String @default("GBP") @db.Char(3)
+  packQuantity   Decimal? @db.Decimal(18, 6)
+  taxInclusive   Boolean
+  checkedAt      DateTime @db.Timestamptz(6)
+  notes          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([itemId, supplierId, checkedAt])
+  @@index([supplierId])
+  @@index([unitId])
+}
+
+model ActualMaterialValue {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  observationKey String @unique
+  itemId String @db.Uuid
+  supplier String
+  sku String
+  sourceUrl String
+  location String
+  priceBasis String
+  packPrice Decimal @db.Decimal(19, 4)
+  packQuantity Decimal @db.Decimal(18, 6)
+  unitCode String
+  unitPrice Decimal @db.Decimal(19, 6)
+  currency String @default("GBP")
+  taxInclusive Boolean
+  minimumPacks Int
+  observedAt DateTime @db.Timestamptz(6)
+  receivedAt DateTime @default(now()) @db.Timestamptz(6)
+  sourceReference String
+  importedBy String
+  @@index([itemId, supplier, observedAt])
+  @@map("actual_values")
+}
+
+model CompanySettings {
+  id        String @id @default("company")
+  versions  CompanySettingsVersion[]
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model CompanySettingsVersion {
+  id                    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  settingsId            String
+  settings              CompanySettings @relation(fields: [settingsId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  versionNumber         Int
+  effectiveFrom         DateTime @db.Timestamptz(6)
+  currency              String @default("GBP") @db.Char(3)
+  estimatorFeeAmount    Decimal @default(50) @db.Decimal(19, 2)
+  // Deliberately nullable until the company chooses its VAT treatment.
+  estimatorFeeInclusive Boolean?
+  estimatorFeeTaxCodeId String? @db.Uuid
+  estimatorFeeTaxCode   TaxCode? @relation(fields: [estimatorFeeTaxCodeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  defaultMarkupPercent Decimal @db.Decimal(7, 4)
+  defaultWastePercent  Decimal @db.Decimal(7, 4)
+  contingencyPercent   Decimal @db.Decimal(7, 4)
+  workdayHours          Decimal @db.Decimal(18, 6)
+  defaultTeamSize       Int
+  workingCalendar       Json
+  quoteValidityDays     Int
+  invoiceTermsDays      Int
+  autoGenerateInvoices  Boolean @default(false)
+  autoSendInvoices      Boolean @default(false)
+  roundingPolicyVersion String
+  createdAt             DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([settingsId, versionNumber])
+  @@unique([settingsId, effectiveFrom])
+  @@index([estimatorFeeTaxCodeId])
+}
+
+model AuditEvent {
+  id            String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Stable actor snapshot, deliberately no FK to legacy User: existing tables
+  // and their current identity-linking behaviour are untouched in this batch.
+  actorUserId   String?
+  actorKind     String
+  action        String
+  entityType    String
+  entityId      String
+  before        Json?
+  after         Json?
+  reason        String?
+  correlationId String?
+  occurredAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([entityType, entityId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([correlationId])
+}
+
+// Premium estimator records are separate, append-only snapshots. No legacy FKs.
+model PremiumRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId String
+  requestKey String @db.Uuid
+  requirementsHash String
+  requirements Json
+  pricingInput Json
+  catalogueSnapshot Json
+  feeSnapshot Json
+  mappingVersion String
+  engineVersion String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime @db.Timestamptz(6)
+  checkout PremiumCheckout?
+  @@unique([ownerId, requestKey])
+  @@index([ownerId, createdAt])
+}
+
+model PremiumCheckout {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId String @unique @db.Uuid
+  request PremiumRequest @relation(fields: [requestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sessionId String @unique
+  url String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  payment PremiumPayment?
+}
+
+model PremiumPayment {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  checkoutId String @unique @db.Uuid
+  checkout PremiumCheckout @relation(fields: [checkoutId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  eventId String @unique
+  paymentIntentId String @unique
+  amountPence Int
+  currency String @db.Char(3)
+  paidAt DateTime @db.Timestamptz(6)
+  recordedAt DateTime @default(now()) @db.Timestamptz(6)
+  submission PremiumSubmission?
+}
+
+model PremiumSubmission {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId String @unique @db.Uuid
+  payment PremiumPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  result Json
+  customerResult Json
+  snapshotHash String
+  requiresReview Boolean
+  reviewReasons Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([requiresReview, createdAt])
+}
+
+model DraftQuote {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceSubmissionId String @unique @db.Uuid
+  ownerId String
+  catalogueSnapshot Json
+  pricingAsOf String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  revisions QuoteRevision[]
+  @@index([ownerId, createdAt])
+}
+
+model QuoteRevision {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId String @db.Uuid
+  quote DraftQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  version Int
+  document Json
+  result Json
+  customerResult Json
+  snapshotHash String
+  reason String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  release QuoteRelease?
+  @@unique([quoteId, version])
+}
+
+model QuoteRelease {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  revisionId String @unique @db.Uuid
+  revision QuoteRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reviewedBy String
+  reviewNote String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+// Project conversion: independent, append-only baseline records. Legacy tables stay untouched.
+model AcceptedQuote {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId String @unique @db.Uuid
+  revisionId String @unique @db.Uuid
+  snapshotHash String
+  acceptedBy String
+  acceptedAt DateTime @db.Timestamptz(6)
+  evidence String
+  approvedOptionalKeys Json
+  recordedBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  project DeliveryProject?
+}
+
+model DeliveryClient {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerId String @unique
+  legacyClientId String? @unique @db.Uuid
+  normalizedEmail String @unique
+  name String
+  contactSnapshot Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  projects DeliveryProject[]
+}
+
+model DeliveryProject {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  acceptanceId String @unique @db.Uuid
+  acceptance AcceptedQuote @relation(fields: [acceptanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  clientId String @db.Uuid
+  client DeliveryClient @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  name String
+  scope Json
+  quoteSnapshot Json
+  planHash String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  stages DeliveryStage[]
+  rooms DeliveryRoom[]
+  tasks DeliveryTask[]
+  baseline DeliveryBaseline?
+  @@index([clientId, createdAt])
+}
+
+model DeliveryStage {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String @db.Uuid
+  project DeliveryProject @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  name String
+  position Int
+  @@unique([projectId, name])
+}
+
+model DeliveryRoom {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String @db.Uuid
+  project DeliveryProject @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  name String
+  position Int
+  @@unique([projectId, name])
+}
+
+model DeliveryTask {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String @db.Uuid
+  project DeliveryProject @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  quoteLineKey String
+  stageName String
+  roomName String
+  section String
+  description String
+  position Int
+  snapshot Json
+  requirements DeliveryRequirement[]
+  @@unique([projectId, quoteLineKey])
+}
+
+model DeliveryRequirement {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId String @db.Uuid
+  task DeliveryTask @relation(fields: [taskId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  kind String
+  description String
+  quantity String?
+  unit String
+  supplyBy String
+  needsReview Boolean
+  snapshot Json
+  @@index([taskId, kind])
+}
+
+model DeliveryBaseline {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String @unique @db.Uuid
+  project DeliveryProject @relation(fields: [projectId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  snapshot Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+// Operational history is independent of immutable delivery baselines.
+model ProjectActivity {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String @db.Uuid
+  sequence Int
+  requestId String @db.Uuid
+  entityId String @db.Uuid
+  kind String
+  body Json
+  requestHash String
+  reason String
+  actorId String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@unique([projectId, sequence])
+  @@unique([projectId, requestId])
+  @@index([projectId, entityId, sequence])
+}
+
+model ProjectAsset {
+  id String @id @db.Uuid
+  projectId String @db.Uuid
+  kind String
+  filename String
+  mimeType String
+  byteLength Int
+  content Bytes
+  sha256 String
+  actorId String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([projectId, createdAt])
+}
+
+// Customer portal: explicit publication snapshots, messages and decisions only.
+model CustomerPublication {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ projectId String @db.Uuid
+ version Int
+ requestId String @db.Uuid
+ requestHash String
+ status String
+ snapshot Json
+ publishedBy String
+ reason String
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ @@unique([projectId, version])
+ @@unique([projectId, requestId])
+}
+model CustomerMessage {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ projectId String @db.Uuid
+ requestId String @db.Uuid
+ authorId String
+ authorKind String
+ text String
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ @@unique([authorId, requestId])
+ @@index([projectId, createdAt])
+}
+model CustomerDecision {
+ id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+ projectId String @db.Uuid
+ publicationId String @db.Uuid
+ variationId String @db.Uuid
+ sourceHash String
+ decision String
+ actorId String
+ requestId String @db.Uuid
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
+ @@unique([projectId, variationId, sourceHash])
+ @@unique([actorId, requestId])
+}
+
+// Takeoff quotes (calculator): additive tables, see migration 20261101120000_add_takeoff_quotes.
+model TakeoffQuote {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reference      String    @unique
+  clientName     String
+  clientEmail    String
+  siteAddress    String    @default("")
+  status         String    @default("DRAFT")
+  currentVersion Int       @default(1)
+  publishedVersion Int?
+  sentAt         DateTime? @db.Timestamptz(6)
+  acceptedAt     DateTime? @db.Timestamptz(6)
+  acceptedName   String?
+  createdBy      String
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  versions       TakeoffQuoteVersion[]
+  events         TakeoffQuoteEvent[]
+  seen           TakeoffQuoteSeen[]
+  job            TakeoffJob?
+  jobStages      TakeoffJobStage[]
+  jobEvents      TakeoffJobEvent[]
+  jobPhotos      TakeoffJobPhoto[]
+  jobActions     TakeoffJobAction[]
+  jobSupplies    TakeoffJobSupply[]
+  jobOrders      TakeoffJobOrder[]
+  jobPayments    TakeoffJobPayment[]
+  jobAssignments TakeoffJobAssignment[]
+  checkIns       TakeoffCheckIn[]
+  expenses       TakeoffExpense[]
+  workerRatings  TakeoffWorkerRating[]
+  @@index([clientEmail])
+  @@index([updatedAt])
+}
+model TakeoffQuoteVersion {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId         String       @db.Uuid
+  quote           TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  version         Int
+  input           Json
+  result          Json
+  customer        Json
+  rates           Json
+  prices          Json
+  reason          String
+  visibleToClient Boolean      @default(false)
+  createdBy       String
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  @@unique([quoteId, version])
+}
+model TakeoffQuoteEvent {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId   String       @db.Uuid
+  quote     TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  version   Int
+  kind      String
+  message   String
+  actor     String
+  actorKind String
+  createdAt DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, createdAt])
+}
+model TakeoffQuoteSeen {
+  id      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId String       @db.Uuid
+  quote   TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  viewer  String
+  seenAt  DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, viewer, seenAt])
+}
+model TakeoffRateSet {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version   Int      @unique
+  overrides Json
+  reason    String
+  createdBy String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model TakeoffSupplierLink {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rateKey      String
+  supplier     String
+  url          String
+  packQuantity Decimal  @default(1) @db.Decimal(18, 6)
+  vatIncluded  Boolean  @default(true)
+  active       Boolean  @default(true)
+  createdBy    String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @db.Timestamptz(6)
+  observations TakeoffPriceObservation[]
+  @@unique([rateKey, supplier])
+}
+model TakeoffPriceObservation {
+  id             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  linkId         String              @db.Uuid
+  link           TakeoffSupplierLink @relation(fields: [linkId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rateKey        String
+  supplier       String
+  status         String
+  packPrice      Decimal?            @db.Decimal(19, 4)
+  unitPriceExVat Decimal?            @db.Decimal(19, 6)
+  error          String?
+  imageUrl       String?
+  observedAt     DateTime            @default(now()) @db.Timestamptz(6)
+  @@index([rateKey, observedAt])
+  @@index([linkId, observedAt])
+}
+
+// Jobs (accepted takeoff quotes): additive tables, see migration 20261102120000_add_takeoff_jobs.
+model TakeoffJob {
+  quoteId        String       @id @db.Uuid
+  quote          TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  status         String       @default("PLANNED")
+  startDate      DateTime?    @db.Date
+  completedAt    DateTime?    @db.Timestamptz(6)
+  clientContacts Json         @default("[]")
+  accessNotes    String       @default("")
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @db.Timestamptz(6)
+}
+model TakeoffJobStage {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId   String       @db.Uuid
+  quote     TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  stage     String
+  status    String       @default("NOT_STARTED")
+  percent   Int          @default(0)
+  note      String       @default("")
+  updatedBy String
+  updatedAt DateTime     @default(now()) @db.Timestamptz(6)
+  @@unique([quoteId, stage])
+}
+model TakeoffJobEvent {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId         String       @db.Uuid
+  quote           TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  kind            String
+  message         String
+  actorKind       String
+  actor           String
+  visibleToClient Boolean      @default(true)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, createdAt])
+}
+model TakeoffJobPhoto {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId         String       @db.Uuid
+  quote           TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  url             String
+  caption         String       @default("")
+  stage           String       @default("")
+  visibleToClient Boolean      @default(false)
+  favourite       Boolean      @default(false)
+  hidden          Boolean      @default(false)
+  uploadedBy      String
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, createdAt])
+  @@index([favourite])
+}
+model TakeoffJobAction {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String       @db.Uuid
+  quote       TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  kind        String
+  title       String
+  detail      String       @default("")
+  dueDate     DateTime?    @db.Date
+  status      String       @default("OPEN")
+  response    String       @default("")
+  respondedAt DateTime?    @db.Timestamptz(6)
+  respondedBy String?
+  createdBy   String
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, status])
+}
+model TakeoffJobSupply {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId   String       @db.Uuid
+  quote     TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  itemKey   String
+  status    String       @default("TO_ORDER")
+  note      String       @default("")
+  updatedBy String
+  updatedAt DateTime     @default(now()) @db.Timestamptz(6)
+  @@unique([quoteId, itemKey])
+}
+model TakeoffJobOrder {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId   String       @db.Uuid
+  quote     TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  stage     String
+  status    String       @default("ORDERED")
+  supplier  String       @default("")
+  note      String       @default("")
+  updatedBy String
+  updatedAt DateTime     @default(now()) @db.Timestamptz(6)
+  @@unique([quoteId, stage])
+}
+model TakeoffJobPayment {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String       @db.Uuid
+  quote       TakeoffQuote @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  scheduleNo  Int?
+  amount      Decimal      @db.Decimal(12, 2)
+  method      String       @default("BANK_TRANSFER")
+  reference   String       @default("")
+  paidOn      DateTime     @db.Date
+  status      String       @default("REPORTED")
+  note        String       @default("")
+  recordedBy  String
+  actorKind   String
+  confirmedBy String?
+  confirmedAt DateTime?    @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  @@index([quoteId])
+  @@index([paidOn])
+}
+model TakeoffWorker {
+  id          String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  kind        String                 @default("EMPLOYEE")
+  trade       String                 @default("")
+  phone       String                 @default("")
+  email       String                 @default("")
+  payBasis    String                 @default("DAY")
+  dayRate     Decimal?               @db.Decimal(12, 2)
+  notes       String                 @default("")
+  active      Boolean                @default(true)
+  tokenHash   String?                @unique
+  createdAt   DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime               @default(now()) @db.Timestamptz(6)
+  ratings     TakeoffWorkerRating[]
+  assignments TakeoffJobAssignment[]
+  checkIns    TakeoffCheckIn[]
+  expenses    TakeoffExpense[]
+}
+model TakeoffWorkerRating {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workerId  String        @db.Uuid
+  worker    TakeoffWorker @relation(fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  quoteId   String?       @db.Uuid
+  quote     TakeoffQuote? @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  score     Int
+  note      String        @default("")
+  ratedBy   String
+  createdAt DateTime      @default(now()) @db.Timestamptz(6)
+  @@index([workerId])
+}
+model TakeoffJobAssignment {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String        @db.Uuid
+  quote       TakeoffQuote  @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workerId    String        @db.Uuid
+  worker      TakeoffWorker @relation(fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  trade       String        @default("")
+  payBasis    String        @default("DAY")
+  dayRate     Decimal?      @db.Decimal(12, 2)
+  agreedPrice Decimal?      @db.Decimal(12, 2)
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime      @default(now()) @db.Timestamptz(6)
+  @@unique([quoteId, workerId])
+}
+model TakeoffCheckIn {
+  id        String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workerId  String        @db.Uuid
+  worker    TakeoffWorker @relation(fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  quoteId   String        @db.Uuid
+  quote     TakeoffQuote  @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  kind      String
+  at        DateTime      @default(now()) @db.Timestamptz(6)
+  lat       Float?
+  lng       Float?
+  accuracy  Float?
+  note      String        @default("")
+  source    String        @default("WORKER")
+  createdAt DateTime      @default(now()) @db.Timestamptz(6)
+  @@index([quoteId, at])
+  @@index([workerId, at])
+}
+model TakeoffExpense {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId     String?        @db.Uuid
+  quote       TakeoffQuote?  @relation(fields: [quoteId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  workerId    String?        @db.Uuid
+  worker      TakeoffWorker? @relation(fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  category    String
+  description String         @default("")
+  supplier    String         @default("")
+  amount      Decimal        @db.Decimal(12, 2)
+  spentOn     DateTime       @db.Date
+  void        Boolean        @default(false)
+  recordedBy  String
+  createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  @@index([quoteId])
+  @@index([workerId])
+  @@index([spentOn])
 }

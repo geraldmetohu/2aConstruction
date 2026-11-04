@@ -1,0 +1,26 @@
+import Link from "next/link";
+import { listItems } from "@/app/lib/catalogue/queries";
+import { humanize } from "@/app/lib/catalogue/validation";
+import { canOpenCatalogue, CatalogueHeader, isMissingCatalogue, Saved, tabClass, Unavailable } from "./_components";
+
+export const dynamic = "force-dynamic";
+const input = "min-h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm";
+export default async function ItemsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  if (!await canOpenCatalogue()) return <Unavailable pending />;
+  const query = await searchParams;
+  let data;
+  try { data = await listItems(query); } catch (error) { if (isMissingCatalogue(error)) return <Unavailable />; throw error; }
+  const pageLink = (page: number) => `/dashboard/items?${new URLSearchParams({ q: data.search, category: data.category, status: data.status, sort: data.sort, page: String(page) })}`;
+  return <div><CatalogueHeader title="Items & prices" description="Manage your standard construction catalogue. Keep material costs, labour and supplier references together, with a full history of price changes." /><Saved value={query.saved} />
+    <form className="mb-6 grid items-end gap-3 rounded-2xl border bg-neutral-50 p-5 sm:grid-cols-2 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
+      <label className="space-y-1 text-sm font-medium"><span>Search name, code or description</span><input name="q" defaultValue={data.search} type="search" maxLength={100} className={input} placeholder="Door, tile, groundwork…" /></label>
+      <label className="space-y-1 text-sm font-medium"><span>Category</span><select name="category" defaultValue={data.category} className={input}><option value="">All categories</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}{c.archivedAt ? " (archived)" : ""}</option>)}</select></label>
+      <label className="space-y-1 text-sm font-medium"><span>Availability</span><select name="status" defaultValue={data.status} className={input}>{["active", "inactive", "archived", "all"].map(s => <option key={s} value={s}>{humanize(s)}</option>)}</select></label>
+      <label className="space-y-1 text-sm font-medium"><span>Sort by</span><select name="sort" defaultValue={data.sort} className={input}><option value="name">Name</option><option value="code">Code</option><option value="updated">Recently updated</option><option value="newest">Newest</option></select></label>
+      <button className="min-h-11 rounded-lg bg-neutral-950 px-5 text-sm font-semibold text-white">Apply</button>
+    </form>
+    <div className="overflow-hidden rounded-2xl border"><div className="flex items-center justify-between border-b bg-white px-5 py-4"><p className="font-semibold">{data.total} matching {data.total === 1 ? "item" : "items"}</p><Link href="/dashboard/items/new" className="text-sm font-semibold underline">Add item</Link></div>
+      {data.items.length === 0 ? <div className="p-10 text-center"><h2 className="font-semibold">No items found</h2><p className="mt-2 text-sm text-neutral-500">Try different filters, or add your first category, unit and item.</p><Link href="/dashboard/items/setup" className="mt-5 inline-block text-sm font-semibold underline">Open catalogue setup</Link></div> : <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-neutral-50 text-neutral-500"><tr>{["Item", "Category / unit", "Fix stage", "Material / labour", "Status"].map(h => <th key={h} className="px-5 py-3 font-medium">{h}</th>)}</tr></thead><tbody>{data.items.map(item => { const p = item.prices[0]; const money = (v: string) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 4 }).format(Number(v)); return <tr key={item.id} className="border-t hover:bg-amber-50/40"><td className="px-5 py-4"><Link href={`/dashboard/items/${item.id}`} className="font-semibold underline decoration-neutral-300 underline-offset-4">{item.name}</Link><div className="mt-1 text-xs text-neutral-500">{item.code}</div></td><td className="px-5 py-4">{item.category.name}<div className="mt-1 text-xs text-neutral-500">per {item.unit.label}</div></td><td className="px-5 py-4">{humanize(item.fixStage)}</td><td className="px-5 py-4">{p ? <>{money(p.materialUnitCost)}<span className="mt-1 block text-xs text-neutral-500">Labour: {p.labourUnitCost == null ? "from specification" : money(p.labourUnitCost)}</span></> : <span className="text-amber-800">Price needed</span>}</td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${item.archivedAt ? "bg-neutral-100 text-neutral-600" : item.active ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{item.archivedAt ? "Archived" : item.active ? "Active" : "Inactive"}</span></td></tr>; })}</tbody></table></div>}
+    </div><nav aria-label="Item pages" className="mt-5 flex items-center gap-4">{data.page > 1 && <Link className={tabClass} href={pageLink(data.page - 1)}>Previous</Link>}<span className="text-sm text-neutral-500">Page {data.page} of {Math.max(1, Math.ceil(data.total / 30))}</span>{data.page * 30 < data.total && <Link className={tabClass} href={pageLink(data.page + 1)}>Next</Link>}</nav>
+  </div>;
+}

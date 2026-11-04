@@ -150,7 +150,7 @@ export default async function ClientsPage() {
                         <p className="mt-1 text-sm text-rose-800">
                           Type <span className="font-bold">delete</span> to remove this client, their estimator submissions, and saved portal phases.
                         </p>
-                        <form action={deleteClient} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                        <form action={async (formData: FormData) => { "use server"; await deleteClient(formData); }} className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
                           <input type="hidden" name="clientId" value={client.id} />
                           <label className="flex-1 text-sm font-medium text-rose-900">
                             Confirmation

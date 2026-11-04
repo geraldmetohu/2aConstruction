@@ -6,6 +6,7 @@ import "./globals.css";
 import { NextSSRPlugin } from "@uploadthing/react/next-ssr-plugin";
 import { extractRouterConfig } from "uploadthing/server";
 import { ourFileRouter } from "./api/uploadthing/core";
+import { AREAS, SITE_URL } from "./lib/seo/areas";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,24 +21,29 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL("https://2aconstruction.co.uk"),
   title: {
-    default: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
+    default: "2A Construction | Builders in London, North London & the South East",
     template: "%s | 2A Construction",
   },
   description:
-    "2A Construction provides loft conversions, house extensions, roofing, refurbishments and general building services across North London, including Enfield, Barnet and Walthamstow. Fully insured. Free quotes.",
+    "2A Construction Ltd builds house extensions, loft conversions, refurbishments and roofs across London, North London (Enfield, Barnet, Haringey, Islington, Camden, Hackney, Waltham Forest) and the South East. FMB member, SafeContractor approved, itemised quotes, 5-year guarantee. Free site visits.",
   keywords: [
     "2A Construction",
-    "builders north london",
-    "loft conversions north london",
-    "loft conversion enfield",
-    "loft conversion barnet",
-    "builders enfield",
-    "builders barnet",
-    "builders walthamstow",
-    "roofing north london",
-    "house extensions north london",
-    "refurbishments north london",
-    "general building london",
+    "builders London",
+    "builders North London",
+    "builders South East England",
+    "house extensions London",
+    "loft conversions North London",
+    "kitchen extension Enfield",
+    "loft conversion Barnet",
+    "builders Haringey",
+    "builders Islington",
+    "builders Camden",
+    "builders Walthamstow",
+    "builders Hertfordshire",
+    "builders Essex",
+    "refurbishment London",
+    "roofing North London",
+    "FMB builder London",
   ],
   applicationName: "2A Construction",
   authors: [{ name: "2A Construction" }],
@@ -63,9 +69,9 @@ export const metadata: Metadata = {
     locale: "en_GB",
     url: "/",
     siteName: "2A Construction",
-    title: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
+    title: "2A Construction | Builders in London, North London & the South East",
     description:
-      "Trusted North London builders for loft conversions, house extensions, roofing and refurbishments in Enfield, Barnet, Walthamstow and surrounding areas.",
+      "House extensions, loft conversions, refurbishments and roofing across London, North London and the South East. FMB member, itemised quotes and a 5-year guarantee.",
     images: [
       {
         url: "/og.jpg",
@@ -77,9 +83,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "2A Construction | Loft Conversions, Extensions & Roofing in North London",
+    title: "2A Construction | Builders in London, North London & the South East",
     description:
-      "Trusted North London builders for loft conversions, house extensions, roofing and refurbishments.",
+      "House extensions, loft conversions, refurbishments and roofing across London, North London and the South East.",
     images: ["/og.jpg"],
   },
   icons: {
@@ -124,55 +130,42 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "HomeAndConstructionBusiness",
-              name: "2A Construction",
-              url: "https://2aconstruction.co.uk",
-              logo: "https://2aconstruction.co.uk/og.jpg",
-              image: ["https://2aconstruction.co.uk/og.jpg"],
-              telephone: "+44 790 3095 967",
-              email: "2a.construction.uk@gmail.com",
-              priceRange: "££",
-              address: {
-                "@type": "PostalAddress",
-                addressLocality: "London",
-                addressCountry: "GB",
+            __html: JSON.stringify([
+              {
+                "@context": "https://schema.org",
+                "@type": "HomeAndConstructionBusiness",
+                "@id": `${SITE_URL}/#business`,
+                name: "2A Construction",
+                legalName: "2A Construction Ltd",
+                url: SITE_URL,
+                logo: `${SITE_URL}/2a_l.png`,
+                image: [`${SITE_URL}/og.jpg`],
+                telephone: "+44 7903 095967",
+                email: "2a.construction.uk@gmail.com",
+                priceRange: "££",
+                address: { "@type": "PostalAddress", addressLocality: "London", addressRegion: "Greater London", addressCountry: "GB" },
+                areaServed: AREAS.map(a => ({ "@type": a.kind === "county" ? "AdministrativeArea" : "Place", name: a.name.replace(/^the /, ""), url: `${SITE_URL}/areas/${a.slug}` })),
+                openingHoursSpecification: [
+                  { "@type": "OpeningHoursSpecification", dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], opens: "08:00", closes: "18:00" },
+                  { "@type": "OpeningHoursSpecification", dayOfWeek: "Saturday", opens: "09:00", closes: "14:00" },
+                ],
+                memberOf: { "@type": "Organization", name: "Federation of Master Builders", url: "https://www.fmb.org.uk/" },
+                knowsAbout: ["House extensions", "Loft conversions", "Dormer lofts", "Hip-to-gable lofts", "Refurbishments", "Roofing", "Kitchen extensions", "Building Control", "Party wall"],
+                hasOfferCatalog: {
+                  "@type": "OfferCatalog",
+                  name: "Building services",
+                  itemListElement: ["House extensions", "Loft conversions", "Refurbishments", "Roofing", "General building", "Painting and decorating", "Flooring", "Plumbing and heating", "Electrical"].map(n => ({ "@type": "Offer", itemOffered: { "@type": "Service", name: n, areaServed: "London and the South East" } })),
+                },
+                sameAs: [
+                  "https://www.facebook.com/2A.Construction.WA/",
+                  "https://www.instagram.com/2a.construction.ltd/",
+                  "https://uk.linkedin.com/company/2a-construction-ltd",
+                  "https://www.checkatrade.com/trades/2aconstructionltd",
+                  "https://www.fmb.org.uk/builder/2a-construction-ltd.html",
+                ],
               },
-              areaServed: [
-                "North London",
-                "Enfield",
-                "Barnet",
-                "Walthamstow",
-                "London",
-              ],
-              openingHours: "Mo-Fr 08:00-18:00, Sa 09:00-14:00",
-              sameAs: [
-                "https://www.linkedin.com/company/2a-construction-ltd/?originalSubdomain=uk",
-              ],
-              makesOffer: [
-                {
-                  "@type": "Offer",
-                  itemOffered: { "@type": "Service", name: "Loft Conversions" },
-                },
-                {
-                  "@type": "Offer",
-                  itemOffered: { "@type": "Service", name: "House Extensions" },
-                },
-                {
-                  "@type": "Offer",
-                  itemOffered: { "@type": "Service", name: "Roofing" },
-                },
-                {
-                  "@type": "Offer",
-                  itemOffered: { "@type": "Service", name: "Refurbishments" },
-                },
-                {
-                  "@type": "Offer",
-                  itemOffered: { "@type": "Service", name: "General Building" },
-                },
-              ],
-            }),
+              { "@context": "https://schema.org", "@type": "WebSite", "@id": `${SITE_URL}/#website`, name: "2A Construction", url: SITE_URL, publisher: { "@id": `${SITE_URL}/#business` }, inLanguage: "en-GB" },
+            ]),
           }}
         />
 

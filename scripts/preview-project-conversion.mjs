@@ -1,0 +1,16 @@
+// Synthetic UI preview: no database, authentication or real acceptance writes.
+import http from 'node:http';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import postcss from 'postcss';
+import tailwind from 'tailwindcss';
+const require=createRequire(import.meta.url), runtime=require('next/dist/compiled/webpack/webpack');runtime.init();const webpack=runtime.webpack;
+const root=fileURLToPath(new URL('../',import.meta.url)),out=path.join(root,'.next/conversion-preview');await mkdir(out,{recursive:true});
+await writeFile(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import {ConversionForm} from '@/app/dashboard/delivery-projects/ConversionForm';createRoot(document.getElementById('root')!).render(<main className="mx-auto max-w-3xl space-y-6 p-6"><h1 className="text-3xl font-black">Project conversion preview</h1><p>Synthetic data only. Submitting this form cannot create a project or record acceptance.</p><ConversionForm quoteId="00000000-0000-4000-8000-000000000001" revisionId="00000000-0000-4000-8000-000000000002" version={2} title="Internal refurbishment" customerName="Preview Customer" releasedAt="2026-01-01T12:00:00Z" validUntil="2099-12-31" baseGross="336.00" optional={[{key:'option',description:'Additional internal doors',gross:'336.00'}]} clients={[{id:'00000000-0000-4000-8000-000000000003',fullName:'Preview Customer',email:'preview@example.invalid'}]}/></main>);`);
+await writeFile(path.join(out,'navigation.ts'),`export const useRouter=()=>({push(){}});`);
+await writeFile(path.join(out,'actions.ts'),`export async function convertAcceptedQuote(){return {ok:false,message:'Preview only: no acceptance or project was saved.'};}`);
+await new Promise((resolve,reject)=>webpack({mode:'development',target:'web',entry:path.join(out,'entry.tsx'),devtool:false,output:{path:out,filename:'bundle.js'},resolve:{extensions:['.tsx','.ts','.js'],alias:{'@':root,'next/navigation$':path.join(out,'navigation.ts')}},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:path.join(root,'scripts/preview-typescript-loader.cjs')}]},plugins:[new webpack.NormalModuleReplacementPlugin(/^\.\/actions$/,r=>{if(r.context.endsWith('delivery-projects'))r.request=path.join(out,'actions.ts');})]},(err,stats)=>err||stats.hasErrors()?reject(err??new Error(stats.toString({all:false,errors:true}))):resolve()));
+const css=(await postcss([tailwind({content:[path.join(root,'app/dashboard/delivery-projects/**/*.tsx')],theme:{extend:{}}})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css;
+http.createServer(async(req,res)=>{if(req.url==='/bundle.js'){res.setHeader('Content-Type','text/javascript');res.end(await readFile(path.join(out,'bundle.js')));return;}res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Project conversion preview</title><style>${css}</style></head><body style="font-family:Arial,sans-serif"><div id="root"></div><script src="/bundle.js"></script></body></html>`);}).listen(4321,'127.0.0.1',()=>console.log('Synthetic project conversion preview: http://127.0.0.1:4321'));

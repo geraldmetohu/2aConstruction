@@ -587,12 +587,6 @@ export function EstimatorOverview() {
                 See our projects
               </EstimatorButton>
 
-              {process.env.NEXT_PUBLIC_PREMIUM_ESTIMATOR_ENABLED ===
-                "true" && (
-                <EstimatorButton href="/premium-estimator">
-                  Premium estimate · £50
-                </EstimatorButton>
-              )}
             </motion.div>
           </div>
         </div>

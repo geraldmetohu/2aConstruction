@@ -52,7 +52,6 @@ className="absolute inset-[-8%] -z-20"
      />
 </motion.div>
 
-```
   {/* Dark architectural overlay */}
   <div className="absolute inset-0 -z-10 bg-[#25241f]/80" />
 

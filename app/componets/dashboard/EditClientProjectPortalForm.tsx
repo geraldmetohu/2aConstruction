@@ -62,7 +62,7 @@ export function EditClientProjectPortalForm({
     }[];
   };
 }) {
-  const [lastResult, action] = useActionState(saveClientProjectPortal, undefined);
+  const [lastResult, action] = useActionState(async (_previous: Awaited<ReturnType<typeof saveClientProjectPortal>> | undefined, formData: FormData) => saveClientProjectPortal(formData), undefined);
   const [phases, setPhases] = useState<PhaseFormItem[]>(
     data.phases.map((phase) => ({
       id: phase.id,

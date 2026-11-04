@@ -1,0 +1,13 @@
+import { prisma } from "@/app/lib/db";
+import { companySettingsEnabled, requireSettingsAdmin } from "@/app/lib/company-settings/access";
+import { suggestedSettings } from "@/app/lib/company-settings/schema";
+import { SettingsEditor } from "./SettingsEditor";
+export const dynamic = "force-dynamic";
+export default async function SettingsPage() {
+  if (!companySettingsEnabled()) return <div className="p-6"><h1 className="text-3xl font-black">Company settings</h1><p className="mt-4">The settings editor is not enabled yet.</p></div>;
+  await requireSettingsAdmin();
+  const [versions, taxes] = await Promise.all([prisma.companySettingsVersion.findMany({ where: { settingsId: "company" }, orderBy: { versionNumber: "desc" }, take: 20 }), prisma.taxCode.findMany({ where: { active: true, archivedAt: null }, include: { rates: { where: { effectiveFrom: { lte: new Date() } }, orderBy: { effectiveFrom: "desc" }, take: 1 } } })]);
+  const latest = versions[0], calendar = latest?.workingCalendar as { workingDays?: number[] } | undefined;
+  const initial = latest ? { ...suggestedSettings, defaultMarkupPercent: latest.defaultMarkupPercent.toString(), defaultWastePercent: latest.defaultWastePercent.toString(), contingencyPercent: latest.contingencyPercent.toString(), workdayHours: latest.workdayHours.toString(), defaultTeamSize: latest.defaultTeamSize, workingDays: calendar?.workingDays ?? suggestedSettings.workingDays, quoteValidityDays: latest.quoteValidityDays, invoiceTermsDays: latest.invoiceTermsDays, estimatorFeeTaxCodeId: latest.estimatorFeeTaxCodeId ?? "" } : suggestedSettings;
+  return <main className="mx-auto max-w-5xl space-y-6 p-6"><header><p className="text-sm text-neutral-500">Company configuration · {latest ? `Version ${latest.versionNumber}` : "Not configured"}</p><h1 className="mt-2 text-3xl font-black">Company settings</h1><p className="mt-3">Review defaults and save a new version. Nothing is saved automatically.</p></header><SettingsEditor key={latest?.id ?? "new"} initial={initial} version={latest?.versionNumber ?? 0} taxes={taxes.filter(t => t.rates.length).map(t => ({ id: t.id, label: `${t.label} · ${t.rates[0].rate}%` }))} /><section className="space-y-3"><h2 className="text-xl font-bold">Recent versions</h2>{versions.map(v => <article key={v.id} className="rounded-xl border p-4"><h3 className="font-bold">Version {v.versionNumber}</h3><p className="mt-2 text-sm">Effective {v.effectiveFrom.toISOString()} · Markup {v.defaultMarkupPercent.toString()}% · Waste {v.defaultWastePercent.toString()}% · Contingency {v.contingencyPercent.toString()}%</p></article>)}{!versions.length && <p>Suggested values have not been approved or saved.</p>}</section></main>;
+}

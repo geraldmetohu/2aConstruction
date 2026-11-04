@@ -1,0 +1,28 @@
+// Read-only synthetic preview; no database connection or external communication.
+import http from 'node:http';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import {createRequire} from 'node:module';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import postcss from 'postcss';
+import tailwind from 'tailwindcss';
+import {typescriptLoader} from '../tests/helpers/load-typescript.mjs';
+import {managementBase as base,ids} from '../tests/fixtures/project-workspace.mjs';
+import {quoteCatalogue,quoteDoc,asOf} from '../tests/fixtures/quote.mjs';
+const root=fileURLToPath(new URL('../',import.meta.url)),out=path.join(root,'.next/customer-preview');await mkdir(out,{recursive:true});
+const load=typescriptLoader(),{initialState,finances,progress}=load('app/lib/project-management/state.ts'),{parseEntry}=load('app/lib/project-management/schema.ts');
+const state=initialState(base).map(e=>e.kind==='TASK'&&e.id===ids.task?parseEntry('TASK',e.id,{...e.body,status:'COMPLETED',progress:100}):e);
+const variationId=crypto.randomUUID(),invoiceId=crypto.randomUUID();
+state.push(parseEntry('VARIATION',variationId,{title:'Additional door finishing',description:'Prepare and finish the additional bedroom doors.',requestedBy:'Customer',status:'PROPOSED',net:'50',vatRate:'20',approvedBy:'',approvalDate:'',evidence:''}));
+state.push(parseEntry('INVOICE',invoiceId,{title:'Installation stage',status:'ISSUED',issueDate:'2026-09-28',dueDate:'2026-10-12',lines:[{description:'Installation work',quantity:'1',unitNet:'100',vatRate:'20'}],reviewNote:''}));
+const input=load('app/lib/customer-portal/schema.ts').publicationSchema.parse({projectId:base.id,expectedSequence:0,expectedPublication:0,requestId:crypto.randomUUID(),title:'Your bedroom refurbishment',introduction:'The door installation is complete. Final adjustments are next. You can review the proposed finishing work in Variations.',shareSchedule:false,fileIds:[],variationIds:[variationId],invoiceIds:[invoiceId],status:'SHARED',reason:'Synthetic preview'});
+const quote=load('app/lib/quotes/calculate.ts').calculateQuote(quoteDoc,quoteCatalogue,asOf);
+const project=load('app/lib/customer-portal/projection.ts').projectForCustomer({base,state,sequence:0,financials:finances(base,state),progress:progress(state),history:[]},input,quote.customer,['a'],[]);
+const view={publicationId:crypto.randomUUID(),version:1,updatedAt:'2026-09-28T10:00:00Z',project,messages:[{id:crypto.randomUUID(),authorKind:'ADMIN',text:'Welcome to your project space. We will share progress and documents here.',createdAt:'2026-09-28T10:00:00Z'}],decisions:[]};
+await writeFile(path.join(out,'entry.tsx'),`import React from 'react';import {createRoot} from 'react-dom/client';import {CustomerProject} from '@/app/(storefront)/my-projects/CustomerProject';createRoot(document.getElementById('root')!).render(<main className="mx-auto max-w-6xl p-6"><p className="rounded-xl bg-amber-50 p-4 text-sm">Synthetic customer preview · messaging and approvals are disabled · no live data</p><CustomerProject preview view={${JSON.stringify(view)}}/></main>);`);
+await writeFile(path.join(out,'navigation.ts'),'export const useRouter=()=>({refresh(){}});');
+await writeFile(path.join(out,'actions.ts'),'export async function sendCustomerMessage(){return {ok:false,message:"Preview only"}};export const decideCustomerVariation=sendCustomerMessage;');
+const require=createRequire(import.meta.url),runtime=require('next/dist/compiled/webpack/webpack');runtime.init();const webpack=runtime.webpack;
+await new Promise((resolve,reject)=>webpack({mode:'development',target:'web',entry:path.join(out,'entry.tsx'),devtool:false,output:{path:out,filename:'bundle.js'},resolve:{extensions:['.tsx','.ts','.js'],alias:{'@':root,'next/navigation$':path.join(out,'navigation.ts')}},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:path.join(root,'scripts/preview-typescript-loader.cjs')}]},plugins:[new webpack.NormalModuleReplacementPlugin(/^\.\/actions$/,r=>{if(r.context.endsWith('my-projects'))r.request=path.join(out,'actions.ts');})]},(err,stats)=>err||stats.hasErrors()?reject(err??Error(stats.toString({all:false,errors:true}))):resolve()));
+const css=(await postcss([tailwind({content:[path.join(root,'app/(storefront)/my-projects/**/*.tsx')],theme:{extend:{}}})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css;
+http.createServer(async(req,res)=>{if(req.url==='/bundle.js'){res.setHeader('Content-Type','text/javascript');res.end(await readFile(path.join(out,'bundle.js')));return;}res.setHeader('Content-Type','text/html; charset=utf-8');res.end(`<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customer project preview</title><style>${css}</style></head><body style="font-family:Arial,sans-serif"><div id="root"></div><script src="/bundle.js"></script></body></html>`);}).listen(4323,'127.0.0.1',()=>console.log('Synthetic customer preview: http://127.0.0.1:4323'));

@@ -69,7 +69,7 @@ export const ourFileRouter = {
 
   bannerImageRoute: f({
     image: {
-      maxFileSize: "8MB",
+      maxFileSize: "32MB", // photos are shrunk in the browser before upload
       maxFileCount: 1,
     },
   })
@@ -78,7 +78,7 @@ export const ourFileRouter = {
 
   beforeImageRoute: f({
     image: {
-      maxFileSize: "8MB",
+      maxFileSize: "32MB", // photos are shrunk in the browser before upload
       maxFileCount: 1,
     },
   })
@@ -87,7 +87,7 @@ export const ourFileRouter = {
 
   afterImageRoute: f({
     image: {
-      maxFileSize: "8MB",
+      maxFileSize: "32MB", // photos are shrunk in the browser before upload
       maxFileCount: 1,
     },
   })
@@ -103,9 +103,19 @@ export const ourFileRouter = {
     .middleware(requireAdmin)
     .onUploadComplete(onComplete),
 
+  /* Job documents: plans, drawings, contracts, certificates (admin only). */
+  documentUploader: f({
+    pdf: { maxFileSize: "64MB", maxFileCount: 20 },
+    image: { maxFileSize: "32MB", maxFileCount: 20 },
+    text: { maxFileSize: "8MB", maxFileCount: 20 },
+    blob: { maxFileSize: "64MB", maxFileCount: 20 },
+  })
+    .middleware(requireAdmin)
+    .onUploadComplete(onComplete),
+
   estimatorUploader: f({
     image: {
-      maxFileSize: "16MB",
+      maxFileSize: "32MB",
       maxFileCount: 10,
     },
     video: {
@@ -113,7 +123,7 @@ export const ourFileRouter = {
       maxFileCount: 6,
     },
     pdf: {
-      maxFileSize: "16MB",
+      maxFileSize: "32MB",
       maxFileCount: 10,
     },
     text: {
@@ -121,7 +131,7 @@ export const ourFileRouter = {
       maxFileCount: 10,
     },
     blob: {
-      maxFileSize: "16MB",
+      maxFileSize: "32MB",
       maxFileCount: 10,
     },
   })

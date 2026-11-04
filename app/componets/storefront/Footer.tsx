@@ -1,177 +1,108 @@
-// app/components/storefront/Footer.tsx
+// app/componets/storefront/Footer.tsx
 import Link from "next/link";
 import Image from "next/image";
-import {
-  Facebook,
-  Twitter,
-  Linkedin,
-  Instagram,
-  Mail,
-  Phone,
-  MapPin,
-  ExternalLink,
-} from "lucide-react";
+import { Facebook, Instagram, Linkedin, Mail, MessageCircle, Phone } from "lucide-react";
+import { COMPANY } from "./site/brand";
+import { CookieSettingsLink } from "./site/CookieNotice";
 
-export default function Footer({
-  logoSrc = "/2a_l2.png",
-  companyNo = "15102296",
-}: {
-  logoSrc?: string;
-  companyNo?: string;
-}) {
+const SERVICES = [
+  { href: "/portfolio/extention", label: "House extensions" },
+  { href: "/portfolio/loft", label: "Loft conversions" },
+  { href: "/portfolio/refurbishment", label: "Refurbishments" },
+  { href: "/portfolio/roof", label: "Roofing" },
+  { href: "/portfolio/general", label: "General building" },
+  { href: "/services#painting", label: "Decorating, flooring & trades" },
+];
+const COMPANY_LINKS = [
+  { href: "/about", label: "About us" },
+  { href: "/portfolio/all", label: "Our work" },
+  { href: "/services", label: "Services" },
+  { href: "/estimator", label: "Estimator" },
+  { href: "/areas", label: "Areas we cover" },
+  { href: "/my-quotes", label: "Client portal" },
+  { href: "/contact", label: "Contact" },
+];
+const POLICIES = [
+  { href: "/certifications#fmb-membership", label: "FMB membership" },
+  { href: "/certifications#safecontractor", label: "SafeContractor" },
+  { href: "/certifications#health-safety", label: "Health & safety" },
+  { href: "/certifications#environmental-policy", label: "Environmental" },
+  { href: "/certifications#gdpr-policy", label: "Data protection" },
+  { href: "/certifications#certifications", label: "All policies" },
+];
+
+export default function Footer({ logoSrc = "/2a_l2.png", companyNo = COMPANY.companyNo }: { logoSrc?: string; companyNo?: string }) {
   const year = new Date().getFullYear();
-
   return (
-    <footer className="bg-slate-950 text-slate-300 pt-16">
-      {/* MAIN GRID */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 pb-14 grid grid-cols-1 md:grid-cols-4 gap-12">
+    <footer className="relative overflow-hidden bg-[#071a33] text-white/75">
+      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.05]" style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 59px, #fff 60px, transparent 61px)" }} />
 
-        {/* --------------------------- */}
-        {/* BRAND COLUMN                */}
-        {/* --------------------------- */}
-        <div>
-          <Link href="/" aria-label="Homepage">
-            <Image
-              src={logoSrc}
-              alt="2A Construction"
-              width={170}
-              height={170}
-              className="h-20 w-auto object-contain"
-              priority
-            />
-          </Link>
-
-          <p className="mt-5 text-base leading-relaxed">
-            Premium construction across London — extensions, loft conversions,
-            roofing, HMO conversions & full domestic refurbishments.
-          </p>
-
-          <ul className="mt-5 space-y-2 text-base">
-            <li className="flex items-center gap-2">
-              <Mail size={16} />
-              <a
-                href="mailto:2a.construction.uk@gmail.com"
-                className="hover:text-yellow-300 transition"
-              >
-                2a.construction.uk@gmail.com
-              </a>
-            </li>
-            <li className="flex items-center gap-2">
-              <Phone size={16} />
-              <a
-                href="tel:+447903095967"
-                className="hover:text-yellow-300 transition"
-              >
-                +44 790 3095 967
-              </a>
-            </li>
-            <li className="flex items-center gap-2">
-              <MapPin size={16} />
-              London, UK
-            </li>
-          </ul>
-
-          <div className="mt-6 flex gap-4">
-            <a href="https://www.facebook.com/2A.Construction.WA/" className="hover:text-yellow-300"><Facebook size={18} /></a>
-            <a href="https://uk.linkedin.com/company/2a-construction-ltd" className="hover:text-yellow-300"><Linkedin size={18} /></a>
-            <a href="https://www.instagram.com/2a.construction.ltd/" className="hover:text-yellow-300"><Instagram size={18} /></a>
+      {/* Call to action strip */}
+      <div className="relative border-b border-white/10">
+        <div className="mx-auto flex max-w-7xl flex-col gap-8 px-5 py-14 sm:px-8 md:flex-row md:items-end md:justify-between lg:px-10">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#f5b400]">Have a project in mind?</p>
+            <a href={COMPANY.phoneHref} className="mt-4 block text-3xl font-semibold tracking-[-0.03em] text-white transition-colors hover:text-[#f5b400] sm:text-5xl">{COMPANY.phone}</a>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <a href={COMPANY.emailHref} className="inline-flex items-center gap-3 border border-white/40 px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white hover:bg-white hover:text-[#071a33]"><Mail className="h-4 w-4" />Email</a>
+            <a href={COMPANY.whatsapp} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-3 border border-white/40 px-6 py-3.5 text-[12px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white hover:bg-white hover:text-[#071a33]"><MessageCircle className="h-4 w-4" />WhatsApp</a>
           </div>
         </div>
-
-        {/* --------------------------- */}
-        {/* COMPANY COLUMN              */}
-        {/* --------------------------- */}
-        <nav>
-          <h3 className="text-orange-400 font-semibold text-lg">Company</h3>
-
-          <ul className="mt-4 space-y-2 text-base">
-            <li><Link href="/about" className="hover:text-yellow-300">About Us</Link></li>
-            <li><Link href="/portfolio/all" className="hover:text-yellow-300">Projects</Link></li>
-            <li><Link href="/estimator" className="hover:text-yellow-300">Estimator</Link></li>
-            <li><Link href="/contact" className="hover:text-yellow-300">Contact</Link></li>
-            <li><Link href="/certifications" className="hover:text-yellow-300">Certifications</Link></li>
-          </ul>
-        </nav>
-
-        {/* --------------------------- */}
-        {/* SERVICES COLUMN             */}
-        {/* --------------------------- */}
-        <nav>
-          <h3 className="text-orange-400 font-semibold text-lg">Services</h3>
-
-          <ul className="mt-4 space-y-2 text-base">
-            {/* MAIN SERVICES */}
-            <li><Link href="/portfolio/extention" className="hover:text-yellow-300">Extensions</Link></li>
-            <li><Link href="/portfolio/loft" className="hover:text-yellow-300">Loft Conversions</Link></li>
-            <li><Link href="/portfolio/roof" className="hover:text-yellow-300">Roofing</Link></li>
-            <li><Link href="/portfolio/refurbishment" className="hover:text-yellow-300">Refurbishments</Link></li>
-
-            {/* NEW SERVICES ADDED */}
-            <li><Link href="/portfolio/painting" className="hover:text-yellow-300">Painting & Decorating</Link></li>
-            <li><Link href="/portfolio/flooring" className="hover:text-yellow-300">Flooring</Link></li>
-            <li><Link href="/portfolio/plumbing" className="hover:text-yellow-300">Plumbing</Link></li>
-            <li><Link href="/portfolio/electrical" className="hover:text-yellow-300">Electrical</Link></li>
-
-            {/* SPECIALTY SECTIONS */}
-            <li><Link href="/services#hmo-development" className="hover:text-yellow-300">HMO Conversions</Link></li>
-            <li><Link href="/services#commercial-change" className="hover:text-yellow-300">Commercial Change-of-Use</Link></li>
-          </ul>
-        </nav>
-
-        {/* --------------------------- */}
-        {/* POLICIES COLUMN             */}
-        {/* --------------------------- */}
-        <nav>
-          <h3 className="text-orange-400 font-semibold text-lg">Policies & Compliance</h3>
-
-          <ul className="mt-4 space-y-2 text-base">
-            <li>
-              <Link href="/certifications#anti-bribery" className="hover:text-yellow-300">
-                Anti-Bribery & Corruption Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/certifications#health-safety" className="hover:text-yellow-300">
-                Health & Safety Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/certifications#environmental-policy" className="hover:text-yellow-300">
-                Environmental Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/certifications#modern-slavery" className="hover:text-yellow-300">
-                Modern Slavery Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/certifications#gdpr-policy" className="hover:text-yellow-300">
-                GDPR / Data Protection Policy
-              </Link>
-            </li>
-            <li>
-              <Link href="/certifications#safeworkforce" className="hover:text-yellow-300">
-                SafeWorkforce Policy
-              </Link>
-            </li>
-
-            {/* Reserved for future policies */}
-            <li className="opacity-30 mt-4">Privacy Policy (Coming Soon)</li>
-            <li className="opacity-30">Terms & Conditions (Coming Soon)</li>
-          </ul>
-        </nav>
-
       </div>
 
-      {/* DIVIDER */}
-      <div className="border-t border-slate-800" />
+      {/* Columns */}
+      <div className="relative mx-auto grid max-w-7xl grid-cols-2 gap-x-8 gap-y-12 px-5 py-14 sm:px-8 md:grid-cols-12 lg:px-10">
+        <div className="col-span-2 md:col-span-4">
+          <Link href="/" aria-label="2A Construction homepage" className="inline-block">
+            <Image src={logoSrc} alt="2A Construction" width={170} height={170} className="h-16 w-auto object-contain" />
+          </Link>
+          <p className="mt-6 max-w-sm text-sm leading-relaxed">Extensions, loft conversions, refurbishments and roofing across London, North London and the South East, planned properly and built to last.</p>
+          <ul className="mt-6 space-y-2 text-sm">
+            <li><a href={COMPANY.emailHref} className="inline-flex items-center gap-2 hover:text-[#f5b400]"><Mail className="h-4 w-4" />{COMPANY.email}</a></li>
+            <li><a href={COMPANY.phoneHref} className="inline-flex items-center gap-2 hover:text-[#f5b400]"><Phone className="h-4 w-4" />{COMPANY.phone}</a></li>
+          </ul>
+          <div className="mt-6 flex gap-2">
+            {[{ href: "https://www.facebook.com/2A.Construction.WA/", icon: Facebook, label: "Facebook" }, { href: COMPANY.social.instagram, icon: Instagram, label: "Instagram" }, { href: COMPANY.social.linkedin, icon: Linkedin, label: "LinkedIn" }].map(s => (
+              <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label} className="grid h-10 w-10 place-items-center border border-white/15 transition-colors hover:border-[#f5b400] hover:bg-[#f5b400] hover:text-[#071a33]"><s.icon className="h-4 w-4" /></a>
+            ))}
+          </div>
+        </div>
+        <FooterCol title="Services" links={SERVICES} className="md:col-span-3 md:col-start-6" />
+        <FooterCol title="Company" links={COMPANY_LINKS} className="md:col-span-2" />
+        <FooterCol title="Compliance" links={POLICIES} className="md:col-span-2" />
+      </div>
 
-      {/* BOTTOM BAR */}
-      <div className="max-w-7xl mx-auto px-6 lg:px-10 py-5 text-xs text-slate-500 flex flex-col md:flex-row justify-between">
-        <p>© {year} 2A Construction Ltd. All rights reserved.</p>
-        <p>Registered in England & Wales • Company No: {companyNo}</p>
+      {/* Accreditation + legal */}
+      <div className="relative border-t border-white/10">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 py-8 text-xs text-white/50 sm:px-8 md:flex-row md:items-center md:justify-between lg:px-10">
+          <div className="flex items-center gap-4">
+            <span className="grid h-10 w-20 place-items-center bg-white px-2"><Image src="/images/fmb-logo.png" alt="FMB member" width={70} height={32} className="h-7 w-auto object-contain" /></span>
+            <span className="grid h-10 w-20 place-items-center bg-white px-2"><Image src="/images/safe_contractor.png" alt="SafeContractor approved" width={70} height={32} className="h-7 w-auto object-contain" /></span>
+          </div>
+          <div className="space-y-1 md:text-right">
+            <p>© {year} {COMPANY.legalName}. All rights reserved.</p>
+            <p>Registered in England &amp; Wales · Company No. {companyNo}</p>
+            <p className="flex flex-wrap gap-x-4 gap-y-1 md:justify-end">
+              <Link href="/privacy" className="hover:text-white">Privacy</Link>
+              <Link href="/terms" className="hover:text-white">Terms &amp; conditions</Link>
+              <Link href="/cookies" className="hover:text-white">Cookies</Link>
+              <CookieSettingsLink className="hover:text-white" />
+            </p>
+          </div>
+        </div>
       </div>
     </footer>
+  );
+}
+
+function FooterCol({ title, links, className = "" }: { title: string; links: { href: string; label: string }[]; className?: string }) {
+  return (
+    <nav aria-label={title} className={className}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white">{title}</p>
+      <ul className="mt-5 space-y-2.5 text-sm">
+        {links.map(l => <li key={l.href}><Link href={l.href} className="transition-colors hover:text-[#f5b400]">{l.label}</Link></li>)}
+      </ul>
+    </nav>
   );
 }

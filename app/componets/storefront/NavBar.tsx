@@ -66,11 +66,14 @@ export async function NavBar() {
    * client users can access /client-dashboard.
    */
 
+  // Admins go to the admin dashboard. Every signed-in client goes to the client area (/my-quotes),
+  // which links on to the older project dashboard when they have projects there.
   const dashboardHref = isAdmin
     ? "/dashboard"
-    : hasClientDashboard
-      ? "/client-dashboard"
+    : user
+      ? "/my-quotes"
       : null;
+  void hasClientDashboard;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-black/[0.08] bg-white text-neutral-900 shadow-sm">
@@ -148,7 +151,7 @@ export async function NavBar() {
                   className="rounded-full bg-[#f5b400] px-5 text-black shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#ffc52e] hover:shadow-md"
                 >
                   <Link href={dashboardHref}>
-                    {isAdmin ? "Admin Dashboard" : "My Dashboard"}
+                    {isAdmin ? "Admin Dashboard" : "My account"}
                   </Link>
                 </Button>
               )}
@@ -173,7 +176,7 @@ export async function NavBar() {
           <MobileNav
             dashboardHref={dashboardHref}
             dashboardLabel={
-              isAdmin ? "Admin Dashboard" : "My Dashboard"
+              isAdmin ? "Admin Dashboard" : "My account"
             }
           />
         </div>

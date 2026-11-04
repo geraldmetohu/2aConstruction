@@ -4,7 +4,8 @@ import { DeleteHeroVideo } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function DeleteHeroVideoRoute({ params }: { params: { id: string } }) {
+export default async function DeleteHeroVideoRoute(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return (
     <div className="flex h-[88vh] w-full items-center justify-center">
       <Card className="max-w-xl">

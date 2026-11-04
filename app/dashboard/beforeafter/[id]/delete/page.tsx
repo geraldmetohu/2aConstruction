@@ -6,7 +6,8 @@ import {
   Card, CardHeader, CardTitle, CardDescription, CardFooter
 } from "@/components/ui/card";
 
-export default function DeleteBeforeAfterRoute({ params }: { params: { id: string } }) {
+export default async function DeleteBeforeAfterRoute(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   return (
     <div className="flex h-[88vh] w-full items-center justify-center">
       <Card className="max-w-xl">

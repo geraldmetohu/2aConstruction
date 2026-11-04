@@ -218,8 +218,8 @@ export function ProjectEditor({ project, detail, sources, detailsReady, clientPr
                   endpoint="imageUploader"
                   appearance={{ container: "border-0 p-2 m-0 w-full", label: "text-xs text-neutral-700", allowedContent: "text-[10px] text-neutral-500", button: "text-xs bg-[#071a33] ut-uploading:bg-neutral-500 px-3" }}
                   content={{ label: "Drop photos or click to upload" }}
-                  onClientUploadComplete={(files: { url?: string; ufsUrl?: string; serverData?: { url?: string } }[]) => addImages(files.map(f => f.ufsUrl || f.url || f.serverData?.url || "").filter(Boolean))}
-                  onUploadError={(e: Error) => setMsg({ ok: false, text: e.message || "Upload failed. Please try again." })}
+                  onClientUploadComplete={(res: unknown[]) => addImages((res as unknown as { url?: string; ufsUrl?: string; serverData?: { url?: string } }[]).map(f => f.ufsUrl || f.url || f.serverData?.url || "").filter(Boolean))}
+                  onUploadError={(e: unknown) => setMsg({ ok: false, text: (e instanceof Error && e.message) || "Upload failed. Please try again." })}
                 />
               </div>
             </div>

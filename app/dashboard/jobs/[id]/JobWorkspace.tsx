@@ -23,7 +23,7 @@ export interface JobView {
   progress: { stages: StageProgress[]; percent: number; behind: number };
   events: Iso<JobEvent, "createdAt">[]; photos: { id: string; url: string; caption: string; stage: string; visibleToClient: boolean; favourite: boolean; createdAt: string }[];
   documents: { id: string; category: string; title: string; fileName: string; url: string; mimeType: string; sizeBytes: number; note: string; visibleToClient: boolean; createdAt: string }[]; docsReady: boolean;
-  actions: (Iso<ActionRow, "createdAt"> & { respondedAt: string | null })[]; supplies: SupplyNeed[];
+  actions: (Omit<ActionRow, "createdAt" | "respondedAt"> & { createdAt: string; respondedAt: string | null })[]; supplies: SupplyNeed[];
   money: { rows: DueRow[]; received: number; outstanding: number; reported: number }; payments: Iso<PaymentRow, "createdAt">[];
   finance: { contract: number; net: number; plannedCost: number; spent: number; received: number; profitSoFar: number };
   expenses: Iso<ExpenseRow, "createdAt">[]; team: { assignment: AssignmentRow; worker: WorkerLite & { createdAt: string }; owed: PayOwed }[]; workers: WorkerLite[];
@@ -157,8 +157,8 @@ function PhotosTab({ j, act, busy }: P) {
         <label className="mb-2 block text-xs font-semibold">Stage (optional)
           <select className={`${input} max-w-xs`} value={stage} onChange={e => setStage(e.target.value)}><option value="">Survey / general</option>{j.progress.stages.map(s => <option key={s.stage} value={s.label}>{s.label}</option>)}</select></label>
         <UploadDropzone endpoint="imageUploader" config={{ mode: "auto" }}
-          onClientUploadComplete={res => { setErr(""); act(() => addPhotosAction(j.quoteId, res.map(f => ({ url: (f as { ufsUrl?: string; url: string }).ufsUrl ?? f.url, caption: "", stage }))), `${res.length} photo${res.length > 1 ? "s" : ""} added.`); }}
-          onUploadError={e => setErr(e.message)} className="rounded-xl border border-dashed border-amber-300 bg-amber-50 ut-button:rounded-full ut-button:bg-neutral-950 ut-button:text-white" />
+          onClientUploadComplete={(res: unknown[]) => { setErr(""); act(() => addPhotosAction(j.quoteId, (res as unknown as { ufsUrl?: string; url?: string; serverData?: { url?: string } }[]).map(f => ({ url: f.ufsUrl || f.url || f.serverData?.url || "", caption: "", stage })).filter(p => p.url)), `${res.length} photo${res.length > 1 ? "s" : ""} added.`); }}
+          onUploadError={(e: unknown) => setErr((e instanceof Error && e.message) || "Upload failed. Please try again.")} className="rounded-xl border border-dashed border-amber-300 bg-amber-50 ut-button:rounded-full ut-button:bg-neutral-950 ut-button:text-white" />
         {err && <p className="mt-2 text-sm text-red-700">{err}</p>}
       </Card>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{j.photos.map(ph => (
@@ -207,12 +207,12 @@ function DocumentsTab({ j, act, busy }: P) {
             <label className="flex items-center gap-2 pb-1.5 text-sm"><input type="checkbox" checked={share} onChange={e => setShare(e.target.checked)} />Share with the client straight away</label>
           </div>
           <UploadDropzone endpoint="documentUploader" config={{ mode: "auto" }}
-            onClientUploadComplete={res => {
+            onClientUploadComplete={(res: unknown[]) => {
               setErr("");
-              const files = res.map(f => { const x = f as { ufsUrl?: string; url: string; name: string; size?: number; type?: string }; return { url: x.ufsUrl ?? x.url, fileName: x.name, sizeBytes: x.size ?? 0, mimeType: x.type ?? "" }; });
+              const files = (res as unknown as { ufsUrl?: string; url?: string; name?: string; size?: number; type?: string }[]).map(x => ({ url: x.ufsUrl || x.url || "", fileName: x.name ?? "file", sizeBytes: x.size ?? 0, mimeType: x.type ?? "" })).filter(f => f.url);
               act(() => addDocumentsAction(j.quoteId, { category, visibleToClient: share, files }), `${files.length} document${files.length > 1 ? "s" : ""} added to ${docCategoryLabel(category)}.`);
             }}
-            onUploadError={e => setErr(e.message)} className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 ut-button:rounded-full ut-button:bg-neutral-950 ut-button:text-white" />
+            onUploadError={(e: unknown) => setErr((e instanceof Error && e.message) || "Upload failed. Please try again.")} className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 ut-button:rounded-full ut-button:bg-neutral-950 ut-button:text-white" />
           {err && <p className="mt-2 text-sm text-red-700">{err}</p>}
         </>}
       </Card>

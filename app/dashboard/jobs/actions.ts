@@ -1,6 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { variationDetail } from "@/app/lib/takeoff/variations";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import { db, jobsAvailable } from "@/app/lib/takeoff/jobs.server";
 import {
@@ -66,8 +67,14 @@ export async function postMessageAction(quoteId: string, text: string, internal:
 
 export async function addClientActionAction(quoteId: string, raw: unknown) {
   return run(quoteId, async actor => {
-    const p = z.object({ kind: z.enum(["QUESTION", "DECISION", "ORDER", "DOCUMENT", "ACCESS", "OTHER"]), title: z.string().trim().min(3).max(200), detail: z.string().trim().max(2000), dueDate: day.nullable() }).parse(raw);
-    await addAction(db(), uuid.parse(quoteId), p, actor);
+    const p = z.object({ kind: z.enum(["QUESTION", "DECISION", "ORDER", "DOCUMENT", "ACCESS", "VARIATION", "OTHER"]), title: z.string().trim().min(3).max(200), detail: z.string().trim().max(2000), dueDate: day.nullable(),
+      price: z.number().finite().min(0).max(1_000_000).optional(), vatPercent: z.number().finite().min(0).max(100).optional() }).parse(raw);
+    if (p.kind === "VARIATION") {
+      if (p.price === undefined) throw new StoreError("A variation needs a price.");
+      await addAction(db(), uuid.parse(quoteId), { kind: p.kind, title: p.title, detail: variationDetail(p.price, p.vatPercent ?? 20, p.detail), dueDate: p.dueDate }, actor);
+      return;
+    }
+    await addAction(db(), uuid.parse(quoteId), { kind: p.kind, title: p.title, detail: p.detail, dueDate: p.dueDate }, actor);
   });
 }
 

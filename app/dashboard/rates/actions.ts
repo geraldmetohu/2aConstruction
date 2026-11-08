@@ -21,9 +21,9 @@ export async function saveRates(expectedVersion: number, raw: unknown, reason: s
     const data = schema.parse(raw);
     for (const k of Object.keys(data.materials)) if (!defaultRateBook.materials[k]) delete data.materials[k];
     for (const k of Object.keys(data.labour)) if (!defaultRateBook.labour[k]) delete data.labour[k];
-    // Keep the company details saved in the same versioned set.
-    const company = ((await latestRateSet(db))?.overrides as { company?: unknown } | null)?.company;
-    const r = await saveRateSet(db, expectedVersion, company ? { ...data, company } : data, z.string().trim().min(3, "Say briefly what changed").max(500).parse(reason), actor);
+    // Keep everything else saved in the same versioned set (company details, saved jobs); only the prices are replaced.
+    const current = ((await latestRateSet(db))?.overrides ?? {}) as Record<string, unknown>;
+    const r = await saveRateSet(db, expectedVersion, { ...current, ...data }, z.string().trim().min(3, "Say briefly what changed").max(500).parse(reason), actor);
     revalidatePath("/dashboard/rates"); revalidatePath("/dashboard/calculator");
     return { ok: true as const, version: r.version };
   } catch (e) {

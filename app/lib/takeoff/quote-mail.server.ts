@@ -13,14 +13,15 @@ async function safe(fn: () => Promise<{ sent: boolean; reason?: string }>) {
   try { return await fn(); } catch (e) { console.error("[quote-mail]", e); return { sent: false, reason: "Email failed." }; }
 }
 
-export function emailQuoteSent(q: { quoteId: string; reference: string; clientName: string; clientEmail: string }) {
+export function emailQuoteSent(q: { quoteId: string; reference: string; clientName: string; clientEmail: string; pdf?: Buffer | null }) {
   return safe(() => sendMail({
     to: q.clientEmail,
+    ...(q.pdf ? { attachments: [{ filename: `Quotation ${q.reference}.pdf`, content: q.pdf, contentType: "application/pdf" }] } : {}),
     subject: `Your quotation from 2A Construction (${q.reference})`,
     ...brandEmail({
       heading: `Hi ${first(q.clientName)}, your quotation is ready`,
       paragraphs: [
-        "Thank you for inviting us to quote. Your full quotation is now waiting for you in your private client area.",
+        "Thank you for inviting us to quote. Your quotation is attached as a PDF, and the full version – with your contract, guarantee and health & safety documents – is waiting in your private client area.",
         "You can read the price breakdown and scope of works, choose your finishes and see the new price straight away, then accept online when you're happy.",
         `Sign in or create an account with this email address (${q.clientEmail}) to open it.`,
       ],

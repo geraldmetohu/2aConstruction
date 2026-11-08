@@ -12,9 +12,12 @@ import { extTypeOptions } from "./modules/extension";
 import { loftTypeOptions } from "./modules/loft";
 import { coveringOptions } from "./modules/roofing";
 import { phaseLabels } from "./types";
+import { renderSystemOptions } from "./modules/external";
+import type { QuoteLayout } from "./quote-format";
 
 const label = (opts: readonly (readonly [string, string])[], k: unknown) => opts.find(([v]) => v === k)?.[1] ?? String(k ?? "");
 const r2 = (x: number) => Math.round(x * 100) / 100;
+const gbpText = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // ---------------------------------------------------------------- Working-day calendar (England & Wales)
 
@@ -46,9 +49,14 @@ export interface DocSection { heading: string; paragraphs?: string[]; items?: st
 
 export interface QuoteDocs {
   company: CompanyProfile; client: DocParty; reference: string; version: number; issueDate: string; validUntil: string; title: string;
+  /** Covering letter: greeting and opening paragraphs (the admin's own wording when given). */
+  letter: { greeting: string; paragraphs: string[] };
+  /** Scope & price table in the chosen format; missing on versions saved before formats existed. */
+  layout?: QuoteLayout;
   description: string[]; programme: ProgrammeRow[]; workingDays: number; weeks: number; start?: string; finish?: string;
   scope: { heading: string; dates?: string; items: string[] }[];
-  price: { areas: { area: string; net: number }[]; phases: { label: string; total: number }[]; net: number; vat: number; gross: number; scaffolding: boolean };
+  price: { areas: { area: string; net: number }[]; phases: { label: string; total: number }[]; net: number; vat: number; gross: number; scaffolding: boolean;
+    discount?: { label: string; amount: number; netBeforeDiscount: number }; vatBreakdown?: { percent: number; net: number; vat: number }[] };
   payments: PaymentRow[]; paymentDays: number; supplies: SupplyRow[]; exclusions: string[]; assumptions: string[];
   contract: DocSection[]; cancellationForm: string[]; guarantee: { years: number; sections: DocSection[] };
   cpp: DocSection[]; risks: { id: HazardId; title: string; who: string; harm: string; before: number; after: number; beforeBand: string; afterBand: string; controls: string[]; activities: string[] }[];
@@ -79,7 +87,15 @@ function describe(input: TakeoffInput, c: CustomerTakeoff): string[] {
     works.push(`a ${label(extTypeOptions, v.extType ?? "REAR").toLowerCase()} extension of about ${r2(w * d)} m² (${w} × ${d} m)${v.knockThrough !== false ? " opened up into the house with a steel beam" : ""}`);
   }
   if (roof?.enabled) works.push(`re-roofing in ${label(coveringOptions, roof.values.covering ?? "SLATE").toLowerCase()}${roof.values.slopes === "FRONT" ? " (front slope)" : roof.values.slopes === "REAR" ? " (rear slope)" : ""}`);
+  const extW = input.packages.external, garden = input.packages.garden, cleaning = input.packages.cleaning;
+  if (extW?.enabled) {
+    const v = extW.values;
+    works.push(`${v.system === "PAINT_ONLY" ? "repainting the outside walls" : `${v.hackOff ? "re-rendering" : "rendering"} the outside walls in ${label(renderSystemOptions, v.system ?? "SILICONE").toLowerCase()}`}${v.insulation ? " over external wall insulation" : ""} (about ${v.area ?? 60} m²)`);
+  }
+  if (garden?.enabled) works.push("garden and landscaping works");
+  if (cleaning?.enabled) works.push("exterior cleaning");
   if (input.rooms.length) works.push(`works to ${input.rooms.length} room${input.rooms.length > 1 ? "s" : ""}: ${input.rooms.map(r => `${r.name} (${label(roomTypeOptions, r.type).toLowerCase()}, ${r.length} × ${r.width} m)`).join(", ")}`);
+  if (input.customItems.length) works.push(input.customItems.length === 1 ? input.customItems[0].title.toLowerCase() : `${input.customItems.length} further items of work listed in the scope`);
   if (works.length) out.push(`We will carry out ${works.length > 1 ? `${works.slice(0, -1).join("; ")}; and ${works[works.length - 1]}` : works[0]}.`);
   out.push(`The work takes about ${c.programme.workingDays} working days (≈ ${c.programme.weeks} weeks) on site. All work is carried out by our own trades and approved specialists, to current Building Regulations and British Standards, with the site kept safe, clean and protected throughout.`);
   return out;
@@ -328,14 +344,28 @@ export function buildDocuments(a: DocArgs): QuoteDocs {
   const lastDay = rows.reduce((m, r) => Math.max(m, r.endDay), 0);
   const finish = t.startDate ? workingDate(t.startDate, lastDay) : undefined;
   const client: DocParty = { name: a.client.name, email: a.client.email, phone: t.clientPhone, address: t.clientAddress || a.client.siteAddress, siteAddress: a.client.siteAddress };
-  const pkgTitles = [input.packages.loft?.enabled && "Loft conversion", input.packages.extension?.enabled && "Extension", input.packages.roofing?.enabled && "Re-roof", input.rooms.length > 0 && "Internal refurbishment"].filter(Boolean) as string[];
+  const pkgTitles = [input.packages.loft?.enabled && "Loft conversion", input.packages.extension?.enabled && "Extension", input.packages.roofing?.enabled && "Re-roof",
+    input.packages.external?.enabled && (input.packages.external.values.insulation ? "External wall insulation" : "External render"), input.packages.garden?.enabled && "Garden & landscaping",
+    input.packages.cleaning?.enabled && "Exterior cleaning", input.rooms.length > 0 && "Internal refurbishment"].filter(Boolean) as string[];
   const title = t.title || (pkgTitles.length ? pkgTitles.join(", ").replace(/, ([^,]*)$/, " and $1") : "Building works");
   const stageStart = new Map(rows.map(r => [r.stage, r.start ?? `Day ${r.startDay + 1}`]));
+  const layout = c.layout;
+  const first = a.client.name.trim().split(/\s+/)[0] ?? "";
+  const how = layout?.format === "ITEMISED" ? "every item and job priced" : layout?.format === "NORMAL" ? "what each stage includes and its price" : "what we will do at each stage and its price";
+  const custom = layout?.intro?.split(/\n\s*\n/).map(x => x.trim()).filter(Boolean) ?? [];
+  const letter = {
+    greeting: `Dear ${first || "Sir / Madam"},`,
+    paragraphs: custom.length ? custom : [
+      `Thank you for asking us to quote for the ${title.toLowerCase()}${a.client.siteAddress ? ` at ${a.client.siteAddress.split("\n")[0]}` : ""}. Following our visit we have set out below exactly what is included, with ${how}.`,
+      `Our price for the works is ${gbpText(c.net)} plus VAT (${gbpText(c.gross)} including VAT). The work takes about ${c.programme.workingDays} working days (≈ ${c.programme.weeks} week${c.programme.weeks > 1 ? "s" : ""})${t.startDate ? `, starting ${longDate(start ?? t.startDate)}` : ""}.`,
+      "Everything listed in the scope below is included. Anything not listed, or listed under \"Not included\", is not part of this price – if you would like something added, just ask and we will price it before any work is done.",
+    ],
+  };
   const base = {
-    company, client, reference: a.reference, version: a.version, issueDate: a.issueDate, validUntil: addDays(a.issueDate, t.validityDays), title,
+    company, client, reference: a.reference, version: a.version, issueDate: a.issueDate, validUntil: addDays(a.issueDate, t.validityDays), title, letter, layout,
     description: describe(input, c), programme: rows, workingDays: c.programme.workingDays, weeks: c.programme.weeks, start, finish,
     scope: scopeByStage(c, rows),
-    price: { areas: c.areas, phases: c.phases.map(p => ({ label: phaseLabels[p.phase], total: p.total })), net: c.net, vat: c.vat, gross: c.gross, scaffolding: c.scaffolding.included },
+    price: { areas: c.areas, phases: c.phases.map(p => ({ label: phaseLabels[p.phase], total: p.total })), net: c.net, vat: c.vat, gross: c.gross, scaffolding: c.scaffolding.included, discount: c.discount, vatBreakdown: c.vatBreakdown },
     payments: paymentSchedule(c, input, rows, a.issueDate), paymentDays: t.paymentDays,
     supplies: c.clientOrders.map(o => {
       const when = o.stage ? stageStart.get(o.stage) : undefined;

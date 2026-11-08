@@ -11,6 +11,9 @@ export const companySchema = z.object({
   bankName: t(80), accountName: t(120), sortCode: t(10), accountNumber: t(12),
   siteManager: t(80), siteManagerPhone: t(40), healthSafetyLead: t(80), firstAider: t(80),
   disputeScheme: t(200), workingHours: t(120),
+  /** How new quotes set out the price unless the client had another layout before. */
+  quoteFormat: z.enum(["SIMPLE", "NORMAL", "ITEMISED"]).default("SIMPLE"),
+  quoteGroupBy: z.enum(["AREA", "TRADE"]).default("AREA"),
 });
 export type CompanyProfile = z.output<typeof companySchema>;
 

@@ -26,6 +26,7 @@ export interface JobView {
   actions: (Omit<ActionRow, "createdAt" | "respondedAt"> & { createdAt: string; respondedAt: string | null })[]; supplies: SupplyNeed[];
   money: { rows: DueRow[]; received: number; outstanding: number; reported: number }; payments: Iso<PaymentRow, "createdAt">[];
   finance: { contract: number; net: number; plannedCost: number; spent: number; received: number; profitSoFar: number };
+  variations: { net: number; gross: number; count: number };
   expenses: Iso<ExpenseRow, "createdAt">[]; team: { assignment: AssignmentRow; worker: WorkerLite & { createdAt: string }; owed: PayOwed }[]; workers: WorkerLite[];
   checkIns: Iso<CheckInRow, "at">[]; toOrder: OrderNeed[]; orders: { stage: string; status: "ORDERED" | "DELIVERED"; supplier: string; note: string; updatedAt: string }[];
   stageMaterials: { stage: string; label: string; start: string | null; items: { description: string; quantity: number; unit: string }[] }[];
@@ -250,7 +251,7 @@ function DocumentsTab({ j, act, busy }: P) {
 
 function ClientTab({ j, act, busy }: P) {
   const [text, setText] = useState(""), [internal, setInternal] = useState(false);
-  const [req, setReq] = useState({ kind: "DECISION", title: "", detail: "", dueDate: "" });
+  const [req, setReq] = useState({ kind: "DECISION", title: "", detail: "", dueDate: "", price: "", vat: "20" });
   const [contacts, setContacts] = useState(j.contacts), [notes, setNotes] = useState(j.accessNotes);
   const messages = j.events.filter(e => ["MESSAGE", "NOTE", "CLIENT_MESSAGE", "CLIENT_NOTE", "ANSWER"].includes(e.kind));
   return (
@@ -280,12 +281,18 @@ function ClientTab({ j, act, busy }: P) {
         <Card title="Requests to the client">
           <div className="grid gap-2 sm:grid-cols-4">
             <select className={input} value={req.kind} onChange={e => setReq({ ...req, kind: e.target.value })}>
-              {[["DECISION", "Decision"], ["QUESTION", "Question"], ["ORDER", "Order / buy"], ["ACCESS", "Access"], ["DOCUMENT", "Document"], ["OTHER", "Other"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+              {[["DECISION", "Decision"], ["QUESTION", "Question"], ["VARIATION", "Variation (priced change)"], ["ORDER", "Order / buy"], ["ACCESS", "Access"], ["DOCUMENT", "Document"], ["OTHER", "Other"]].map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
             <input className={`${input} sm:col-span-2`} placeholder="What do you need? e.g. Choose the kitchen worktop colour" value={req.title} onChange={e => setReq({ ...req, title: e.target.value })} />
             <input type="date" className={input} value={req.dueDate} onChange={e => setReq({ ...req, dueDate: e.target.value })} />
-            <textarea className={`${input} sm:col-span-4`} rows={2} placeholder="Details (optional)" value={req.detail} onChange={e => setReq({ ...req, detail: e.target.value })} />
+            <textarea className={`${input} sm:col-span-4`} rows={2} placeholder={req.kind === "VARIATION" ? "What changes and why – the client approves this in their portal" : "Details (optional)"} value={req.detail} onChange={e => setReq({ ...req, detail: e.target.value })} />
+            {req.kind === "VARIATION" && <>
+              <label className="text-xs font-semibold text-neutral-700 sm:col-span-2">Price ex VAT (£)<input className={input} inputMode="decimal" value={req.price} onChange={e => setReq({ ...req, price: e.target.value })} /></label>
+              <label className="text-xs font-semibold text-neutral-700">VAT %<input className={input} inputMode="decimal" value={req.vat} onChange={e => setReq({ ...req, vat: e.target.value })} /></label>
+            </>}
           </div>
-          <button disabled={busy || req.title.trim().length < 3} onClick={async () => (await act(() => addClientActionAction(j.quoteId, { ...req, dueDate: req.dueDate || null }), "Request sent to the client.")) && setReq({ kind: "DECISION", title: "", detail: "", dueDate: "" })} className={`${btn} mt-2 bg-neutral-950 text-white`}>Ask the client</button>
+          <button disabled={busy || req.title.trim().length < 3 || (req.kind === "VARIATION" && !(Number(req.price) >= 0 && req.price.trim() !== ""))} onClick={async () => (await act(() => addClientActionAction(j.quoteId, { kind: req.kind, title: req.title, detail: req.detail, dueDate: req.dueDate || null,
+            ...(req.kind === "VARIATION" ? { price: Number(req.price), vatPercent: Number(req.vat) || 0 } : {}) }), req.kind === "VARIATION" ? "Variation sent – the client approves or declines it in their portal." : "Request sent to the client.")) && setReq({ kind: "DECISION", title: "", detail: "", dueDate: "", price: "", vat: "20" })} className={`${btn} mt-2 bg-neutral-950 text-white`}>{req.kind === "VARIATION" ? "Send variation for approval" : "Ask the client"}</button>
+          {j.variations.count > 0 && <p className="mt-2 rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-900">{j.variations.count} approved variation{j.variations.count > 1 ? "s" : ""}: {gbp(j.variations.gross)} inc VAT added to the contract and the payment schedule.</p>}
           <ul className="mt-3 divide-y text-sm">{j.actions.map(a => (
             <li key={a.id} className="py-2"><p className="font-semibold">{a.title} <span className="text-xs font-normal text-neutral-500">{a.kind.toLowerCase()}{a.dueDate ? ` · by ${a.dueDate}` : ""} · {a.status.toLowerCase()}</span></p>
               {a.detail && <p className="text-neutral-600">{a.detail}</p>}

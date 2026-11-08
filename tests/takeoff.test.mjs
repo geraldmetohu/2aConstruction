@@ -152,13 +152,14 @@ test('skim includes PVA, multi-finish and beads; bond & skim adds grit primer an
 
 test('painting: choose elements; mist coat + 2 coats by default; 3 coats costs more', () => {
   const ceilingOnly = rooms([room('BEDROOM', { paintWalls: false, paintSkirting: false, paintDoors: false })]);
-  assert.ok(key(ceilingOnly, 'labour:paint_ceilings') && !key(ceilingOnly, 'labour:paint_walls') && !key(ceilingOnly, 'labour:paint_door'));
+  assert.ok(key(ceilingOnly, 'labour:paint_ceilings') && !key(ceilingOnly, 'labour:paint_walls') && !key(ceilingOnly, 'labour:paint_door_old'));
   const two = rooms([room('BEDROOM', { walls: 'SKIM' })]);
   assert.ok(key(two, 'labour:mist_coat'), 'mist coat on new plaster by default');
   const three = rooms([room('BEDROOM', { walls: 'SKIM', coats: '3' })]);
   near(key(three, 'labour:paint_walls').total, key(two, 'labour:paint_walls').total * 1.5);
   const all = rooms([room('BEDROOM', { paintWindows: true, paintRadiators: true })]);
-  assert.equal(key(all, 'labour:paint_door').unitPrice, 150);
+  // Existing door repaint, part by part: leaf 85 + frame 35 + architraves 30 = the old £150 per door.
+  assert.equal(key(all, 'labour:paint_door_old').unitPrice + key(all, 'labour:paint_frame_old').unitPrice + key(all, 'labour:paint_architrave_old').unitPrice, 150);
   assert.ok(key(all, 'labour:paint_window') && key(all, 'labour:paint_radiator'));
 });
 
@@ -326,7 +327,7 @@ test('re-roof types: coverings, re-lay existing, one slope', () => {
   const front = r({ covering: 'FIBRE_SLATE', slopes: 'FRONT' });
   near(key(front, 'labour:roof_tiling_fibre_slate').quantity, key(full, 'labour:roof_tiling_slate').quantity / 2, 'half area', 0.02);
   for (const c of ['CONCRETE', 'CONCRETE_PLAIN', 'CLAY', 'PANTILE']) assert.deepEqual(r({ covering: c }).warnings, [], c);
-  const extra = r({ valleys: 4, rafterRepair: 10, chimneyRepoint: 1 });
+  const extra = r({ valleys: 4, valleyType: 'LEAD', rafterRepair: 10, chimneyRepoint: 1 });
   assert.ok(key(extra, 'lead_valley') && key(extra, 'labour:rafter_repair') && key(extra, 'labour:chimney_repoint'));
 });
 
@@ -425,9 +426,10 @@ test('totals: waste, contingency, markup and VAT in order', () => {
 });
 
 test('every project builds without warnings and within sane ranges (inc VAT)', () => {
-  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000] };
+  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000] };
+  const sample = { garden: { patio: 25, fencing: 12, turf: 40 }, cleaning: { windows: 12, jetWash: 40, gutters: 20 }, demolition: { kitchens: 1, bathrooms: 1, partitions: 15, chimneyBreasts: 1 } };
   for (const p of workPackages) {
-    const r = only(p.id);
+    const r = only(p.id, sample[p.id]);
     assert.deepEqual(r.warnings, [], `${p.id} warnings`);
     const [lo, hi] = ranges[p.id];
     assert.ok(r.totals.gross > lo && r.totals.gross < hi, `${p.id} £${r.totals.gross}`);
@@ -449,7 +451,8 @@ test('price priority: per-quote edit > live/catalogue price > rate book', () => 
 test('company labour price list overrides price and output', () => {
   const rates = mergeRateBook(defaultRateBook, { labour: { paint_door: { price: 180 }, skim: { perDay: 20 } } });
   const r = calc({ packages: {}, rooms: [room('BEDROOM', { walls: 'SKIM' })] }, {}, rates);
-  assert.equal(key(r, 'labour:paint_door').unitPrice, 180);
+  // The old all-in door price scales the door / frame / architrave parts.
+  near(key(r, 'labour:paint_door_old').unitPrice + key(r, 'labour:paint_frame_old').unitPrice + key(r, 'labour:paint_architrave_old').unitPrice, 180);
   const skim = key(r, 'labour:skim');
   near(skim.days, skim.quantity / 20, 'skim days');
 });
@@ -481,6 +484,290 @@ test('customer projection hides costs, sums to the net price and lists choices',
 test('takeoff lines are valid quote-builder lines', () => {
   const r = calc({ packages: { extension: { enabled: true, values: {} } }, rooms: [room('KITCHEN', { kitchenRefit: true })] });
   for (const l of takeoffToQuoteLines(r, '00000000-0000-4000-8000-000000000001')) quoteLineSchema.parse(l);
+});
+
+// ---------------- Painting by condition, trades, custom jobs, formats ----------------
+test('door painting depends on condition: new doors cost more than a repaint; mixed counts', () => {
+  const old = rooms([room('BEDROOM', { paintDoors: true }, { doors: 2 })]);
+  const fitted = rooms([room('BEDROOM', { paintDoors: true, newDoors: 1 }, { doors: 2 })]);
+  assert.equal(key(fitted, 'labour:paint_door_new').quantity, 1, 'the new door is painted as new');
+  assert.equal(key(fitted, 'labour:paint_door_old').quantity, 1, 'the other door is a repaint');
+  assert.ok(key(fitted, 'labour:paint_frame_new') && key(fitted, 'labour:paint_architrave_new'));
+  const allNew = rooms([room('BEDROOM', { paintDoors: true, doorLeaves: 'NEW', doorFrames: 'NEW', architraves: 'NEW' }, { doors: 2 })]);
+  assert.ok(sum(lines(allNew, l => /paint_(door|frame|architrave)_new/.test(l.rateKey)), l => l.total) > sum(lines(old, l => /paint_(door|frame|architrave)_old/.test(l.rateKey)), l => l.total));
+  assert.ok(key(allNew, 'knotting_primer'), 'bare joinery gets knotting & primer');
+  const mixed = rooms([room('BEDROOM', { paintDoors: true, doorLeaves: 'MIXED', doorLeavesNew: 2, doorFrames: 'EXISTING' }, { doors: 3 })]);
+  assert.equal(key(mixed, 'labour:paint_door_new').quantity, 2);
+  assert.equal(key(mixed, 'labour:paint_door_old').quantity, 1);
+  assert.equal(key(mixed, 'labour:paint_frame_old').quantity, 3);
+  const win = rooms([room('BEDROOM', { paintWindows: true, windowCondition: 'STRIP' }, { windows: 2 })]);
+  assert.equal(key(win, 'labour:paint_window_strip').quantity, 2);
+});
+
+test('external walls: render with or without insulation; EWI costs more and adds boards, fixings and sills', () => {
+  const plain = only('external', { area: 80, system: 'SILICONE' });
+  const ewi = only('external', { area: 80, system: 'SILICONE', insulation: true, board: 'ewi_eps_100', sills: 5 });
+  assert.ok(!key(plain, 'ewi_eps_100') && key(ewi, 'ewi_eps_100') && key(ewi, 'ewi_fixings') && key(ewi, 'ewi_sill'));
+  assert.ok(ewi.totals.net > plain.totals.net);
+  assert.ok(key(plain, 'scaffold_erect'), 'two storeys needs scaffold');
+  const paintOnly = only('external', { area: 50, system: 'PAINT_ONLY', storeys: 'ONE' });
+  assert.ok(key(paintOnly, 'labour:masonry_paint_apply') && !key(paintOnly, 'scaffold_erect'));
+  const hack = only('external', { area: 50, system: 'SAND_CEMENT', hackOff: true });
+  assert.ok(key(hack, 'labour:render_hack_off') && hack.assumptions.some(a => /Approved Document L/.test(a)));
+});
+
+test('garden and cleaning packages price only what is measured', () => {
+  const g = only('garden', { patio: 20, fencing: 15, artificial: 30, driveway: 25, driveType: 'RESIN', treesSmall: 2, maintenance: 4 });
+  for (const k of ['labour:patio_lay', 'paving_porcelain', 'labour:fence_closeboard', 'artificial_turf_30', 'labour:resin_drive', 'labour:tree_fell_small', 'labour:garden_maintenance', 'muck_away']) assert.ok(key(g, k), `garden missing ${k}`);
+  assert.ok(!key(g, 'scaffold_erect') && !key(g, 'final_clean'), 'no scaffold or builders clean for a garden');
+  assert.ok(g.lines.filter(l => l.kind === 'LABOUR').every(l => l.trade), 'every labour line has a trade');
+  const c = only('cleaning', { windows: 12, visits: 4, jetWash: 40, gutters: 20 });
+  near(key(c, 'labour:window_clean').quantity, 12 * (1 + 3 * 0.9), 'repeat visits at the contract rate');
+  assert.ok(key(c, 'labour:jet_wash') && key(c, 'labour:gutter_clean'));
+  assert.equal(key(c, 'labour:window_clean').trade, 'CLEANER');
+});
+
+test('trade filter keeps only the chosen trades (site set-up stays)', () => {
+  const list = [room('BEDROOM', { walls: 'SKIM', electrics: 'ADD', flooring: 'LAMINATE' })];
+  const full = rooms(list);
+  const elec = rooms(list, { trades: ['ELECTRICIAN'] });
+  assert.ok(elec.lines.filter(l => l.phase !== 'SITE').every(l => l.trade === 'ELECTRICIAN'));
+  assert.ok(key(elec, 'socket_double') && !key(elec, 'labour:skim') && !key(elec, 'multifinish'));
+  assert.ok(elec.totals.net < full.totals.net);
+  assert.ok(full.lines.every(l => l.phase === 'SITE' || l.trade), 'every non-site line has a trade');
+});
+
+test('custom jobs: client price lands back on the client total; cost price gets margins', () => {
+  const item = { id: 'c1', title: 'Bespoke alcove shelving', description: 'Two oak shelves', trade: 'CARPENTER', price: 1200, priceMode: 'CLIENT', days: 2 };
+  const base0 = rooms([room('BEDROOM')]);
+  const withItem = rooms([room('BEDROOM')], { customItems: [item] });
+  const c = customerTakeoff(withItem, takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: {}, rooms: [room('BEDROOM')], customItems: [item] }));
+  const row = c.layout.groups.flatMap(g => g.rows).find(r => r.title === 'Bespoke alcove shelving');
+  near(row.net, 1200, 'client price', 0.05);
+  assert.ok(withItem.scope.some(s => s.includes('Two oak shelves')));
+  assert.equal(key(withItem, 'custom:c1').trade, 'CARPENTER');
+  const cost = rooms([room('BEDROOM')], { customItems: [{ ...item, priceMode: 'COST' }] });
+  assert.ok(cost.totals.net - base0.totals.net > 1200, 'cost price is marked up');
+});
+
+test('quote formats: rows add up to the net; simple has no items, normal no prices, itemised prices', () => {
+  const mk = (format, extra = {}) => {
+    const input = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: { garden: { enabled: true, values: { patio: 20 } } }, rooms: [room('BEDROOM', { walls: 'SKIM' })], terms: { format, ...extra } });
+    return customerTakeoff(calculateTakeoff(input, {}), input);
+  };
+  for (const f of ['SIMPLE', 'NORMAL', 'ITEMISED']) {
+    const c = mk(f);
+    const rows = c.layout.groups.flatMap(g => g.rows);
+    near(sum(rows, r => r.net), c.net, f);
+    assert.equal(c.layout.groups[0].key, 'site', 'site set-up first');
+    assert.ok(rows.every(r => r.text), `${f}: every row is described`);
+    if (f === 'SIMPLE') assert.ok(rows.every(r => !r.items));
+    if (f === 'NORMAL') assert.ok(rows.some(r => r.items?.length) && rows.every(r => (r.items ?? []).every(i => i.net === undefined)));
+    if (f === 'ITEMISED') { assert.ok(rows.every(r => (r.items ?? []).every(i => i.byClient || typeof i.net === 'number'))); near(sum(rows.flatMap(r => r.items), i => i.net ?? 0), c.net, 'items'); }
+  }
+  const byTrade = mk('SIMPLE', { groupBy: 'TRADE' });
+  assert.ok(byTrade.layout.groups.some(g => g.title === 'Plasterer') && byTrade.layout.groups.some(g => /Landscaper/.test(g.title)));
+  near(sum(byTrade.layout.groups, g => g.net), byTrade.net, 'by trade');
+});
+
+test('wording edits: new titles and text, hidden rows fold into the group, options and notes', () => {
+  const input0 = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: {}, rooms: [room('BEDROOM', { walls: 'SKIM', flooring: 'LAMINATE' }, { name: 'Bed 1' })] });
+  const c0 = customerTakeoff(calculateTakeoff(input0, {}), input0);
+  const g = c0.layout.groups.find(x => x.title === 'Bed 1');
+  const [first, second] = g.rows;
+  const input = takeoffInputSchema.parse({ ...input0, wording: { intro: 'Hello', notes: 'PC sum £500', options: [{ title: 'Oak floor upgrade', price: 900 }],
+    rows: { [first.key]: { title: 'Walls', text: 'Skim all walls.' }, [second.key]: { hidden: true } } } });
+  const c = customerTakeoff(calculateTakeoff(input, {}), input);
+  const g2 = c.layout.groups.find(x => x.title === 'Bed 1');
+  assert.equal(g2.rows.length, g.rows.length - 1);
+  assert.equal(g2.rows[0].title, 'Walls'); assert.equal(g2.rows[0].text, 'Skim all walls.');
+  near(g2.net, g.net, 'hidden row price stays in');
+  assert.equal(c.layout.intro, 'Hello'); assert.equal(c.layout.options[0].price, 900); assert.equal(c.layout.notes, 'PC sum £500');
+});
+
+// ---------------- VAT, discounts, labour only, extras, conditions ----------------
+test('EWI is zero-rated for VAT; other work and scaffold stay at 20%', () => {
+  const r = only('external', { area: 60, system: 'SILICONE', insulation: true });
+  assert.ok(r.lines.filter(l => l.area === 'External walls & render').every(l => l.vatPercent === 0));
+  assert.ok(key(r, 'scaffold_erect').vatPercent === undefined);
+  assert.equal(r.totals.vatBreakdown.length, 2);
+  near(sum(r.totals.vatBreakdown, v => v.net), r.totals.net, 'breakdown nets');
+  assert.ok(r.totals.vat < r.totals.net * 0.2);
+  const off = only('external', { area: 60, system: 'SILICONE', insulation: true }, { commercial: { esmZeroRate: false } });
+  near(off.totals.vat, off.totals.net * 0.2, 'relief off', 0.05);
+  const plain = only('external', { area: 60, system: 'SILICONE' });
+  assert.equal(plain.totals.vatBreakdown.length, 1);
+});
+
+test('discount comes off before VAT; the scope table still adds up', () => {
+  const list = [room('BEDROOM', { walls: 'SKIM' })];
+  const full = rooms(list), disc = rooms(list, { commercial: { discountPercent: 5, discountAmount: 100, discountLabel: 'Goodwill' } });
+  near(disc.totals.discount, full.totals.net * 0.05 + 100);
+  near(disc.totals.net, full.totals.net - disc.totals.discount);
+  near(disc.totals.vat, disc.totals.net * 0.2, 'vat on discounted net', 0.05);
+  const input = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: {}, rooms: list, commercial: { ...defaultTakeoffInput().commercial, discountPercent: 5 } });
+  const c = customerTakeoff(calculateTakeoff(input, {}), input);
+  near(sum(c.layout.groups, g => g.net), c.discount.netBeforeDiscount, 'rows before discount');
+  near(c.discount.netBeforeDiscount - c.discount.amount, c.net);
+});
+
+test('labour only: every material is listed for the client and left out of the price', () => {
+  const list = [room('BEDROOM', { walls: 'SKIM', flooring: 'LAMINATE' })];
+  const r = rooms(list, { labourOnly: true });
+  assert.ok(r.lines.filter(l => l.kind === 'MATERIAL' || l.kind === 'SUPPORTING').every(l => l.clientSupplied && l.total === 0));
+  assert.ok(r.clientOrders.length > 3);
+  assert.ok(r.totals.net < rooms(list).totals.net);
+});
+
+test('custom jobs: materials part, own VAT rate and provisional sums', () => {
+  const item = { id: 'p1', title: 'Making good after rewire', trade: 'PLASTERER', price: 400, materialPrice: 100, priceMode: 'CLIENT', provisional: true, vatPercent: 0 };
+  const input = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: {}, rooms: [room('BEDROOM')], customItems: [item] });
+  const r = calculateTakeoff(input, {});
+  assert.ok(key(r, 'custom:p1') && key(r, 'custom:p1:materials'));
+  assert.ok(r.assumptions.some(a => /provisional sum/.test(a)));
+  const c = customerTakeoff(r, input);
+  const row = c.layout.groups.flatMap(g => g.rows).find(x => x.title === 'Making good after rewire');
+  near(row.net, 500, 'client price incl materials', 0.05);
+  assert.equal(row.provisional, true); assert.equal(row.vatPercent, 0);
+});
+
+test('optional extras chosen by the client are priced in', () => {
+  const base0 = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: {}, rooms: [room('BEDROOM')], wording: { options: [{ title: 'Oak floor', price: 900 }] } });
+  const chosen = takeoffInputSchema.parse({ ...base0, wording: { ...base0.wording, options: [{ title: 'Oak floor', price: 900, chosen: true }] } });
+  const a = calculateTakeoff(base0, {}), b = calculateTakeoff(chosen, {});
+  near(b.totals.net - a.totals.net, 900, 'extra at its price', 0.05);
+  assert.ok(customerTakeoff(b, chosen).layout.groups.some(g => g.title === 'Optional extras'));
+});
+
+test('trade filter drops sentences that describe other trades', () => {
+  const r = rooms([room('BEDROOM', { walls: 'SKIM', electrics: 'ADD' }, { name: 'Bed 1' })], { trades: ['ELECTRICIAN'] });
+  assert.ok(!r.scope.some(s => /skim/.test(s)));
+});
+
+test('render on extensions and dormers uses the chosen render system', () => {
+  const e = only('extension', { walls: 'BLOCK_RENDER', renderSystem: 'MONOCOUCHE' });
+  assert.ok(key(e, 'labour:render_mono') && key(e, 'render_bead') && !key(e, 'clad_render'));
+  const l = loft({ cladding: 'RENDER' });
+  assert.ok(key(l, 'labour:render_thincoat') && !key(l, 'clad_render'));
+  const newDoor = loft({});
+  assert.ok(key(newDoor, 'labour:paint_door_new') && !key(newDoor, 'labour:paint_door'), 'loft fire doors painted as new');
+});
+
+test('condition of the floor, old tiles, lath walls and refitted joinery are priced', () => {
+  const r = rooms([room('LIVING', { flooring: 'LAMINATE', subfloor: 'PLY', oldTiles: 6, walls: 'LATH', refitSkirting: true, refitArchitraves: true })]);
+  for (const k of ['labour:ply_overlay', 'ply_6', 'labour:tile_remove', 'labour:lath_strip', 'labour:plasterboard', 'labour:skirting_refit', 'labour:architrave_refit']) assert.ok(key(r, k), `missing ${k}`);
+  const lev = rooms([room('LIVING', { flooring: 'LVT', subfloor: 'LEVEL' })]);
+  assert.ok(key(lev, 'latex_leveller'));
+});
+
+test('garden extras: fence heights, retaining walls, lights; cleaning contract rate', () => {
+  const low = only('garden', { fencing: 10, fenceHeight: '1.2' }), high = only('garden', { fencing: 10 });
+  assert.ok(key(low, 'fence_closeboard_kit_12') && low.totals.net < high.totals.net);
+  const g = only('garden', { retaining: 5, retainingType: 'BLOCK', steps: 3, lights: 4, lightCable: 20, irrigation: 2, shedBase: 9, pergolas: 1 });
+  for (const k of ['labour:retaining_block', 'labour:garden_steps', 'garden_light', 'labour:swa_trench', 'labour:irrigation_zone', 'labour:shed_base', 'labour:pergola_build', 'labour:elec_certificate']) assert.ok(key(g, k), `missing ${k}`);
+  const c = only('cleaning', { windows: 10, visits: 12, solar: 8 });
+  near(key(c, 'labour:window_clean').quantity, 10 * (1 + 11 * 0.9));
+  assert.ok(key(c, 'labour:solar_clean'));
+});
+
+test('variations: price written and read back; only approved ones count', () => {
+  const { variationDetail, variationPrice, approvedVariations } = load('app/lib/takeoff/variations.ts');
+  const detail = variationDetail(1250, 20, 'Extra double socket in the loft');
+  assert.deepEqual(variationPrice(detail), { net: 1250, vatPercent: 20, gross: 1500 });
+  const v = approvedVariations([
+    { kind: 'VARIATION', title: 'A', detail, response: 'APPROVED', status: 'ANSWERED' },
+    { kind: 'VARIATION', title: 'B', detail, response: 'DECLINED', status: 'ANSWERED' },
+    { kind: 'VARIATION', title: 'C', detail, response: '', status: 'OPEN' },
+  ]);
+  assert.equal(v.list.length, 1); assert.equal(v.gross, 1500);
+});
+
+// ---------------- Loft cladding & fit-out, extension options, roofs, demolition ----------------
+test('dormer cladding: composite, timber, brick and render on carrier board', () => {
+  assert.ok(key(loft({ cladding: 'COMPOSITE' }), 'clad_composite'));
+  assert.ok(key(loft({ cladding: 'TIMBER' }), 'clad_timber'));
+  const brick = loft({ cladding: 'BRICK', dormerBrick: 'facing_brick_stock' });
+  assert.ok(key(brick, 'facing_brick_stock') && key(brick, 'labour:facing_brickwork'));
+  const rend = loft({ cladding: 'RENDER', renderSystem: 'ACRYLIC' });
+  assert.ok(key(rend, 'render_carrier') && key(rend, 'labour:render_board_fit') && key(rend, 'render_acrylic'));
+});
+
+test('loft fitted out room by room: shell in the loft, finishes from the loft rooms; hatch & ladder option', () => {
+  const lr = [room('BEDROOM', { flooring: 'CARPET', electrics: 'ADD' }, { floor: 'LOFT', name: 'Loft bed', doors: 0 }), room('ENSUITE', { bathroomRefit: true, layout: 'SHOWER' }, { floor: 'LOFT', name: 'Loft en-suite', doors: 0 })];
+  const input = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: { loft: { enabled: true, values: { fitOutBy: 'ROOMS' } } }, rooms: lr });
+  const r = calculateTakeoff(input, {});
+  assert.ok(!r.lines.some(l => l.area === 'Loft conversion' && /floor_carpet|suite_/.test(l.rateKey)), 'no whole-loft flooring or en-suite');
+  assert.ok(key(r, 'labour:staircase_fit') && r.lines.some(l => l.area === 'Loft bed' && l.rateKey === 'floor_carpet'));
+  assert.ok(r.lines.some(l => l.area === 'Loft en-suite' && /suite_/.test(l.rateKey)));
+  const hatch = loft({ staircase: false, hatch: true });
+  assert.ok(key(hatch, 'loft_ladder') && !key(hatch, 'staircase'));
+  assert.ok(key(loft({ stairType: 'SPACE_SAVER' }), 'staircase_spacesaver'));
+});
+
+test('one consumer unit and one certificate when loft and extension both ask for a board', () => {
+  const input = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: { loft: { enabled: true, values: { consumerUnit: true } }, extension: { enabled: true, values: { consumerUnit: true } } } });
+  const r = calculateTakeoff(input, {});
+  assert.equal(key(r, 'consumer_unit').quantity, 1);
+  assert.equal(lines(r, l => l.rateKey === 'labour:elec_certificate').length, 1);
+});
+
+test('extension: types, foundations, walls & DPC, floors, UFH, manholes, columns, rooflight sizes', () => {
+  for (const t of ['SIDE', 'DOUBLE_SIDE', 'WRAP_DOUBLE_REAR', 'WRAP_DOUBLE_SIDE']) {
+    const r = only('extension', { extType: t });
+    assert.ok(r.totals.net > 20000, t);
+    if (t !== 'SIDE') assert.ok(key(r, 'scaffold_erect') && lines(r, l => l.stage.includes('First floor')).length, `${t} has a first floor`);
+  }
+  const wrapRear = only('extension', { extType: 'WRAP_DOUBLE_REAR' }), dbl = only('extension', { extType: 'DOUBLE' });
+  assert.ok(wrapRear.totals.net > dbl.totals.net * 0.9);
+  assert.ok(key(only('extension', { foundation: 'RAFT' }), 'labour:raft_slab'));
+  const piled = only('extension', { foundation: 'PILED' });
+  assert.ok(key(piled, 'labour:pile_mini') && key(piled, 'pile_rig') && key(piled, 'labour:ground_beam'));
+  const misc = only('extension', { underpin: 4, columns: 2, moveManhole: 1, buildOver: true, breakOut: 10, houseFloor: 12, cavityTrays: 4, brick: 'facing_brick_stock' });
+  for (const k of ['labour:underpin', 'labour:pad_foundation', 'labour:manhole_move', 'build_over', 'labour:break_out_concrete', 'cavity_tray', 'facing_brick_stock', 'engineering_brick']) assert.ok(key(misc, k), `missing ${k}`);
+  assert.ok(key(only('extension', { floorType: 'BEAM_BLOCK' }), 'beam_block'));
+  assert.ok(key(only('extension', { floorType: 'TIMBER' }), 'labour:sleeper_wall'));
+  const wet = only('extension', { ufh: true, ufhType: 'WET', screedType: 'LIQUID' });
+  assert.ok(key(wet, 'ufh_wet_kit') && key(wet, 'ufh_manifold') && key(wet, 'screed_liquid'));
+  const rl = only('extension', { rooflightCount: 2, rooflight1: 'CUSTOM_LANTERN', rooflight1W: 1.5, rooflight1L: 3, rooflight2: 'TBC' });
+  near(key(rl, 'lantern_custom').quantity, 4.5);
+  assert.ok(rl.assumptions.some(a => /size to be confirmed|until you confirm/.test(a)));
+  assert.ok(key(only('extension', { walls: 'CLAD_COMPOSITE' }), 'clad_composite'));
+  assert.ok(key(only('extension', { roof: 'FLAT_EPDM' }), 'epdm_system'));
+});
+
+test('kitchen in an extension: hob circuit, sockets, spurs, extract and boiler move; who fits it', () => {
+  const k = only('extension', { kitchen: true, kFitBy: 'US', kBoilerMove: true, kBoilerRun: 5, kHoodType: 'CEILING' });
+  for (const x of ['cooker_switch', 'labour:boiler_move', 'labour:boiler_move_extra', 'base_unit_mid', 'hood_duct_kit']) assert.ok(key(k, x), `missing ${x}`);
+  near(key(k, 'labour:boiler_move_extra').quantity, 2);
+  const client = only('extension', { kitchen: true, kFitBy: 'CLIENT' });
+  assert.ok(!key(client, 'base_unit_mid') && !key(client, 'labour:kitchen_units') && key(client, 'cooker_switch'));
+  const weFit = only('extension', { kitchen: true, kFitBy: 'WE_FIT' });
+  assert.ok(!key(weFit, 'base_unit_mid') && key(weFit, 'labour:kitchen_units'));
+});
+
+test('re-roof shapes, valleys, ventilation, structure and stacks', () => {
+  const mono = only('roofing', { shape: 'MONO', length: 6, depth: 3 });
+  assert.ok(key(mono, 'labour:mono_abutment') && !key(mono, 'ridge_tile'));
+  const cx = only('roofing', { shape: 'COMPLEX', roofArea: 150, valleys: 8 });
+  near(key(cx, 'breather_membrane').quantity, Math.ceil(150 * 1.1));
+  assert.ok(key(cx, 'grp_valley'));
+  assert.ok(key(only('roofing', { structure: 'RENEW' }), 'labour:roof_restructure'));
+  assert.ok(key(only('roofing', { chimneyRemove: 1, ventTiles: 3, loftInsulation: true }), 'labour:chimney_stack_remove'));
+});
+
+test('demolition package: structural items, asbestos, waste route', () => {
+  const d = only('demolition', { kitchens: 1, partitions: 20, loadBearing: 1, chimneyBreasts: 2, breastSupport: 'STEEL', concrete: 20, asbestosSum: 2000, waste: 'GRAB' });
+  for (const k of ['asbestos_survey', 'labour:services_isolate', 'labour:strip_kitchen', 'labour:remove_partition', 'labour:knock_through', 'labour:chimney_breast_remove', 'labour:break_out_concrete', 'asbestos_licensed', 'muck_away', 'building_control', 'structural_engineer']) assert.ok(key(d, k), `missing ${k}`);
+  assert.equal(key(d, 'asbestos_licensed').total, 2000);
+  const bld = only('demolition', { building: 60 });
+  assert.ok(key(bld, 'demolition_notice') && key(bld, 'utility_disconnect'));
+});
+
+test('acrylic and polymer renders in the external walls project', () => {
+  assert.ok(key(only('external', { system: 'ACRYLIC' }), 'render_acrylic'));
+  assert.ok(key(only('external', { system: 'POLYMER' }), 'render_polymer'));
+  const ewi = only('external', { system: 'ACRYLIC', insulation: true });
+  assert.ok(key(ewi, 'ewi_eps_90') && ewi.totals.vatBreakdown.length === 2);
 });
 
 console.log(`\n${passed} takeoff tests passed`);

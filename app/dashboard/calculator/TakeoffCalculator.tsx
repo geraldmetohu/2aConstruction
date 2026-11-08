@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Calculator, ChevronDown, ChevronUp, ClipboardList, Copy, FileText, HardHat, History, House, LayoutList,
-  Eye, EyeOff, Lock, Plus, Printer, RotateCcw, Save, Send, Settings2, Trash2, Users,
+  Eye, EyeOff, Lock, PenLine, Plus, Printer, RotateCcw, Save, Send, Settings2, Trash2, Users, Wrench,
 } from "lucide-react";
 import { calculateTakeoff, customerTakeoff } from "@/app/lib/takeoff/engine";
 import { workPackages } from "@/app/lib/takeoff/modules/index";
@@ -11,9 +11,9 @@ import { roomFields, roomGeometry, roomTypeDefaults } from "@/app/lib/takeoff/mo
 import { toSpec } from "@/app/lib/takeoff/package";
 import {
   accessOptions, ageOptions, constructionOptions, defaultTakeoffInput, floorOptions, houseTypeOptions, newRoom, occupancyOptions,
-  parkingOptions, roomTypeOptions, takeoffInputSchema, type RoomInput, type TakeoffInput,
+  parkingOptions, roomTypeOptions, takeoffInputSchema, type CustomItem, type RoomInput, type TakeoffInput,
 } from "@/app/lib/takeoff/schema";
-import { phaseLabels, priceSourceLabels, type PriceSource, type PriceTable, type RateBook, type TakeoffLine, type TakeoffResult } from "@/app/lib/takeoff/types";
+import { phaseLabels, priceSourceLabels, type PriceSource, type PriceTable, type RateBook, type TakeoffLine, type TakeoffResult, type Trade } from "@/app/lib/takeoff/types";
 import { isClientFinish, materialVariants } from "@/app/lib/takeoff/ratebook";
 import { PackageFields } from "@/app/componets/takeoff/PackageFields";
 import { DocumentsViewer } from "@/app/componets/takeoff/DocumentsViewer";
@@ -22,6 +22,7 @@ import { defaultCompany, missingCompanyFields, type CompanyProfile } from "@/app
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 import { saveTakeoffQuote, sendTakeoffQuote } from "./actions";
+import { CustomWork, fieldsForTrades, LoftRooms, TradeFilter, WordingEditor } from "./QuoteExtras";
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const gbp0 = (x: number) => `£${Math.round(x).toLocaleString("en-GB")}`;
@@ -35,7 +36,7 @@ const roomSpec = { fields: roomFields, defaults: Object.fromEntries(roomFields.m
 const label = (opts: readonly (readonly [string, string])[], v: string) => opts.find(([k]) => k === v)?.[1] ?? v;
 const STORAGE = "2a-takeoff-draft-v3";
 
-type Step = "house" | "rooms" | "projects" | "site";
+type Step = "house" | "rooms" | "projects" | "extras" | "site" | "wording";
 type Tab = "breakdown" | "trades" | "programme" | "choices" | "documents" | "history";
 type Commercial = { markupPercent: number; wastePercent: number; contingencyPercent: number } | null;
 type Client = { name: string; email: string; address: string };
@@ -46,11 +47,17 @@ export type SavedQuote = {
   events: { kind: string; message: string; actorKind: string; createdAt: string }[];
 };
 
-export function TakeoffCalculator({ rates, prices, notes, commercial, storage, saved, company = defaultCompany }: {
+export function TakeoffCalculator({ rates, prices, notes, commercial, storage, saved, company = defaultCompany, savedJobs = [], clientFormats = {} }: {
   rates: RateBook; prices: PriceTable; notes: string[]; commercial: Commercial; storage: boolean; saved: SavedQuote | null; company?: CompanyProfile;
+  savedJobs?: CustomItem[]; clientFormats?: Record<string, { format: string; groupBy: string }>;
 }) {
   const router = useRouter();
-  const fresh = () => { const d = defaultTakeoffInput(); return commercial ? { ...d, commercial: { ...d.commercial, ...commercial } } : d; };
+  const fresh = () => {
+    const d = defaultTakeoffInput();
+    const terms = { ...d.terms, format: company.quoteFormat ?? d.terms.format, groupBy: company.quoteGroupBy ?? d.terms.groupBy };
+    return { ...d, terms, ...(commercial ? { commercial: { ...d.commercial, ...commercial } } : {}) };
+  };
+  const [formatTouched, setFormatTouched] = useState(!!saved);
   const [input, setInput] = useState<TakeoffInput>(() => saved?.input ?? fresh());
   const [client, setClient] = useState<Client>(saved?.client ?? { name: "", email: "", address: "" });
   const [step, setStep] = useState<Step>("house");
@@ -87,7 +94,11 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
   const setCommercial = (v: Partial<TakeoffInput["commercial"]>) => update(i => ({ ...i, commercial: { ...i.commercial, ...v } }));
   const setPkg = (id: string, p: Partial<{ enabled: boolean; values: Record<string, number | boolean | string> }>) =>
     update(i => ({ ...i, packages: { ...i.packages, [id]: { enabled: i.packages[id]?.enabled ?? false, values: i.packages[id]?.values ?? {}, ...p } } }));
-  const setRoom = (id: string, r: Partial<RoomInput>) => update(i => ({ ...i, rooms: i.rooms.map(x => x.id === id ? { ...x, ...r } : x) }));
+  const setRoom = (id: string, r: Partial<RoomInput>) => update(i => {
+    const was = i.rooms.find(x => x.id === id);
+    const next = { ...i, rooms: i.rooms.map(x => x.id === id ? { ...x, ...r } : x) };
+    return was && r.name !== undefined && r.name !== was.name ? renameArea(next, was.name, r.name) : next;
+  });
   const chooseMaterial = (materialKey: string, key: string | null) => update(i => {
     const materialChoices = { ...i.materialChoices };
     if (key === null) delete materialChoices[materialKey]; else materialChoices[materialKey] = key;
@@ -119,7 +130,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
     if (!r.ok) { setFlash({ ok: false, text: r.message }); return; }
     setDirty(false); setReason("");
     try { if (!saved) localStorage.removeItem(STORAGE); } catch { /* ignore */ }
-    setFlash({ ok: true, text: r.notified ? `Saved version ${r.version}. The client will see an "updated" notice when they log in.` : `Saved version ${r.version}.` });
+    setFlash({ ok: true, text: r.notified ? `Saved version ${r.version}. The client will see an "updated" notice when they log in.` : `Draft saved (version ${r.version}). The client can't see it until you press Send to client.` });
     router.push(`/dashboard/calculator?quote=${r.id}`); router.refresh();
   }
   async function send() {
@@ -135,9 +146,12 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
   const steps: [Step, string, ReactNode, string][] = [
     ["house", "1. House", <House key="h" className="h-4 w-4" />, "Client & general description"],
     ["rooms", `2. Rooms (${input.rooms.length})`, <LayoutList key="r" className="h-4 w-4" />, "Sizes and work in each room"],
-    ["projects", "3. Projects", <HardHat key="p" className="h-4 w-4" />, "Loft, extension, roof"],
-    ["site", "4. Site & margins", <Settings2 key="s" className="h-4 w-4" />, "Site costs, H&S, markup"],
+    ["projects", "3. Projects", <HardHat key="p" className="h-4 w-4" />, "Loft, extension, roof, render, garden, cleaning"],
+    ["extras", `4. Custom work (${input.customItems.length})`, <Wrench key="e" className="h-4 w-4" />, "Jobs you price by hand"],
+    ["site", "5. Site & margins", <Settings2 key="s" className="h-4 w-4" />, "Site costs, H&S, terms, markup"],
+    ["wording", "6. Quote layout", <PenLine key="w" className="h-4 w-4" />, "Simple / normal / itemised, wording"],
   ];
+  const areaNames = [...input.rooms.map(r => r.name), ...workPackages.filter(p => input.packages[p.id]?.enabled).map(p => p.label)];
 
   return (
     <div className="space-y-5">
@@ -146,13 +160,14 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
         <div>
           <h1 className="flex items-center gap-2 text-xl font-black"><Calculator className="h-6 w-6 text-amber-600" />{saved ? saved.reference : "New quote"}
             {saved && <StatusBadge status={saved.status} />}{saved && <span className="text-sm font-medium text-neutral-500">version {saved.version}{dirty ? " · unsaved changes" : ""}</span>}</h1>
-          <p className="mt-1 text-xs text-neutral-500">{saved ? (sent ? "Sent to the client. Saving changes creates a new version and the client is told in their portal." : accepted ? "Accepted by the client – read only." : "Draft – only you can see it.") : "Fill in the steps on the left. The price updates as you go."}</p>
+          <p className="mt-1 text-xs text-neutral-500">{saved ? (sent ? "Sent to the client. Saving changes creates a new version and the client is told in their portal." : accepted ? "Accepted by the client – read only." : "Draft – only you can see it. Change anything, save as often as you like, then send it to the client.") : "Fill in the steps on the left. Saving keeps it as a draft – the client sees nothing until you send it."}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {(saved || dirty) && !accepted && <input value={reason} onChange={e => setReason(e.target.value)} placeholder={saved ? "What changed? (required)" : "Note (optional)"} className="w-56 rounded-full border px-4 py-2 text-sm" />}
+          {(saved || dirty) && !accepted && <input value={reason} onChange={e => setReason(e.target.value)} placeholder={saved ? "What changed? (required)" : "Note (optional)"} className="w-full rounded-full border px-4 py-2 text-sm sm:w-56" />}
           {!accepted && <button disabled={!storage || !!saving || (saved ? !dirty || reason.trim().length < 3 : false)} onClick={save} className={`${btn} ${sent ? "bg-amber-500 text-neutral-950" : "bg-neutral-950 text-white"}`} title={storage ? "" : "Needs the new database tables"}>
-            <Save className="h-4 w-4" />{saving === "save" ? "Saving…" : sent ? "Save & notify client" : saved ? "Save new version" : "Save quote"}</button>}
+            <Save className="h-4 w-4" />{saving === "save" ? "Saving…" : sent ? "Save & notify client" : "Save draft"}</button>}
           {saved && saved.status === "DRAFT" && <button disabled={dirty || !!saving} onClick={send} className={`${btn} border border-amber-500 text-amber-700`} title={dirty ? "Save first" : ""}><Send className="h-4 w-4" />{saving === "send" ? "Sending…" : "Send to client"}</button>}
+          {saved && <a href={`/dashboard/calculator/pdf?quote=${saved.id}`} target="_blank" rel="noopener noreferrer" className={`${btn} border`} title={dirty ? "PDF of the last saved version" : ""}><FileText className="h-4 w-4" />PDF</a>}
           <button onClick={() => { if (!dirty || confirm("Start a new quote? Unsaved changes will be lost.")) { try { localStorage.removeItem(STORAGE); } catch { /* */ } router.push("/dashboard/calculator"); if (!saved) { setInput(fresh()); setClient({ name: "", email: "", address: "" }); setDirty(false); } } }} className={`${btn} border`}><RotateCcw className="h-4 w-4" />New</button>
         </div>
         {flash && <p className={`w-full rounded-lg px-3 py-2 text-sm ${flash.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{flash.text}</p>}
@@ -162,8 +177,8 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
 
       <div className="grid gap-6 xl:grid-cols-12">
         {/* ---------- Steps ---------- */}
-        <div className="space-y-4 xl:col-span-5 print:hidden">
-          <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
+        <div className="min-w-0 space-y-4 xl:col-span-5 print:hidden">
+          <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
             {steps.map(([k, name, icon, hint]) => (
               <button key={k} onClick={() => setStep(k)} className={`rounded-xl border p-3 text-left ${step === k ? "border-amber-500 bg-amber-50" : "bg-white hover:border-neutral-400"}`}>
                 <span className="flex items-center gap-2 text-sm font-bold">{icon}{name}</span><span className="mt-0.5 block text-[11px] text-neutral-500">{hint}</span>
@@ -175,7 +190,13 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
             <Card title="Client">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Text label="Client name" value={client.name} onChange={v => { setClient({ ...client, name: v }); setDirty(true); }} />
-                <Text label="Client email (they log in with this)" value={client.email} onChange={v => { setClient({ ...client, email: v }); setDirty(true); }} />
+                <Text label="Client email (they log in with this)" value={client.email} onChange={v => {
+                  setClient({ ...client, email: v }); setDirty(true);
+                  // A client we've quoted before gets the same layout as last time (until you choose one yourself).
+                  const prev = clientFormats[v.trim().toLowerCase()];
+                  if (prev && !formatTouched) update(i => ({ ...i, terms: { ...i.terms, format: prev.format as TakeoffInput["terms"]["format"], groupBy: prev.groupBy as TakeoffInput["terms"]["groupBy"] } }));
+                }} />
+                {clientFormats[client.email.trim().toLowerCase()] && !saved && <p className="text-xs text-neutral-500 sm:col-span-2">Quoted before – using their last layout ({clientFormats[client.email.trim().toLowerCase()].format.toLowerCase()}).</p>}
                 <div className="sm:col-span-2"><Text label="Site address" value={client.address} onChange={v => { setClient({ ...client, address: v }); setDirty(true); }} /></div>
               </div>
             </Card>
@@ -196,12 +217,14 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 <textarea className={`${field} min-h-24`} value={input.property.notes} onChange={e => setProp({ notes: e.target.value })} placeholder="e.g. Victorian mid-terrace, original lath & plaster ceilings, damp in rear reception, access via side return…" />
               </label>
             </Card>
+            <TradeFilter value={input.trades} rates={rates} onChange={trades => update(i => ({ ...i, trades }))} />
             <NextStep onClick={() => setStep("rooms")} label="Next: rooms" />
           </>}
 
           {step === "rooms" && <>
             {input.rooms.length === 0 && <p className="rounded-xl border border-dashed p-4 text-sm text-neutral-600">Add each room that needs work, with its size. Then tick what is needed in it: plastering, painting, flooring, electrics, heating, doors, windows, a new kitchen or bathroom.</p>}
-            {input.rooms.map((room, idx) => <RoomCard key={room.id} room={room} index={idx} count={input.rooms.length}
+            {input.trades.length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Pricing {input.trades.map(t => rates.trades[t]?.name.toLowerCase() ?? t).join(", ")} only – room forms show just those sections. Change it in step 1.</p>}
+            {input.rooms.map((room, idx) => <RoomCard key={room.id} room={room} index={idx} count={input.rooms.length} trades={input.trades}
               onChange={r => setRoom(room.id, r)}
               onRemove={() => update(i => ({ ...i, rooms: i.rooms.filter(x => x.id !== room.id) }))}
               onDuplicate={() => update(i => { const copy = { ...newRoom(room.type), ...room, id: newRoom().id, name: `${room.name} (copy)` }; const rooms = [...i.rooms]; rooms.splice(idx + 1, 0, copy); return { ...i, rooms }; })}
@@ -218,15 +241,28 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
               return (
                 <section key={pkg.id} className={`space-y-3 rounded-xl border bg-white p-4 ${on ? "border-amber-400" : ""}`}>
                   <label className="flex cursor-pointer items-start justify-between gap-3">
-                    <span><span className="block font-bold">{pkg.label}</span><span className="block text-xs text-neutral-500">{pkg.description}</span></span>
+                    <span><span className="block font-bold text-[#0d3b72]">{pkg.label}</span><span className="block text-xs text-neutral-500">{pkg.description}</span></span>
                     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-amber-600" checked={on} onChange={e => setPkg(pkg.id, { enabled: e.target.checked })} />
                   </label>
-                  {on && <PackageFields pkg={toSpec(pkg)} values={input.packages[pkg.id]?.values} onChange={values => setPkg(pkg.id, { values })} inputClass={field} showClientChoice />}
+                  {on && <PackageFields pkg={(() => { const sp = toSpec(pkg); return input.trades.length ? { ...sp, fields: fieldsForTrades(sp.fields, input.trades) } : sp; })()} values={input.packages[pkg.id]?.values} onChange={values => setPkg(pkg.id, { values })} inputClass={field} showClientChoice />}
+                  {on && pkg.id === "loft" && input.packages.loft?.values.fitOutBy === "ROOMS" && input.packages.loft?.values.fitOut !== false && (
+                    <LoftRooms rooms={input.rooms} onChange={rooms => update(i => ({ ...i, rooms }))} onEdit={() => setStep("rooms")}
+                      costs={Object.fromEntries((result?.areas ?? []).map(a => [a.area, a.cost]))} shellCost={result?.areas.find(a => a.area === pkg.label)?.cost ?? 0} />
+                  )}
                 </section>
               );
             })}
+            <NextStep onClick={() => setStep("extras")} label="Next: custom work" />
+          </>}
+
+          {step === "extras" && <>
+            <CustomWork items={input.customItems} areas={areaNames} rates={rates} margins={input.commercial} library={savedJobs} canSave={storage} onChange={customItems => update(i => ({ ...i, customItems }))} />
             <NextStep onClick={() => setStep("site")} label="Next: site & margins" />
           </>}
+
+          {step === "wording" && (result
+            ? <WordingEditor input={input} result={result} rates={rates} onChange={fn => { setFormatTouched(true); update(fn); }} />
+            : <p className="rounded-xl border border-dashed p-4 text-sm text-neutral-600">Add some work first – the scope table is built from it.</p>)}
 
           {step === "site" && <>
             <Card title="Site set-up & health and safety">
@@ -274,6 +310,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
             </Card>
             <Card title="Who buys the finishes">
               <Check label="Client supplies finishes: tiles, bathroom suite & shower, kitchen units & worktops, flooring, light fittings" value={input.finishesByClient} onChange={v => update(i => ({ ...i, finishesByClient: v }))} />
+              <Check label="Labour only – the client buys all materials (we give them the full list)" value={input.labourOnly} onChange={v => update(i => ({ ...i, labourOnly: v }))} />
               <p className="text-xs text-neutral-500">They are listed for the client to order (with quantities) and left out of your price. Untick “Client supplies” on any line to supply it yourself.</p>
             </Card>
             <Card title="Margins & VAT">
@@ -283,21 +320,32 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 <Num label="Markup %" value={input.commercial.markupPercent} onChange={v => setCommercial({ markupPercent: v })} />
                 <Num label="VAT %" value={input.commercial.vatPercent} onChange={v => setCommercial({ vatPercent: v })} />
               </div>
+              <Check label="0% VAT on external wall insulation (energy-saving materials relief, to 31 March 2027)" value={input.commercial.esmZeroRate} onChange={v => setCommercial({ esmZeroRate: v })} />
+              <p className="text-xs text-neutral-500">Custom jobs can carry their own VAT rate. Check unusual cases with your accountant.</p>
             </Card>
+            <Card title="Discount">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Num label="Discount %" value={input.commercial.discountPercent} onChange={v => setCommercial({ discountPercent: v })} />
+                <Num label="Discount £ (ex VAT)" value={input.commercial.discountAmount} onChange={v => setCommercial({ discountAmount: v })} />
+                <Text label="Shown as" value={input.commercial.discountLabel} onChange={v => setCommercial({ discountLabel: v })} />
+              </div>
+              {result && result.totals.discount > 0 && <p className="text-xs text-neutral-600">Discount {gbp(result.totals.discount)} off {gbp(result.totals.netBeforeDiscount)}; it comes off your profit ({gbp0(result.totals.markup - result.totals.discount)} left).</p>}
+            </Card>
+            <NextStep onClick={() => setStep("wording")} label="Next: quote layout & wording" />
           </>}
         </div>
 
         {/* ---------- Results ---------- */}
-        <div className="space-y-4 xl:col-span-7">
+        <div className="min-w-0 space-y-4 xl:col-span-7">
           {computed.error && <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-800 print:hidden">Check the inputs: {computed.error}</p>}
           {result && <>
             <section className="rounded-2xl bg-neutral-950 p-5 text-white print:hidden">
               <div className="flex flex-wrap items-end justify-between gap-4">
-                <div><p className="text-sm text-neutral-400">Total inc. VAT</p><p className="text-4xl font-black">{gbp(result.totals.gross)}</p></div>
-                <div className="grid grid-cols-3 gap-5 text-sm">
+                <div><p className="text-sm text-neutral-400">Total inc. VAT</p><p className="text-3xl font-black sm:text-4xl">{gbp(result.totals.gross)}</p></div>
+                <div className="grid w-full grid-cols-3 gap-3 text-sm sm:w-auto sm:gap-5">
                   <Stat label="Net" value={gbp0(result.totals.net)} />
                   <Stat label="Programme" value={`${result.programme.workingDays} days`} sub={`≈ ${result.programme.weeks} wk`} />
-                  <Stat label="Profit" value={gbp0(result.totals.markup)} sub={`${input.commercial.markupPercent}% markup`} />
+                  <Stat label="Profit" value={gbp0(result.totals.markup - result.totals.discount)} sub={result.totals.discount ? `after ${gbp0(result.totals.discount)} discount` : `${input.commercial.markupPercent}% markup`} />
                 </div>
               </div>
               <div className="mt-4 rounded-xl bg-white/5 p-3">
@@ -339,7 +387,16 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
 
 /* ================================================================ Rooms */
 
-function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove, cost }: {
+/** A room's name is part of the keys for its choices, removed lines and wording edits: carry them over on rename. */
+function renameArea(i: TakeoffInput, from: string, to: string): TakeoffInput {
+  const move = <T,>(rec: Record<string, T>) => Object.fromEntries(Object.entries(rec).map(([k, v]) => [k.startsWith(`${from}::`) ? `${to}::${k.slice(from.length + 2)}` : k.endsWith(`::${from}`) && k.startsWith("trade:") ? `${k.slice(0, -from.length)}${to}` : k, v]));
+  return { ...i, materialChoices: move(i.materialChoices), clientSupply: move(i.clientSupply), excluded: move(i.excluded),
+    wording: { ...i.wording, rows: move(i.wording.rows), lines: move(i.wording.lines) },
+    customItems: i.customItems.map(c => c.area === from ? { ...c, area: to } : c) };
+}
+
+function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove, cost, trades = [] }: {
+  trades?: Trade[];
   room: RoomInput; index: number; count: number; onChange: (r: Partial<RoomInput>) => void; onRemove: () => void; onDuplicate: () => void; onMove: (d: number) => void; cost?: number;
 }) {
   const [open, setOpen] = useState(true);
@@ -377,7 +434,7 @@ function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove,
         <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-600">Floor & ceiling {fmt(g.floor)} m² · walls {fmt(g.walls)} m² (less doors & windows) · skirting {fmt(g.skirting)} m</p>
         <Text label="Notes about this room" value={room.notes} onChange={v => onChange({ notes: v })} />
         <div className="border-t pt-3"><p className="mb-2 text-sm font-bold">Work needed</p>
-          <PackageFields pkg={roomSpec} values={{ ...roomTypeDefaults(room.type), ...room.works }} context={{ roomType: room.type }} onChange={works => onChange({ works })} inputClass={field} showClientChoice />
+          <PackageFields pkg={trades.length ? { ...roomSpec, fields: fieldsForTrades(roomSpec.fields, trades) } : roomSpec} values={{ ...roomTypeDefaults(room.type), ...room.works }} context={{ roomType: room.type }} onChange={works => onChange({ works })} inputClass={field} showClientChoice />
         </div>
       </div>}
     </section>
@@ -515,8 +572,8 @@ function LineOptions({ line, rates, input, chooseMaterial, setClientSupply }: { 
 
 function Trades({ result }: { result: TakeoffResult }) {
   return (
-    <section className="overflow-hidden rounded-xl border bg-white">
-      <table className="w-full text-sm">
+    <section className="overflow-x-auto rounded-xl border bg-white">
+      <table className="w-full min-w-[520px] text-sm">
         <thead className="bg-neutral-50 text-left"><tr><th className="px-4 py-2">Trade</th><th className="px-2 py-2 text-right">Days on site</th><th className="px-2 py-2 text-right">Person-days</th><th className="px-2 py-2 text-right">£ / person-day</th><th className="px-4 py-2 text-right">Labour cost</th></tr></thead>
         <tbody>
           {result.trades.map(t => (
@@ -595,7 +652,7 @@ function NextStep({ onClick, label: text }: { onClick: () => void; label: string
   return <button onClick={onClick} className={`${btn} w-full justify-center border bg-white hover:border-amber-500`}><FileText className="h-4 w-4" />{text}</button>;
 }
 function Card({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="space-y-3 rounded-xl border bg-white p-4"><h2 className="font-bold">{title}</h2>{children}</section>;
+  return <section className="space-y-3 rounded-xl border bg-white p-4"><h2 className="flex items-center gap-2 font-bold text-[#0d3b72]"><span aria-hidden className="h-5 w-1.5 rounded-full bg-amber-500" />{title}</h2>{children}</section>;
 }
 function Text({ label: l, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return <label className="block text-xs font-semibold text-neutral-700">{l}<input className={field} value={value} onChange={e => onChange(e.target.value)} /></label>;

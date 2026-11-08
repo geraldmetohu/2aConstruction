@@ -58,8 +58,8 @@ export function RatesEditor({ rates, defaults, version, overrides, storage }: { 
           <h1 className="text-xl font-black">Labour & material rates</h1>
           <p className="mt-1 max-w-2xl text-sm text-neutral-600">Your standard prices for every quote. Change a trade&apos;s price (for example what your plasterer charges per m²) and every new calculation uses it. Rates version {version || "– (defaults)"}.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="What changed? e.g. New decorator prices" className="w-64 rounded-full border px-4 py-2 text-sm" />
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <input value={reason} onChange={e => setReason(e.target.value)} placeholder="What changed? e.g. New decorator prices" className="min-w-0 flex-1 rounded-full border px-4 py-2 text-sm sm:w-64 sm:flex-none" />
           <button disabled={!storage || !dirty || busy || reason.trim().length < 3} onClick={save} className="inline-flex items-center gap-2 rounded-full bg-neutral-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"><Save className="h-4 w-4" />{busy ? "Saving…" : "Save rates"}</button>
         </div>
         {msg && <p className={`w-full rounded-lg px-3 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>}
@@ -75,7 +75,7 @@ export function RatesEditor({ rates, defaults, version, overrides, storage }: { 
       </div>
 
       {tab === "labour" && labourGroups.map(([group, keys]) => (
-        <section key={group} className="overflow-hidden rounded-xl border bg-white">
+        <section key={group} className="overflow-x-auto rounded-xl border bg-white">
           <h2 className="bg-neutral-50 px-4 py-2 font-bold">{group}</h2>
           <table className="w-full text-sm">
             <thead className="text-left text-xs text-neutral-500"><tr><th className="px-4 py-1.5">Job</th><th className="px-2">Who</th><th className="px-2 text-right">Price</th><th className="px-2 text-right">Output / time</th><th className="px-4 text-right">≈ per person-day</th></tr></thead>
@@ -103,7 +103,7 @@ export function RatesEditor({ rates, defaults, version, overrides, storage }: { 
       ))}
 
       {tab === "materials" && materialGroups.map(([group, keys]) => (
-        <section key={group} className="overflow-hidden rounded-xl border bg-white">
+        <section key={group} className="overflow-x-auto rounded-xl border bg-white">
           <h2 className="bg-neutral-50 px-4 py-2 font-bold">{group}</h2>
           <table className="w-full text-sm"><tbody>
             {keys.map(k => {

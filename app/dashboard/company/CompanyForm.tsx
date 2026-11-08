@@ -24,6 +24,18 @@ export function CompanyForm({ company, version, storage }: { company: CompanyPro
         <p className="mt-1 text-sm text-neutral-600">These details appear on every quotation, contract, guarantee and health &amp; safety document. Each save is kept as a new version.</p></div>
       {!storage && <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">Saving needs the new database tables (migration 20261101120000_add_takeoff_quotes). Documents use the details below until then.</p>}
       {msg && <p className={`rounded-lg px-4 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>}
+      <section className="rounded-xl border bg-white p-5">
+        <h2 className="font-bold">Quotes</h2>
+        <p className="mt-1 text-xs text-neutral-500">How new quotes set out the price. A client you have quoted before gets the layout of their last quote; you can change it on any quote.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-semibold text-neutral-700">Default layout
+            <select className={input} value={v.quoteFormat} onChange={e => setV({ ...v, quoteFormat: e.target.value as CompanyProfile["quoteFormat"] })}>
+              <option value="SIMPLE">Simple – each activity and its price</option><option value="NORMAL">Normal – grouped, with what each step includes</option><option value="ITEMISED">Itemised – every product and job priced</option></select></label>
+          <label className="text-xs font-semibold text-neutral-700">Group the scope by
+            <select className={input} value={v.quoteGroupBy} onChange={e => setV({ ...v, quoteGroupBy: e.target.value as CompanyProfile["quoteGroupBy"] })}>
+              <option value="AREA">Room / project</option><option value="TRADE">Trade</option></select></label>
+        </div>
+      </section>
       {groups.map(([title, fields]) => (
         <section key={title} className="rounded-xl border bg-white p-5">
           <h2 className="font-bold">{title}</h2>

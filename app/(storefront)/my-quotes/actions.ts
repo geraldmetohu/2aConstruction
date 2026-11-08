@@ -12,7 +12,7 @@ import { emailQuoteAccepted } from "@/app/lib/takeoff/quote-mail.server";
 import type { PriceTable, RateBook } from "@/app/lib/takeoff/types";
 import { defaultRateBook } from "@/app/lib/takeoff/ratebook";
 
-const choiceSchema = z.array(z.object({ scope: z.enum(["room", "package"]), id: z.string().max(40), key: z.string().max(40), value: z.string().max(60) })).max(200);
+const choiceSchema = z.array(z.object({ scope: z.enum(["room", "package", "extra"]), id: z.string().max(40), key: z.string().max(40), value: z.string().max(60) })).max(200);
 const msg = (e: unknown) => e instanceof StoreError ? e.message : e instanceof z.ZodError ? "Please check your choices." : "Something went wrong. Please try again or contact us.";
 
 async function clientEmail() {
@@ -27,6 +27,16 @@ function applyChoices(input: TakeoffInput, raw: unknown) {
   const next: TakeoffInput = JSON.parse(JSON.stringify(input));
   const changes: string[] = [];
   for (const c of choices) {
+    if (c.scope === "extra") {
+      // Optional extras the company offered with a price: the client can add or remove them.
+      const o = next.wording?.options?.[Number(c.id)];
+      if (!o || o.price === null || c.key !== "chosen") continue;
+      const want = c.value === "yes";
+      if (!!o.chosen === want) continue;
+      o.chosen = want;
+      changes.push(`${want ? "Added" : "Removed"} optional extra: ${o.title}`);
+      continue;
+    }
     const fields = c.scope === "room" ? roomFields : workPackages.find(p => p.id === c.id)?.fields;
     const f = fields?.find(x => x.key === c.key && x.clientChoice);
     if (!f) continue;

@@ -12,6 +12,9 @@ export const gradeOptions: [string, string][] = [["STANDARD", "Standard"], ["MID
 export const paintSystemOptions: [string, string][] = [["STANDARD", "Standard trade emulsion"], ["DURABLE", "Durable / washable"], ["PREMIUM", "Premium designer paint"], ["KITCHEN_BATH", "Kitchen & bathroom paint"]];
 const ceil = (x: number) => Math.ceil(x - 1e-9);
 
+/** A new consumer unit is fitted once for the whole job, whichever project (or site settings) asked for it. */
+export const newConsumerUnit = (input: Ctx["input"]) => input.prelims.consumerUnit || Object.values(input.packages).some(p => p.enabled && p.values.consumerUnit === true);
+
 // ---------------------------------------------------------------- Plastering
 
 /**
@@ -85,6 +88,28 @@ export interface PaintSpec {
   newWood?: boolean;           // bare / new joinery needs primer-undercoat
   coats?: number;              // finish coats on walls & ceilings (company default 2)
   mistCoat?: boolean;          // mist coat on new plaster (company default yes)
+  /** Doors priced part by part, by condition (replaces `doors`): new / bare joinery costs more than a repaint. */
+  doorParts?: DoorParts;
+  /** Windows: existing (repaint), new bare timber, or strip back (poor condition). Counts within `windows`. */
+  windowsNew?: number;
+  windowsStrip?: number;
+  /** Skirting is new (bare / primed MDF): full paint system. */
+  skirtingNew?: boolean;
+  /** Staircase flights (spindles, strings, handrail). */
+  stairs?: number;
+}
+
+export interface DoorParts { leavesNew: number; leavesOld: number; framesNew: number; framesOld: number; architravesNew: number; architravesOld: number }
+export const doorConditionOptions: [string, string][] = [["AUTO", "Match the work (new doors new, rest existing)"], ["EXISTING", "All existing – repaint"], ["NEW", "All new / bare – full paint system"], ["MIXED", "Mixed – I'll say how many are new"]];
+
+/** Split `total` doors into new / existing parts from the chosen condition. */
+export function doorPartsFor(total: number, fitted: number, c: { leaves: string; frames: string; architraves: string; leavesNew?: number; framesNew?: number; architravesNew?: number }): DoorParts {
+  const pick = (mode: string, mixed = 0) => {
+    const nw = mode === "NEW" ? total : mode === "EXISTING" ? 0 : mode === "MIXED" ? Math.min(total, Math.max(0, mixed)) : Math.min(total, fitted);
+    return [nw, total - nw] as const;
+  };
+  const [leavesNew, leavesOld] = pick(c.leaves, c.leavesNew), [framesNew, framesOld] = pick(c.frames, c.framesNew), [architravesNew, architravesOld] = pick(c.architraves, c.architravesNew);
+  return { leavesNew, leavesOld, framesNew, framesOld, architravesNew, architravesOld };
 }
 
 const wallPaint: Record<string, { key: string; litres: number }> = {
@@ -99,9 +124,11 @@ const wallPaint: Record<string, { key: string; litres: number }> = {
 export function paint(ctx: Ctx, S: string, p: PaintSpec) {
   const rooms = p.rooms ?? 1;
   const ceilings = qty2(p.ceilings ?? 0), walls = qty2(p.walls ?? 0), skirting = qty2(p.skirting ?? 0);
-  const doors = p.doors ?? 0, windows = p.windows ?? 0, rads = p.radiators ?? 0, mist = p.mistCoat === false ? 0 : qty2(p.newPlaster ?? 0);
+  const dp = p.doorParts;
+  const doors = dp ? Math.max(dp.leavesNew + dp.leavesOld, dp.framesNew + dp.framesOld, dp.architravesNew + dp.architravesOld) : p.doors ?? 0;
+  const windows = p.windows ?? 0, rads = p.radiators ?? 0, stairs = p.stairs ?? 0, mist = p.mistCoat === false ? 0 : qty2(p.newPlaster ?? 0);
   const coats = Math.min(3, Math.max(1, p.coats ?? 2)), cf = coats / 2;
-  if (!(ceilings + walls + skirting + doors + windows + rads > 0)) return;
+  if (!(ceilings + walls + skirting + doors + windows + rads + stairs > 0)) return;
   const L = p.label;
 
   // Materials
@@ -111,11 +138,19 @@ export function paint(ctx: Ctx, S: string, p: PaintSpec) {
     const sys = wallPaint[p.system ?? "STANDARD"] ?? wallPaint.STANDARD;
     ctx.material(S, sys.key, ceil(walls * coats / 12 / sys.litres), `walls ${fmt(walls)} m² × ${coats} coat${coats > 1 ? "s" : ""} ÷ 12 m²/L ÷ ${sys.litres} L`);
   }
-  const woodArea = qty2(skirting * 0.15 + doors * 4.5 + windows * 1.2 + rads * 1.8);
+  const woodArea = qty2(skirting * 0.15 + doors * 4.5 + windows * 1.2 + rads * 1.8 + stairs * 6);
   if (woodArea > 0) {
     ctx.material(S, p.wood === "PREMIUM" ? "wood_premium_25l" : "wood_trade_25l", ceil(woodArea * 2 / 12 / 2.5),
-      `woodwork ${fmt(woodArea)} m² (skirting ${fmt(skirting)} m × 0.15, ${doors} doors × 4.5, ${windows} windows × 1.2, ${rads} radiators × 1.8) × 2 coats ÷ 12 m²/L ÷ 2.5 L`);
-    if (p.newWood || p.prep === "HEAVY") ctx.material(S, "wood_undercoat_25l", ceil(woodArea / 12 / 2.5), `${fmt(woodArea)} m² ÷ 12 m²/L ÷ 2.5 L`);
+      `woodwork ${fmt(woodArea)} m² (skirting ${fmt(skirting)} m × 0.15, ${doors} doors × 4.5, ${windows} windows × 1.2, ${rads} radiators × 1.8${stairs ? `, ${stairs} stair flight${stairs > 1 ? "s" : ""} × 6` : ""}) × 2 coats ÷ 12 m²/L ÷ 2.5 L`);
+    // New / bare joinery: knotting, primer and undercoat on the new parts only (all of it when the spec says new wood or heavy prep).
+    const newArea = dp || p.skirtingNew || p.windowsNew
+      ? qty2((dp ? dp.leavesNew * 3.4 + dp.framesNew * 0.6 + dp.architravesNew * 0.5 : 0) + (p.skirtingNew ? skirting * 0.15 : 0) + (p.windowsNew ?? 0) * 1.2 + (p.windowsStrip ?? 0) * 1.2)
+      : 0;
+    const primeArea = p.newWood || p.prep === "HEAVY" ? woodArea : newArea;
+    if (primeArea > 0) {
+      ctx.material(S, "wood_undercoat_25l", ceil(primeArea / 12 / 2.5), `${fmt(primeArea)} m² ÷ 12 m²/L ÷ 2.5 L`);
+      if (newArea > 0) ctx.material(S, "knotting_primer", ceil(newArea / 12), `new / bare joinery ${fmt(newArea)} m² ÷ 12 m²/L`);
+    }
   }
   if (p.prep === "HEAVY") ctx.material(S, "stain_block", rooms, `${rooms} room${rooms > 1 ? "s" : ""}`);
   ctx.material(S, "filler_caulk", rooms, `${rooms} room${rooms > 1 ? "s" : ""}`);
@@ -129,9 +164,23 @@ export function paint(ctx: Ctx, S: string, p: PaintSpec) {
   if (ceilings > 0) ctx.labour(S, "paint_ceilings", qty2(ceilings * cf), `${L} ${fmt(ceilings)} m²${coatText}`);
   if (walls > 0) ctx.labour(S, "paint_walls", qty2(walls * cf), `${L} ${fmt(walls)} m²${coatText}`);
   if (p.featureWalls) ctx.labour(S, "feature_wall", p.featureWalls, `${p.featureWalls} wall${p.featureWalls > 1 ? "s" : ""}`);
-  if (skirting > 0) ctx.labour(S, "paint_skirting", skirting, `${fmt(skirting)} m`);
-  if (doors > 0) ctx.labour(S, "paint_door", doors, `${doors} door${doors > 1 ? "s" : ""}`);
-  if (windows > 0) ctx.labour(S, "paint_window", windows, `${windows} window${windows > 1 ? "s" : ""}`);
+  if (skirting > 0) ctx.labour(S, p.skirtingNew ? "paint_skirting_new" : "paint_skirting", skirting, `${fmt(skirting)} m${p.skirtingNew ? " new skirting" : ""}`);
+  const nOf = (k: number, one: string) => `${k} ${one}${k > 1 ? "s" : ""}`;
+  if (dp) {
+    if (dp.leavesNew) ctx.labour(S, "paint_door_new", dp.leavesNew, `${L}: ${nOf(dp.leavesNew, "new door")}`);
+    if (dp.leavesOld) ctx.labour(S, "paint_door_old", dp.leavesOld, `${L}: ${nOf(dp.leavesOld, "existing door")}`);
+    if (dp.framesNew) ctx.labour(S, "paint_frame_new", dp.framesNew, `${L}: ${nOf(dp.framesNew, "new frame")}`);
+    if (dp.framesOld) ctx.labour(S, "paint_frame_old", dp.framesOld, `${L}: ${nOf(dp.framesOld, "existing frame")}`);
+    if (dp.architravesNew) ctx.labour(S, "paint_architrave_new", dp.architravesNew, `${L}: new architraves to ${nOf(dp.architravesNew, "door")}`);
+    if (dp.architravesOld) ctx.labour(S, "paint_architrave_old", dp.architravesOld, `${L}: existing architraves to ${nOf(dp.architravesOld, "door")}`);
+  } else if (doors > 0) ctx.labour(S, "paint_door", doors, `${doors} door${doors > 1 ? "s" : ""}`);
+  if (windows > 0) {
+    const wNew = Math.min(windows, p.windowsNew ?? 0), wStrip = Math.min(windows - wNew, p.windowsStrip ?? 0), wOld = windows - wNew - wStrip;
+    if (wNew) ctx.labour(S, "paint_window_new", wNew, `${L}: ${nOf(wNew, "new window")}`);
+    if (wStrip) ctx.labour(S, "paint_window_strip", wStrip, `${L}: ${nOf(wStrip, "window")} stripped back`);
+    if (wOld) ctx.labour(S, "paint_window", wOld, `${nOf(wOld, "window")}`);
+  }
+  if (stairs > 0) ctx.labour(S, "paint_stairs", stairs, `${L}: ${nOf(stairs, "flight")}`);
   if (rads > 0) ctx.labour(S, "paint_radiator", rads, `${rads} radiator${rads > 1 ? "s" : ""}`);
 }
 
@@ -220,7 +269,7 @@ export function electricsItems(ctx: Ctx, S: string, e: ElecSpec, opts: { label: 
     ctx.labour(S, "make_good_chases", total, `${opts.label}: fill chases for ${total} items`);
     ctx.material(S, "bonding_plaster", Math.max(1, Math.ceil(total / 15)), `1 bag per 15 chased items`, "Bonding plaster for chases");
   }
-  if ((e.cooker ?? 0) > 0 && !ctx.input.prelims.consumerUnit) ctx.material(S, "rcbo", e.cooker!, `${e.cooker} new circuit${e.cooker! > 1 ? "s" : ""} in the existing board`);
+  if ((e.cooker ?? 0) > 0 && !newConsumerUnit(ctx.input)) ctx.material(S, "rcbo", e.cooker!, `${e.cooker} new circuit${e.cooker! > 1 ? "s" : ""} in the existing board`);
   return total;
 }
 
@@ -278,7 +327,8 @@ export function newDoors(ctx: Ctx, S: string, n: number, doorType: string, o: { 
   ctx.material(S, "door_fixings", n, per(1, "set"));
   if (doorType === "door_fire") { ctx.material(S, "fire_door_kit", n, per(1, "set")); ctx.material(S, "door_closer", n, per(1, "closer")); }
   ctx.labour(S, "door_hang", n, `${n} × £200, 1 day each`);
-  if (o.paint) paint(ctx, S, { label: o.label ?? "new doors", doors: n, newWood: true, rooms: 0 });
+  if (o.paint) paint(ctx, S, { label: o.label ?? "new doors", rooms: 0,
+    doorParts: { leavesNew: n, leavesOld: 0, framesNew: o.lining !== false ? n : 0, framesOld: o.lining !== false ? 0 : n, architravesNew: o.architrave !== false ? n : 0, architravesOld: o.architrave !== false ? 0 : n } });
 }
 
 // ---------------------------------------------------------------- Tiles

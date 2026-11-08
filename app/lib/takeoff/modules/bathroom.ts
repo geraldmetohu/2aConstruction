@@ -10,6 +10,8 @@ export interface BathroomSpec {
   wallTiling: "FULL" | "HALF" | "WET_ZONES";
   floorTiling: boolean; ufh: boolean; towelRail: boolean; extractor: boolean;
   downlights: number; strip: boolean; ceiling: boolean; decorate: boolean;
+  /** The bathroom door is new (e.g. a loft en-suite): full paint system instead of a repaint. */
+  newDoor?: boolean;
   wallTileSize?: string; floorTileSize?: string;
   /** Distance to the nearest hot & cold supply, and to the soil stack (m). */
   supplyRun?: number; wasteRun?: number; pipe?: PipeSystem;
@@ -66,7 +68,8 @@ export function buildBathroom(ctx: Ctx, S: (s: string) => string, b: BathroomSpe
   ctx.material(F, "silicone", 2 + (hasBath ? 1 : 0), "bath / tray, basin, WC & tile edges");
   ctx.labour(F, "sanitary_fit", items, `${items} items: WC, basin, ${layoutLabels[b.layout]}${b.towelRail ? ", towel rail" : ""}`);
 
-  if (b.decorate) paint(ctx, S("Decoration"), { label, ceilings: b.ceiling ? A : 0, walls: Math.max(0, walls - tiled), newPlaster: (b.ceiling ? A : 0) + Math.max(0, walls - tiled), doors: 1, system: "KITCHEN_BATH" });
+  if (b.decorate) paint(ctx, S("Decoration"), { label, ceilings: b.ceiling ? A : 0, walls: Math.max(0, walls - tiled), newPlaster: (b.ceiling ? A : 0) + Math.max(0, walls - tiled), system: "KITCHEN_BATH",
+    doorParts: b.newDoor ? { leavesNew: 1, leavesOld: 0, framesNew: 1, framesOld: 0, architravesNew: 1, architravesOld: 0 } : { leavesNew: 0, leavesOld: 1, framesNew: 0, framesOld: 1, architravesNew: 0, architravesOld: 1 } });
 
   ctx.scope(`${label}: ${b.strip ? "strip out existing, " : ""}first fix plumbing (supplies to ${b.supplyRun ?? 4} m, wastes to ${b.wasteRun ?? 2} m), tank wet zones, ${b.wallTiling === "FULL" ? "full height" : b.wallTiling === "HALF" ? "half height" : "wet zone"} wall tiling (${fmt(tiled)} m²), ${b.floorTiling ? "tiled" : "LVT"} floor (${fmt(A)} m²), install ${b.grade.toLowerCase()} suite with ${layoutLabels[b.layout]}${b.towelRail ? ", heated towel rail" : ""}${b.extractor ? ", extractor fan" : ""}${b.downlights ? `, ${b.downlights} downlights` : ""}${b.ufh ? ", underfloor heating" : ""}.`);
 }

@@ -3,10 +3,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
-import { calculateTakeoff, customerTakeoff } from "@/app/lib/takeoff/engine";
-import { resolveTakeoffPrices } from "@/app/lib/takeoff/prices.server";
-import { takeoffInputSchema } from "@/app/lib/takeoff/schema";
-import { createQuote, prismaDb, saveVersion, sendQuote, storageReady, StoreError } from "@/app/lib/takeoff/store";
+import { calculateTakeoff, customerTakeoff, type CustomerTakeoff } from "@/app/lib/takeoff/engine";
+import { companyProfile, resolveTakeoffPrices } from "@/app/lib/takeoff/prices.server";
+import { buildDocuments } from "@/app/lib/takeoff/documents";
+import { renderQuotationPdf } from "@/app/lib/takeoff/quote-pdf.server";
+import { customItemSchema, takeoffInputSchema } from "@/app/lib/takeoff/schema";
+import { createQuote, getQuote, latestRateSet, prismaDb, saveRateSet, saveVersion, sendQuote, storageReady, StoreError } from "@/app/lib/takeoff/store";
 import { emailQuoteSent, emailQuoteUpdated } from "@/app/lib/takeoff/quote-mail.server";
 
 const clientSchema = z.object({
@@ -53,8 +55,43 @@ export async function sendTakeoffQuote(quoteId: string) {
     const db = await ready();
     const id = z.string().uuid().parse(quoteId);
     const r = await sendQuote(db, id, actor);
-    const mail = r.already ? { sent: false } : await emailQuoteSent({ quoteId: id, reference: r.reference, clientName: r.clientName, clientEmail: r.clientEmail });
+    const mail = r.already ? { sent: false } : await emailQuoteSent({ quoteId: id, reference: r.reference, clientName: r.clientName, clientEmail: r.clientEmail, pdf: await quotationPdf(db, id) });
     revalidatePath("/dashboard/saved-quotes");
     return { ok: true as const, version: r.version, emailed: mail.sent };
+  } catch (e) { return { ok: false as const, message: message(e) }; }
+}
+
+
+/** The quotation PDF for the email; null if it can't be built (the email still goes, with the link). */
+async function quotationPdf(db: Awaited<ReturnType<typeof ready>>, quoteId: string) {
+  try {
+    const q = await getQuote(db, quoteId);
+    if (!q?.latest) return null;
+    const input = takeoffInputSchema.parse(q.latest.input);
+    const { company } = await companyProfile();
+    const docs = buildDocuments({ customer: q.latest.customer as CustomerTakeoff, input, company, client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress },
+      reference: q.quote.reference, version: q.quote.currentVersion, issueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date()) });
+    return await renderQuotationPdf(docs);
+  } catch (e) { console.error("[quote-pdf]", e); return null; }
+}
+
+/** Your own saved jobs (custom items you reuse), kept with the company rate settings. */
+export async function saveJobToLibrary(raw: unknown, remove?: string) {
+  try {
+    const actor = await requireCatalogueAdmin();
+    const db = await ready();
+    const latest = await latestRateSet(db);
+    const overrides = ((latest?.overrides ?? {}) as Record<string, unknown>);
+    const list = z.array(customItemSchema).catch([]).parse(overrides.savedJobs ?? []);
+    let next = list;
+    if (remove) next = list.filter(j => j.id !== remove);
+    else {
+      const job = customItemSchema.parse(raw);
+      const id = `j${Date.now().toString(36)}`;
+      next = [...list.filter(j => j.title.toLowerCase() !== job.title.toLowerCase()), { ...job, id, area: "" }].slice(-200);
+    }
+    await saveRateSet(db, latest?.version ?? 0, { ...overrides, savedJobs: next }, remove ? "Saved job removed" : "Job saved to the library", actor);
+    revalidatePath("/dashboard/calculator");
+    return { ok: true as const, jobs: next };
   } catch (e) { return { ok: false as const, message: message(e) }; }
 }

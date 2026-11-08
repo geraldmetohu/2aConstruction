@@ -4,7 +4,8 @@ import { prisma } from "@/app/lib/db";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import { companyProfile, readCommercialDefaults, resolveTakeoffPrices } from "@/app/lib/takeoff/prices.server";
 import { takeoffInputSchema } from "@/app/lib/takeoff/schema";
-import { getQuote, markSeen, prismaDb, storageReady } from "@/app/lib/takeoff/store";
+import { clientQuoteFormats, getQuote, latestRateSet, markSeen, prismaDb, storageReady } from "@/app/lib/takeoff/store";
+import { customItemSchema } from "@/app/lib/takeoff/schema";
 import { TakeoffCalculator, type SavedQuote } from "./TakeoffCalculator";
 
 export const metadata: Metadata = { title: "Quote calculator" };
@@ -16,6 +17,10 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
   const db = prismaDb(prisma);
   const [{ rates, prices, notes }, commercial, storage, { company }] = await Promise.all([resolveTakeoffPrices(), readCommercialDefaults(), storageReady(db), companyProfile()]);
 
+  const [savedJobs, clientFormats] = storage ? await Promise.all([
+    latestRateSet(db).then(r => z.array(customItemSchema).catch([]).parse((r?.overrides as { savedJobs?: unknown } | null)?.savedJobs ?? [])).catch(() => []),
+    clientQuoteFormats(db).catch(() => ({})),
+  ]) : [[], {}];
   let saved: SavedQuote | null = null;
   if (storage && quoteId && z.string().uuid().safeParse(quoteId).success) {
     const q = await getQuote(db, quoteId);
@@ -33,5 +38,5 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
       }
     }
   }
-  return <TakeoffCalculator key={saved ? `${saved.id}:${saved.version}` : "new"} rates={rates} prices={prices} notes={notes} commercial={commercial} storage={storage} saved={saved} company={company} />;
+  return <TakeoffCalculator key={saved ? `${saved.id}:${saved.version}` : "new"} rates={rates} prices={prices} notes={notes} commercial={commercial} storage={storage} saved={saved} company={company} savedJobs={savedJobs} clientFormats={clientFormats} />;
 }

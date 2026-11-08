@@ -21,8 +21,8 @@ export function PackageFields({ pkg, values, onChange, publicOnly = false, input
         const list = fields.filter(f => (f.group ?? "") === group);
         const checks = list.filter(f => f.type === "boolean"), inputs = list.filter(f => f.type !== "boolean");
         return (
-          <div key={group} className="space-y-2">
-            {group && !publicOnly && <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{group}</p>}
+          <div key={group} className={group && !publicOnly ? "space-y-2 rounded-lg border border-neutral-200 p-3" : "space-y-2"}>
+            {group && !publicOnly && <p className="-mx-3 -mt-3 mb-1 flex items-center gap-2 rounded-t-lg border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-[#0d3b72]"><span aria-hidden className="h-3.5 w-1 rounded-full bg-amber-500" />{group}</p>}
             {inputs.length > 0 && <div className="grid gap-3 sm:grid-cols-2">{inputs.map(f => <Input key={f.key} f={f} value={v[f.key]} onChange={x => set(f.key, x)} inputClass={inputClass} labelClass={labelClass} clientChoice={showClientChoice && f.clientChoice} />)}</div>}
             {checks.length > 0 && <div className="grid gap-x-4 sm:grid-cols-2">{checks.map(f =>
               <label key={f.key} className="flex items-start gap-2 py-1 text-sm"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-amber-600" checked={v[f.key] === true} onChange={e => set(f.key, e.target.checked)} />{f.label}</label>)}</div>}

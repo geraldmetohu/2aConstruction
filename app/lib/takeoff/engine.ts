@@ -7,6 +7,7 @@ import { buildPrelims } from "./modules/prelims";
 import type { AreaSummary, ClientChoice, ScopeItem, ClientOrderItem, CostKind, Phase, PhaseSummary, PriceTable, RateBook, StageSummary, TakeoffLine, TakeoffResult, TakeoffTotals, Trade, TradeSummary } from "./types";
 import { fmt, money } from "./util";
 import { activitiesOf } from "./activities";
+import { buildQuoteLayout } from "./quote-format";
 
 /** What the client must specify for an item they supply (from their choices in that area). */
 const SPEC_KEYS: [RegExp, string[]][] = [
@@ -88,7 +89,7 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
         const rate = rates.materials[useKey];
         const r = resolve(useKey, rate.price, rate.confirmed);
         const buyable = rate.kind === "MATERIAL" || rate.kind === "SUPPORTING";
-        const clientSupplied = buyable && (input.clientSupply[materialKey] ?? (input.finishesByClient && isClientFinish(useKey)));
+        const clientSupplied = buyable && (input.labourOnly || (input.clientSupply[materialKey] ?? (input.finishesByClient && isClientFinish(useKey))));
         const lineId = lineIdFor(area, stage, rateKey);
         const excluded = input.excluded[lineId] === true;
         const desc = useKey !== rateKey ? rate.name + (description && description !== rates.materials[rateKey].name ? ` – ${description.split(" – ").slice(1).join(" – ") || description}` : "") : description ?? rate.name;
@@ -158,7 +159,63 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     buildRoom(makeCtx(room.name, "Rooms"), room, values);
     collectChoices(roomFields, values, { ...values, roomType: room.type }, "room", room.id, room.name);
   }
-  if (!active.length && !input.rooms.length) warnings.push("Add a room or choose a project to start.");
+  // Jobs priced by hand for this project (a job price, plus materials when given).
+  for (const it of input.customItems) {
+    const area = it.area.trim() || "Additional works", stage = `Extra · ${it.title}`;
+    const c = input.commercial;
+    const gang = [{ trade: it.trade, n: 1 }];
+    const parts: { kind: "LABOUR" | "MATERIAL"; price: number; suffix: string; days: number }[] = [{ kind: it.kind, price: it.price, suffix: "", days: it.days }];
+    if (it.materialPrice > 0) parts.push({ kind: "MATERIAL", price: it.materialPrice, suffix: " – materials", days: 0 });
+    for (const part of parts) {
+      const margin = (part.kind === "MATERIAL" ? 1 + c.wastePercent / 100 : 1) * (1 + c.contingencyPercent / 100) * (1 + c.markupPercent / 100);
+      const unitCost = it.priceMode === "CLIENT" ? part.price / margin : part.price;
+      const rk = `custom:${it.id}${part.suffix ? ":materials" : ""}`;
+      const lineId = lineIdFor(area, stage, rk);
+      const excluded = input.excluded[lineId] === true;
+      lines.push({ key: `${rk}#${++n}`, lineId, area, package: area, stage, phase: it.phase, kind: part.kind, rateKey: rk, customId: it.id, trade: it.trade,
+        description: it.title + part.suffix, quantity: it.quantity, unit: it.unit, unitPrice: money(unitCost), total: excluded ? 0 : money(it.quantity * unitCost),
+        formula: (it.priceMode === "CLIENT"
+          ? `${fmt(it.quantity)} ${it.unit} × £${fmt(part.price)} client price ÷ ${fmt(margin, 3)} (${part.kind === "MATERIAL" ? "waste, " : ""}contingency & markup) = cost`
+          : `${fmt(it.quantity)} ${it.unit} × £${fmt(part.price)} cost`) + (part.days ? ` · ${fmt(part.days, 1)} day${part.days === 1 ? "" : "s"}` : "") + (it.provisional ? " · provisional sum" : "") + (excluded ? " · removed from this quote" : ""),
+        source: "MANUAL", confirmed: true, days: excluded ? 0 : part.days, crew: 1, gang, excluded,
+        ...(it.vatPercent !== null ? { vatPercent: it.vatPercent } : {}), ...(it.provisional ? { provisional: true } : {}) });
+    }
+    const text = (it.description ? `${it.title}: ${it.description}` : `${it.title}.`) + (it.provisional ? " (Provisional sum – adjusted to the actual cost.)" : "");
+    scope.push(text); scopeItems.push({ text, area, stage });
+    if (it.provisional) assumptions.push(`${it.title} is a provisional sum: the final account is adjusted up or down to the actual cost.`);
+  }
+
+  if (input.labourOnly) assumptions.push("Labour only: you supply all materials to our list and timings (site set-up, plant and waste removal are included in our price). Delays caused by late or wrong materials are charged at our day rates.");
+
+  // Optional extras the client has chosen are priced in at the price offered (ex VAT, margins included).
+  input.wording.options.forEach((o, idx) => {
+    if (!o.chosen || o.price === null) return;
+    const area = "Optional extras", stage = `Extra · ${o.title}`;
+    const c = input.commercial, margin = (1 + c.contingencyPercent / 100) * (1 + c.markupPercent / 100);
+    const rk = `option:${idx}`, lineId = lineIdFor(area, stage, rk);
+    lines.push({ key: `${rk}#${++n}`, lineId, area, package: area, stage, phase: "SECOND_FIX", kind: "LABOUR", rateKey: rk, customId: `option:${idx}`, trade: "GENERAL_BUILDER",
+      description: o.title, quantity: 1, unit: "item", unitPrice: money(o.price / margin), total: money(o.price / margin),
+      formula: `optional extra chosen by the client: £${fmt(o.price)} ÷ ${fmt(margin, 3)} (contingency & markup) = cost`, source: "MANUAL", confirmed: true, days: 0, crew: 1, gang: [{ trade: "GENERAL_BUILDER", n: 1 }] });
+    const text = `${o.title} (optional extra you chose).`;
+    scope.push(text); scopeItems.push({ text, area, stage });
+  });
+
+  // Who does each line: labour from its gang; materials from their family, else the main trade of the same stage.
+  tagTrades(lines);
+  // Trade filter: only the chosen trades are priced (site set-up and hand-priced jobs are always kept).
+  if (input.trades.length) {
+    const keep = new Set(input.trades);
+    const trimmed = new Set<string>();
+    for (let i = lines.length - 1; i >= 0; i--) if (lines[i].phase !== "SITE" && !lines[i].customId && lines[i].trade && !keep.has(lines[i].trade!)) { trimmed.add(lines[i].area); lines.splice(i, 1); }
+    const stagesLeft = new Set(lines.map(l => `${l.area}::${l.stage}`));
+    // Where other trades' work was taken out, the written sentences would still describe it: drop them so the quote
+    // describes only the jobs left (the scope table then lists those jobs with their quantities).
+    for (let i = scopeItems.length - 1; i >= 0; i--) if (!stagesLeft.has(`${scopeItems[i].area}::${scopeItems[i].stage}`) || (trimmed.has(scopeItems[i].area) && !scopeItems[i].stage.startsWith("Extra · "))) { const at = scope.indexOf(scopeItems[i].text); if (at >= 0) scope.splice(at, 1); scopeItems.splice(i, 1); }
+    for (let i = clientChoices.length - 1; i >= 0; i--) if (!lines.some(l => l.area === clientChoices[i].area)) clientChoices.splice(i, 1);
+    assumptions.push(`Priced for ${input.trades.map(t => rates.trades[t]?.name.toLowerCase() ?? t).join(", ")} work only; other trades are by others.`);
+  }
+
+  if (!active.length && !input.rooms.length && !input.customItems.length) warnings.push("Add a room or choose a project to start.");
 
   // Preliminaries depend on the programme length of the work above.
   const workDays = summariseStages(lines).reduce((s, x) => s + x.days, 0);
@@ -169,6 +226,15 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     cookers: live.filter(l => l.rateKey === "cooker_switch").reduce((s, l) => s + l.quantity, 0),
   };
   if (lines.length) buildPrelims(makeCtx("Site set-up & safety", "Site"), workDays, active, input.rooms, elec);
+  tagTrades(lines);
+
+  // Energy-saving materials relief: installing external wall insulation in a home is zero-rated (GB, to 31 March 2027).
+  const ewi = active.find(a => a.pkg.id === "external" && a.values.insulation === true && ["SILICONE", "ACRYLIC", "MONOCOUCHE", "POLYMER"].includes(String(a.values.system)));
+  if (ewi && input.commercial.esmZeroRate && input.commercial.vatPercent > 0) {
+    for (const l of lines) if (l.area === ewi.pkg.label && l.vatPercent === undefined) l.vatPercent = 0;
+    assumptions.push("The external wall insulation installation is zero-rated for VAT (energy-saving materials relief, available to 31 March 2027); other work is at the standard rate.");
+    if (input.terms.startDate && input.terms.startDate > "2027-03-31") warnings.push("The 0% VAT relief for energy-saving materials is due to end on 31 March 2027 – check the VAT rate for work after that date.");
+  }
 
   const stages = summariseStages(lines);
   const totals = summariseTotals(lines, input);
@@ -192,6 +258,42 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     },
     scope, scopeItems, assumptions, warnings, unconfirmedRates,
   };
+}
+
+/** Material families and the trade that fits them (roof tiles before wall / floor tiles). */
+const MATERIAL_TRADE: [RegExp, Trade][] = [
+  [/^(tile_(concrete|clay)|slate_|ridge_tile|dry_ridge|lead_|breather_membrane|batten_|felt_system|grp_system|roof_trims|fascia|soffit|gutter|downpipe|eaves_protector|over_fascia|polytop|pipe_clip$|offset_bend|pipe_socket|pipe_shoe|roof_window|rooflight_|lantern_|roof_lantern|upstand_kerb|clad_)/, "ROOFER"],
+  [/^(render_|ewi_|masonry_paint$)/, "RENDERER"],
+  [/^(cable_|back_box|elec_|light_switch|socket_double|fused_spur|fan_isolator|data_point|tv_point|cooker_switch|shaver_socket|outside_light|ceiling_rose|pendant_fitting|downlight|consumer_unit|rcbo|main_bonding|smoke_alarm|ufh_mat|extractor_fan)/, "ELECTRICIAN"],
+  [/^(pipe_(cu|pex)|elbow|tee_|pipe_insert|isolating_valve|flexi_|tap_connector|pipe_clip_|solder|ptfe|waste_|bend(45|90)_|trap_|basin_waste|bath_waste|shower_waste|sink_waste|washer_valve|standpipe|soil_|pan_connector|wc_fixing|stopcock|drain_cock|mdpe|duct_sleeve|outside_tap|rad_valves|inhibitor|radiator|towel_rail|heating_pipework|suite_|shower_(standard|mid|premium)$|plumbing_sundries|sink_tap)/, "PLUMBER"],
+  [/^(tile_|grout|wall_tile_|floor_tile$|tanking_kit|splashback_tile)/, "TILER"],
+  [/^(paint_|mist_coat_paint|wood_(trade|premium|undercoat)|stain_block|filler_caulk|masking|emulsion|decor_sundries|knotting_primer|door_paint|dust_sheets)/, "DECORATOR"],
+  [/^(plasterboard_|multifinish|dab_adhesive|drywall_screws|board_screws|scrim_beads|bonding_plaster|pva_bond|grit_primer|angle_bead|stop_bead|jointing_tape|coving)/, "PLASTERER"],
+  [/^(base_unit|wall_unit|worktop|kitchen_sundries)/, "KITCHEN_FITTER"],
+  [/^(facing_brick|dense_block|thermal_block|mortar_|wall_ties|cavity_|lintel|wall_starter|weep_vent|dpc$)/, "BRICKLAYER"],
+  [/^(timber_|door_(standard|fire|premium|oak|glazed|lining|fixings|stop)|architrave|skirting_|hinges_|handle_|gripfill|fire_door_kit|door_closer|floorboard_|plywood_|osb_|staircase|window_board)/, "CARPENTER"],
+];
+
+/** Give every line a trade. Labour: the lead of its gang. Materials: their family, else the biggest labour trade in the same stage / area. */
+function tagTrades(lines: TakeoffLine[]) {
+  const main = (ls: TakeoffLine[]) => {
+    const by = new Map<Trade, number>();
+    for (const l of ls) if (l.kind === "LABOUR" && l.gang?.length) by.set(l.gang[0].trade, (by.get(l.gang[0].trade) ?? 0) + l.quantity * l.unitPrice);
+    return [...by.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  };
+  const byStage = new Map<string, TakeoffLine[]>(), byArea = new Map<string, TakeoffLine[]>();
+  for (const l of lines) { (byStage.get(`${l.area}::${l.stage}`) ?? byStage.set(`${l.area}::${l.stage}`, []).get(`${l.area}::${l.stage}`)!).push(l); (byArea.get(l.area) ?? byArea.set(l.area, []).get(l.area)!).push(l); }
+  const stageMain = new Map<string, Trade | undefined>(), areaMain = new Map<string, Trade | undefined>();
+  for (const l of lines) {
+    if (l.trade || l.phase === "SITE") continue;
+    if (l.kind === "LABOUR" && l.gang?.length) { l.trade = l.gang[0].trade; continue; }
+    const fam = MATERIAL_TRADE.find(([re]) => re.test(l.rateKey))?.[1];
+    if (fam) { l.trade = fam; continue; }
+    const sk = `${l.area}::${l.stage}`;
+    if (!stageMain.has(sk)) stageMain.set(sk, main(byStage.get(sk) ?? []));
+    if (!areaMain.has(l.area)) areaMain.set(l.area, main(byArea.get(l.area) ?? []));
+    l.trade = stageMain.get(sk) ?? areaMain.get(l.area) ?? "GENERAL_BUILDER";
+  }
 }
 
 function summarisePhases(lines: TakeoffLine[]): PhaseSummary[] {
@@ -269,9 +371,25 @@ function summariseTotals(lines: TakeoffLine[], input: TakeoffInput): TakeoffTota
   const costSubtotal = money(material + supporting + waste + labour + prelim + healthSafety);
   const contingency = money(costSubtotal * c.contingencyPercent / 100);
   const markup = money((costSubtotal + contingency) * c.markupPercent / 100);
-  const net = money(costSubtotal + contingency + markup);
-  const vat = money(net * c.vatPercent / 100);
-  return { material, supporting, waste, labour, prelim, healthSafety, costSubtotal, contingency, markup, net, vat, gross: money(net + vat) };
+  const netBeforeDiscount = money(costSubtotal + contingency + markup);
+  const discount = money(Math.min(netBeforeDiscount, netBeforeDiscount * c.discountPercent / 100 + c.discountAmount));
+  const net = money(netBeforeDiscount - discount);
+  // VAT by rate: each line's selling price (margins applied, discount spread evenly) at its own rate.
+  const cm = (1 + c.contingencyPercent / 100) * (1 + c.markupPercent / 100), w = 1 + c.wastePercent / 100;
+  const sellRaw = lines.reduce((s, l) => s + l.total * (l.kind === "MATERIAL" || l.kind === "SUPPORTING" ? w : 1) * cm, 0);
+  const scale = sellRaw > 0 ? net / sellRaw : 0;
+  const byRate = new Map<number, number>();
+  for (const l of lines) {
+    const rate = l.vatPercent ?? c.vatPercent;
+    byRate.set(rate, (byRate.get(rate) ?? 0) + l.total * (l.kind === "MATERIAL" || l.kind === "SUPPORTING" ? w : 1) * cm * scale);
+  }
+  if (!byRate.size) byRate.set(c.vatPercent, 0);
+  const vatBreakdown = [...byRate.entries()].sort((a, b) => b[0] - a[0]).map(([percent, n]) => ({ percent, net: money(n), vat: money(n * percent / 100) }));
+  // Rounding: the breakdown nets add up to the net.
+  const nd = money(net - vatBreakdown.reduce((s, x) => s + x.net, 0));
+  if (nd) { vatBreakdown[0].net = money(vatBreakdown[0].net + nd); vatBreakdown[0].vat = money(vatBreakdown[0].net * vatBreakdown[0].percent / 100); }
+  const vat = money(vatBreakdown.reduce((s, x) => s + x.vat, 0));
+  return { material, supporting, waste, labour, prelim, healthSafety, costSubtotal, contingency, markup, netBeforeDiscount, discount, net, vat, gross: money(net + vat), vatBreakdown };
 }
 
 /**
@@ -291,6 +409,9 @@ export function customerTakeoff(result: TakeoffResult, input?: TakeoffInput) {
     sections, areas,
     packages: areas.map(a => ({ package: a.area, net: a.net })),
     net: result.totals.net, vat: result.totals.vat, gross: result.totals.gross,
+    /** Discount before VAT (0 when none) and VAT by rate. Missing on older versions. */
+    discount: result.totals.discount ? { label: input?.commercial.discountLabel || "Discount", amount: result.totals.discount, netBeforeDiscount: result.totals.netBeforeDiscount } : undefined as { label: string; amount: number; netBeforeDiscount: number } | undefined,
+    vatBreakdown: result.totals.vatBreakdown as TakeoffTotals["vatBreakdown"] | undefined,
     guide: { low: Math.floor(result.totals.gross * 0.95 / 50) * 50, high: Math.ceil(result.totals.gross * 1.1 / 50) * 50 },
     programme: result.programme,
     trades: result.trades.map(t => ({ trade: t.name, days: t.days })),
@@ -303,6 +424,8 @@ export function customerTakeoff(result: TakeoffResult, input?: TakeoffInput) {
     clientOrders: result.clientOrders.map(o => ({ area: o.area, description: o.description, quantity: o.quantity, unit: o.unit, imageUrl: o.imageUrl, stage: o.stage, spec: o.spec })),
     scaffolding: { included: result.scaffolding.included },
     rooms: (input?.rooms ?? []).map((r: RoomInput) => ({ id: r.id, name: r.name, type: r.type, floor: r.floor, length: r.length, width: r.width, height: r.height })),
+    /** Scope table in the chosen format (simple / normal / itemised). Missing on versions saved before formats existed. */
+    layout: buildQuoteLayout(result, input, defaultRateBook.trades) as ReturnType<typeof buildQuoteLayout> | undefined,
   };
 }
 export type CustomerTakeoff = ReturnType<typeof customerTakeoff>;

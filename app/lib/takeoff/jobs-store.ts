@@ -170,8 +170,11 @@ export async function answerAction(db: Db, quoteId: string, id: string, response
   return db.transaction(async tx => {
     const [a] = await tx.query<ActionRow>(`SELECT ${ACTION_COLS} FROM "TakeoffJobAction" WHERE "id" = $1::uuid AND "quoteId" = $2::uuid FOR UPDATE`, [id, quoteId]);
     if (!a || a.status === "CANCELLED" || a.status === "DONE") throw new StoreError("This request is closed.");
+    // A variation, once approved or declined, is a decision on the contract: it can't be changed from the portal.
+    if (a.kind === "VARIATION" && a.response) throw new StoreError("You have already answered this change. Please message us if you need to change it.");
+    if (a.kind === "VARIATION" && !/^(APPROVED|DECLINED)$/.test(response)) throw new StoreError("Please approve or decline the change.");
     await tx.query(`UPDATE "TakeoffJobAction" SET "status" = 'ANSWERED', "response" = $2, "respondedAt" = now(), "respondedBy" = $3, "updatedAt" = now() WHERE "id" = $1::uuid RETURNING "id"`, [id, response, actor]);
-    await addEvent(tx, quoteId, "ANSWER", `Answered “${a.title}”: ${response}`, "CLIENT", actor);
+    await addEvent(tx, quoteId, "ANSWER", a.kind === "VARIATION" ? `${response === "APPROVED" ? "Approved" : "Declined"} variation “${a.title}”.` : `Answered “${a.title}”: ${response}`, "CLIENT", actor);
   });
 }
 

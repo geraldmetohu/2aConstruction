@@ -11,6 +11,7 @@ import {
   listSupplies, listWorkers, monthlyMoney, unreadSince,
 } from "./jobs-store";
 import { listDocuments } from "./job-documents";
+import { approvedVariations } from "./variations";
 import { clientSupplies, londonDay, ordersToPlace, paymentsDue, payOwed, stageProgress, todoOrder, type Todo } from "./jobs";
 
 export const db = () => prismaDb(prisma);
@@ -37,9 +38,14 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
     listDocuments(d, quoteId, opts.forClient).catch(() => []),
   ]);
   const progress = stageProgress(docs.programme, stagesSaved, today);
-  const money = paymentsDue(docs.payments, payments, today);
+  // Approved variations are added to the payment schedule (payable with the next stage payment).
+  const variations = approvedVariations(actions);
+  const schedule = [...docs.payments, ...variations.list.map((v, i) => ({ n: docs.payments.length + i + 1, label: `Variation: ${v.action.title}`,
+    when: "Approved by you – payable with the next stage payment", percent: 0, amount: v.price.gross }))];
+  const money = paymentsDue(schedule, payments, today);
   const supplyList = clientSupplies(customer, docs.programme, supplies, today);
-  const base = { quote: q.quote, versionNo, job, input, customer, company, docs, today, progress, events, photos, documents, actions, payments, money, supplies: supplyList };
+  const base = { quote: q.quote, versionNo, job, input, customer, company, docs, today, progress, events, photos, documents, actions, payments, money, supplies: supplyList,
+    variations: { net: variations.net, gross: variations.gross, count: variations.list.length } };
   if (opts.forClient) return { ...base, admin: null };
   const result = version.result as TakeoffResult;
   const [orders, expenses, assignments, checkIns, workers, unread] = await Promise.all([
@@ -53,7 +59,7 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
       result, orders, expenses, team, checkIns, workers, unread,
       toOrder: ordersToPlace(result.lines, docs.programme, orders, today, 5),
       // Planned cost is the quote's direct cost; actual is what has been spent so far.
-      finance: { contract: customer.gross, net: customer.net, plannedCost: result.totals.costSubtotal, spent, received: money.received, profitSoFar: money.received / (1 + input.commercial.vatPercent / 100) - spent },
+      finance: { contract: customer.gross + variations.gross, net: customer.net + variations.net, plannedCost: result.totals.costSubtotal, spent, received: money.received, profitSoFar: money.received / (1 + input.commercial.vatPercent / 100) - spent },
     },
   };
 }
@@ -72,7 +78,7 @@ export async function companyOverview() {
     const loaded = await loadJob(j.quoteId);
     if (!loaded?.admin) continue;
     const href = `/dashboard/jobs/${j.quoteId}`, ref = `${j.reference} ${j.clientName}`;
-    contractActive += loaded.customer.gross;
+    contractActive += loaded.customer.gross + loaded.variations.gross;
     outstanding += loaded.money.outstanding;
     for (const r of loaded.money.rows) {
       if (r.state === "OVERDUE") { overdue += r.balance; todos.push({ level: "urgent", kind: "payment", text: `${ref}: ${r.label} £${r.balance.toFixed(2)} overdue since ${r.date}`, href, quoteId: j.quoteId }); }

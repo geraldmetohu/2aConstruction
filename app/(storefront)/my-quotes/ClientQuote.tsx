@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Bell, CalendarDays, Check, FileText, ShoppingCart } from "lucide-react";
 import { HelpCard, PortalHero, Steps } from "./PortalParts";
+import { PortalScope } from "./PortalScope";
 import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
 import type { TakeoffInput } from "@/app/lib/takeoff/schema";
 import { phaseLabels } from "@/app/lib/takeoff/types";
@@ -26,8 +27,13 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
   const [name, setName] = useState(clientName);
   const [agree, setAgree] = useState(false);
   const open = status === "SENT";
-  const payload = () => choiceFields.map(f => ({ scope: f.scope, id: f.id, key: f.key, value: choices[`${f.scope}:${f.id}:${f.key}`] ?? f.value }));
-  const changed = useMemo(() => choiceFields.some(f => (choices[`${f.scope}:${f.id}:${f.key}`] ?? f.value) !== f.value), [choices, choiceFields]);
+  const extras = (c.layout?.options ?? []).map((o, i) => ({ i, chosen: !!o.chosen, priced: o.price != null }));
+  const [picked, setPicked] = useState<Record<number, boolean>>(() => Object.fromEntries(extras.map(e => [e.i, e.chosen])));
+  const payload = () => [
+    ...choiceFields.map(f => ({ scope: f.scope as string, id: f.id, key: f.key, value: choices[`${f.scope}:${f.id}:${f.key}`] ?? f.value })),
+    ...extras.filter(e => e.priced).map(e => ({ scope: "extra", id: String(e.i), key: "chosen", value: picked[e.i] ? "yes" : "no" })),
+  ];
+  const changed = useMemo(() => choiceFields.some(f => (choices[`${f.scope}:${f.id}:${f.key}`] ?? f.value) !== f.value) || extras.some(e => !!picked[e.i] !== e.chosen), [choices, choiceFields, picked, extras]);
   const areas = [...new Set(choiceFields.map(f => f.area))];
 
   async function check() { setBusy(true); const r = await previewChoices(id, payload()); setBusy(false); if (r.ok) setPreview(r); else setMsg({ ok: false, text: r.message }); }
@@ -46,15 +52,17 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
       <ArrowRight className="h-5 w-5 shrink-0 text-[#071a33] transition-transform group-hover:translate-x-1" />
     </Link>
   );
+  const pdfLink = <a href={`/my-quotes/${id}/quotation.pdf`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-[#071a33]/10 bg-white px-5 py-3 text-sm font-semibold text-[#071a33] transition-colors hover:border-[#f5b400]"><FileText className="h-4 w-4" />Download quotation (PDF)</a>;
 
   const content = (
     <div className="min-w-0 space-y-6">
       {notices.length > 0 && <section className="rounded-2xl border border-[#f5b400] bg-[#f5b400]/10 p-5"><p className="flex items-center gap-2 font-semibold text-[#071a33]"><Bell className="h-5 w-5 text-[#c99400]" />We&apos;ve updated your quote</p>
         <ul className="mt-2 space-y-1 text-sm text-[#071a33]/80">{notices.map((n, i) => <li key={i}>• {n.message.replace(/^Quote updated: /, "")} <span className="text-neutral-500">({when(n.at)})</span></li>)}</ul></section>}
       {msg && <p className={`rounded-xl px-4 py-3 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>}
-      {embedded && docs}
+      {embedded && docs}{embedded && pdfLink}
 
-      <section className="grid gap-6 md:grid-cols-2">
+      {c.layout ? <PortalScope layout={c.layout} net={c.net} vat={c.vat} gross={c.gross} discount={c.discount} vatBreakdown={c.vatBreakdown}
+        picked={open ? picked : undefined} onPick={open ? (i, on) => { setPicked(p => ({ ...p, [i]: on })); setPreview(null); } : undefined} /> : <section className="grid gap-6 md:grid-cols-2">
         <div className={card}><h2 className={h2}>Price by area</h2>
           <table className="mt-3 w-full text-sm"><tbody>{c.areas.map(a => <tr key={a.area} className="border-b border-[#071a33]/10 last:border-0"><td className="py-2">{a.area}</td><td className="text-right font-semibold tabular-nums">{gbp(a.net)}</td></tr>)}</tbody></table>
         </div>
@@ -64,7 +72,7 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
           </tbody></table>
           <p className="mt-3 text-xs text-neutral-600">Scaffolding: <strong>{c.scaffolding.included ? "included" : "not included"}</strong>. Prices exclude VAT.</p>
         </div>
-      </section>
+      </section>}
 
       {choiceFields.length > 0 && (
         <section className={`${card} ${open ? "ring-2 ring-[#f5b400]/40" : ""}`}>
@@ -90,13 +98,15 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
               </div>
             ))}
           </div>
-          {open && changed && <div className="mt-6 flex flex-wrap items-center gap-3 rounded-xl bg-[#f6f7f9] p-4">
+
+        </section>
+      )}
+
+          {open && changed && <div className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-[#f5b400] bg-white p-4 shadow-lg">
             {!preview && <button disabled={busy} onClick={check} className="rounded-xl border border-[#071a33] px-5 py-2.5 text-sm font-bold text-[#071a33] hover:bg-[#071a33] hover:text-white">{busy ? "Working it out…" : "See new price"}</button>}
             {preview && <><p className="text-sm text-[#071a33]">New total: <strong className="text-lg tabular-nums">{gbp(preview.gross)}</strong> <span className={preview.gross >= c.gross ? "text-[#8a6500]" : "text-emerald-700"}>({preview.gross >= c.gross ? "+" : "−"}{gbp(Math.abs(preview.gross - c.gross))})</span></p>
               <button disabled={busy} onClick={confirm} className="rounded-xl bg-[#071a33] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#0d2a4f]">Confirm my choices</button></>}
           </div>}
-        </section>
-      )}
 
       {c.clientOrders.length > 0 && (
         <section className={card}>
@@ -118,9 +128,9 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
       </section>
 
       <details className={`${card} group`} open={!embedded}>
-        <summary className="flex cursor-pointer list-none items-center justify-between [&::-webkit-details-marker]:hidden"><h2 className={h2}>Scope of works &amp; terms</h2><span className="text-sm text-neutral-500 group-open:hidden">Show</span><span className="hidden text-sm text-neutral-500 group-open:inline">Hide</span></summary>
-        <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-sm text-neutral-800">{c.scope.map(s => <li key={s}>{s}</li>)}</ol>
-        <h3 className="mt-5 font-semibold text-[#071a33]">Assumptions &amp; terms</h3><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">{c.assumptions.map(s => <li key={s}>{s}</li>)}<li>Subject to site survey. Payment: deposit on acceptance, staged payments, balance on completion.</li></ul>
+        <summary className="flex cursor-pointer list-none items-center justify-between [&::-webkit-details-marker]:hidden"><h2 className={h2}>{c.layout ? "Assumptions & terms" : "Scope of works & terms"}</h2><span className="text-sm text-neutral-500 group-open:hidden">Show</span><span className="hidden text-sm text-neutral-500 group-open:inline">Hide</span></summary>
+        {!c.layout && <ol className="mt-4 list-decimal space-y-1.5 pl-5 text-sm text-neutral-800">{c.scope.map(s => <li key={s}>{s}</li>)}</ol>}
+        {!c.layout && <h3 className="mt-5 font-semibold text-[#071a33]">Assumptions &amp; terms</h3>}<ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-neutral-700">{c.assumptions.map(s => <li key={s}>{s}</li>)}<li>Subject to site survey. Payment: deposit on acceptance, staged payments, balance on completion.</li></ul>
       </details>
 
       {open && (
@@ -174,6 +184,7 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
         {content}
         <aside className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           {docs}
+          {pdfLink}
           {open && <a href="#accept" className="flex items-center justify-center gap-2 rounded-2xl bg-[#071a33] px-5 py-4 text-sm font-bold text-white transition-colors hover:bg-[#f5b400] hover:text-[#071a33]"><Check className="h-4 w-4" />Ready? Accept this quote</a>}
           <HelpCard reference={reference} />
         </aside>

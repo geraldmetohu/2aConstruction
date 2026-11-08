@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { longDate, type DocSection, type QuoteDocs } from "@/app/lib/takeoff/documents";
+import type { QuoteLayout } from "@/app/lib/takeoff/quote-format";
 
 export type DocKind = "quote" | "contract" | "guarantee" | "cpp" | "rams";
 export const docKinds: [DocKind, string][] = [
@@ -25,7 +26,7 @@ export function QuoteDocuments({ docs: d, show }: { docs: QuoteDocs; show: DocKi
 function Page({ d, title, subtitle, children }: { d: QuoteDocs; title: string; subtitle?: string; children: ReactNode }) {
   const c = d.company;
   return (
-    <section className="mx-auto max-w-[210mm] break-before-page rounded-xl border bg-white px-10 py-9 shadow-sm print:max-w-none print:rounded-none print:border-0 print:px-0 print:py-0 print:shadow-none">
+    <section className="mx-auto max-w-[210mm] break-before-page overflow-x-auto rounded-xl border bg-white px-4 py-6 shadow-sm sm:px-10 sm:py-9 print:max-w-none print:overflow-visible print:rounded-none print:border-0 print:px-0 print:py-0 print:shadow-none">
       <header className="flex items-start justify-between gap-6 border-b-2 border-amber-400 pb-5">
         <div>
           {c.logoUrl ? <img src={c.logoUrl} alt={c.name} className="h-16 w-auto" /> : <p className="text-2xl font-black">{c.name}</p>}
@@ -75,14 +76,15 @@ function Quotation({ d }: { d: QuoteDocs }) {
   return (
     <Page d={d} title="Quotation">
       <Parties d={d} />
+      {d.letter && <div><p>{d.letter.greeting}</p>{d.letter.paragraphs.map((p, i) => <p key={i} className="mt-2 whitespace-pre-line">{p}</p>)}</div>}
       <div><H>Description of the works</H>{d.description.map((p, i) => <p key={i} className="mt-2">{p}</p>)}</div>
 
-      <div><H>Scope of works (in order)</H>
+      {d.layout ? <ScopeTable layout={d.layout} price={d.price} /> : <div><H>Scope of works (in order)</H>
         <ol className="mt-2 space-y-3">{d.scope.map(s => (
           <li key={s.heading} className="break-inside-avoid"><p className="font-semibold">{s.heading}{s.dates && <span className="ml-2 text-xs font-normal text-neutral-500">{s.dates}</span>}</p>
             <ul className="mt-0.5 list-disc space-y-0.5 pl-5">{s.items.map((x, i) => <li key={i}>{x}</li>)}</ul></li>
         ))}</ol>
-      </div>
+      </div>}
 
       <div className="break-inside-avoid"><H>Programme</H>
         <p className="mt-1">{d.start ? <>Start <strong>{longDate(d.start)}</strong>, practical completion around <strong>{longDate(d.finish!)}</strong> – </> : null}about {d.workingDays} working days (≈ {d.weeks} weeks), Monday to Friday excluding bank holidays.</p>
@@ -90,15 +92,16 @@ function Quotation({ d }: { d: QuoteDocs }) {
           <tbody>{d.programme.filter(r => r.days > 0).map(r => <tr key={r.stage} className="border-b"><td className="py-1">{r.label}</td><td>{r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : `Day ${r.startDay + 1}${r.endDay > r.startDay ? `–${r.endDay + 1}` : ""}`}</td></tr>)}</tbody></table>
       </div>
 
-      <div className="break-inside-avoid"><H>Price</H>
+      {!d.layout && <div className="break-inside-avoid"><H>Price</H>
         <table className="mt-2 w-full"><tbody>
           {d.price.areas.map(a => <tr key={a.area} className="border-b"><td className="py-1">{a.area}</td><td className="text-right">{gbp(a.net)}</td></tr>)}
           <tr><td className="pt-2 font-semibold">Total (ex VAT)</td><td className="pt-2 text-right font-semibold">{gbp(d.price.net)}</td></tr>
+          {d.price.discount && <tr><td>Less: {d.price.discount.label}</td><td className="text-right">−{gbp(d.price.discount.amount)}</td></tr>}
           <tr><td>VAT</td><td className="text-right">{gbp(d.price.vat)}</td></tr>
           <tr className="text-base"><td className="font-black">Total including VAT</td><td className="text-right font-black">{gbp(d.price.gross)}</td></tr>
         </tbody></table>
         <p className="mt-2 text-xs text-neutral-600">By part of the job: {d.price.phases.map(p => `${p.label} ${gbp(p.total)}`).join(" · ")} (ex VAT). Scaffolding: <strong>{d.price.scaffolding ? "included" : "not included"}</strong>.</p>
-      </div>
+      </div>}
 
       <div className="break-inside-avoid"><H>Payment schedule</H>
         <table className="mt-2 w-full table-fixed text-xs"><colgroup><col className="w-[4%]" /><col className="w-[16%]" /><col className="w-[44%]" /><col className="w-[16%]" /><col className="w-[7%]" /><col className="w-[13%]" /></colgroup><thead><tr className="border-b text-left text-neutral-500"><th className="py-1">#</th><th>Payment</th><th>When</th><th>Due date</th><th className="text-right">%</th><th className="text-right">Amount</th></tr></thead>
@@ -122,6 +125,89 @@ function Quotation({ d }: { d: QuoteDocs }) {
         <div className="mt-8 grid grid-cols-2 gap-10"><div className="border-t pt-1 text-xs">Signed for {d.company.registeredName || d.company.name}</div><div className="border-t pt-1 text-xs">Client signature, name &amp; date</div></div>
       </div>
     </Page>
+  );
+}
+
+const Tags = ({ r }: { r: { vatPercent?: number; provisional?: boolean } }) => <>
+  {r.provisional && <span className="ml-1.5 rounded bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-800">Provisional sum</span>}
+  {r.vatPercent !== undefined && <span className="ml-1.5 rounded bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-800">{r.vatPercent}% VAT</span>}
+</>;
+const qty = (q: number, unit: string) => `${Number(q.toFixed(2))} ${unit}`;
+
+/** Scope of works with prices, in the format chosen for this client. */
+export function ScopeTable({ layout: L, price: p }: { layout: QuoteLayout; price: QuoteDocs["price"] }) {
+  let n = 0;
+  const vb = p.vatBreakdown && p.vatBreakdown.length > 1 ? p.vatBreakdown : null;
+  const totals = (
+    <table className="mt-3 w-full break-inside-avoid"><tbody>
+      {p.discount && <><tr className="border-t-2 border-neutral-900"><td className="pt-2">Subtotal</td><td className="pt-2 text-right">{gbp(p.discount.netBeforeDiscount)}</td></tr>
+        <tr><td>Less: {p.discount.label}</td><td className="text-right">−{gbp(p.discount.amount)}</td></tr></>}
+      <tr className={p.discount ? "" : "border-t-2 border-neutral-900"}><td className="pt-2 font-semibold">Total (ex VAT)</td><td className="pt-2 text-right font-semibold">{gbp(p.net)}</td></tr>
+      {vb ? vb.map(v => <tr key={v.percent}><td>VAT at {v.percent}% on {gbp(v.net)}</td><td className="text-right">{gbp(v.vat)}</td></tr>) : <tr><td>VAT</td><td className="text-right">{gbp(p.vat)}</td></tr>}
+      <tr className="text-base"><td className="font-black">Total including VAT</td><td className="text-right font-black">{gbp(p.gross)}</td></tr>
+    </tbody></table>
+  );
+  const extras = (
+    <>
+      {L.options.length > 0 && <div className="mt-5 break-inside-avoid"><h3 className="font-bold">Optional extras{L.options.some(o => o.chosen) ? "" : " (not included in the price above)"}</h3>
+        <table className="mt-1 w-full text-xs"><tbody>{L.options.map((o, i) => <tr key={i} className="border-b"><td className="py-1">{o.title}</td><td className="text-right">{o.chosen ? "Added – included above" : o.price != null ? `${gbp(o.price)} + VAT` : "Price on request"}</td></tr>)}</tbody></table></div>}
+      {L.notes && <div className="mt-5 break-inside-avoid rounded-lg bg-amber-50 p-3"><h3 className="font-bold">Notes &amp; provisional sums</h3><p className="mt-1 whitespace-pre-line">{L.notes}</p></div>}
+    </>
+  );
+
+  if (L.format === "SIMPLE") return (
+    <div><H>Scope of works &amp; price</H>
+      <table className="mt-2 w-full table-fixed">
+        <colgroup><col className="w-[6%]" /><col className="w-[22%]" /><col className="w-[56%]" /><col className="w-[16%]" /></colgroup>
+        <thead><tr className="border-b-2 border-neutral-900 text-left text-xs uppercase tracking-wide text-neutral-500"><th className="py-1.5">No.</th><th>Activity</th><th>Description of works</th><th className="text-right">Cost (ex VAT)</th></tr></thead>
+        {L.groups.map(g => (
+          <tbody key={g.key} className="break-inside-avoid">
+            <tr className="bg-neutral-100"><td colSpan={3} className="px-2 py-1.5 font-bold">{g.title}</td><td className="px-2 text-right font-bold">{gbp(g.net)}</td></tr>
+            {g.text && <tr><td /><td colSpan={3} className="py-1 pr-2 text-xs italic text-neutral-600">{g.text}</td></tr>}
+            {g.rows.map(r => (
+              <tr key={r.key} className="border-b align-top"><td className="py-2 text-neutral-500">{++n}</td><td className="py-2 pr-3 font-semibold">{r.title}<Tags r={r} /></td><td className="py-2 pr-3">{r.text}</td><td className="py-2 text-right font-semibold tabular-nums">{gbp(r.net)}</td></tr>
+            ))}
+          </tbody>
+        ))}
+      </table>
+      {totals}{extras}
+    </div>
+  );
+
+  return (
+    <div><H>Scope of works &amp; price{L.format === "ITEMISED" ? " – itemised" : ""}</H>
+      <div className="mt-3 space-y-5">
+        {L.groups.map(g => (
+          <section key={g.key}>
+            <div className="flex items-baseline justify-between gap-3 border-b-2 border-neutral-900 pb-1"><h3 className="text-sm font-black uppercase tracking-wide">{g.title}</h3><span className="font-bold tabular-nums">{gbp(g.net)}</span></div>
+            {g.text && <p className="mt-1 text-xs italic text-neutral-600">{g.text}</p>}
+            <div className="mt-2 space-y-3">
+              {g.rows.map(r => (
+                <div key={r.key} className="break-inside-avoid">
+                  <div className="flex items-baseline justify-between gap-3"><p className="font-semibold"><span className="mr-2 text-neutral-400">{++n}.</span>{r.title}<Tags r={r} />{r.trade && <span className="ml-2 text-[11px] font-normal text-neutral-500">{r.trade}</span>}</p><span className="font-semibold tabular-nums">{gbp(r.net)}</span></div>
+                  <p className="mt-0.5 pl-6">{r.text}</p>
+                  {L.format === "NORMAL" && r.items && r.items.length > 0 && (
+                    <ul className="mt-1 grid gap-x-6 pl-6 text-xs text-neutral-600 sm:grid-cols-2 print:grid-cols-2">
+                      {r.items.map(i => <li key={i.id} className="flex justify-between gap-2 border-b border-dotted py-0.5"><span>{i.description}{i.byClient ? " (supplied by you)" : ""}</span><span className="whitespace-nowrap">{qty(i.quantity, i.unit)}</span></li>)}
+                    </ul>
+                  )}
+                  {L.format === "ITEMISED" && r.items && r.items.length > 0 && (
+                    <table className="mt-1 ml-6 w-[calc(100%-1.5rem)] text-xs">
+                      <thead><tr className="border-b text-left text-neutral-500"><th className="py-0.5 font-medium">Item</th><th className="text-right font-medium">Qty</th><th className="text-right font-medium">Rate</th><th className="text-right font-medium">Amount</th></tr></thead>
+                      <tbody>{r.items.map(i => (
+                        <tr key={i.id} className="border-b border-dotted"><td className="py-0.5 pr-2">{i.description}{i.kind === "LABOUR" ? "" : ""}</td><td className="whitespace-nowrap text-right">{qty(i.quantity, i.unit)}</td>
+                          <td className="whitespace-nowrap text-right">{i.byClient ? "—" : gbp(i.rate ?? 0)}</td><td className="whitespace-nowrap text-right">{i.byClient ? "Supplied by you" : gbp(i.net ?? 0)}</td></tr>
+                      ))}</tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+      {totals}{extras}
+    </div>
   );
 }
 

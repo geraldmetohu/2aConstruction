@@ -10,7 +10,7 @@ export function mailConfigured() {
   return !!(process.env.SMTP_URL || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS));
 }
 
-export async function sendMail(m: { to: string | string[]; subject: string; text: string; html?: string }) {
+export async function sendMail(m: { to: string | string[]; subject: string; text: string; html?: string; attachments?: { filename: string; content: Buffer; contentType?: string }[] }) {
   if (!mailConfigured()) return { sent: false as const, reason: "Email is not set up (SMTP settings missing)." };
   const to = (Array.isArray(m.to) ? m.to : [m.to]).map(x => x.trim()).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
   if (!to.length) return { sent: false as const, reason: "No valid email address." };
@@ -19,7 +19,7 @@ export async function sendMail(m: { to: string | string[]; subject: string; text
   const transport = process.env.SMTP_URL ? nodemailer.createTransport(process.env.SMTP_URL)
     : nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT ?? 587), secure: Number(process.env.SMTP_PORT) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, ...timeouts });
   try {
-    await transport.sendMail({ from: process.env.MAIL_FROM ?? process.env.SMTP_USER, to, subject: m.subject, text: m.text, html: m.html });
+    await transport.sendMail({ from: process.env.MAIL_FROM ?? process.env.SMTP_USER, to, subject: m.subject, text: m.text, html: m.html, ...(m.attachments?.length ? { attachments: m.attachments } : {}) });
     return { sent: true as const };
   } catch (e) {
     console.error("[mail] send failed", e);

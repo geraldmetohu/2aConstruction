@@ -28,7 +28,14 @@ export const costKindLabels: Record<CostKind, string> = {
 
 export type Trade =
   | "GENERAL_BUILDER" | "LABOURER" | "GROUNDWORKER" | "BRICKLAYER" | "CARPENTER" | "ROOFER"
-  | "PLASTERER" | "ELECTRICIAN" | "PLUMBER" | "TILER" | "DECORATOR" | "KITCHEN_FITTER";
+  | "PLASTERER" | "ELECTRICIAN" | "PLUMBER" | "TILER" | "DECORATOR" | "KITCHEN_FITTER"
+  | "RENDERER" | "LANDSCAPER" | "CLEANER";
+
+/** Every trade in the order they are shown (filters, trade summaries, document grouping). */
+export const TRADES: Trade[] = [
+  "GENERAL_BUILDER", "LABOURER", "GROUNDWORKER", "BRICKLAYER", "CARPENTER", "ROOFER", "PLASTERER", "RENDERER",
+  "ELECTRICIAN", "PLUMBER", "TILER", "DECORATOR", "KITCHEN_FITTER", "LANDSCAPER", "CLEANER",
+];
 
 export interface GangMember { trade: Trade; n: number }
 
@@ -128,6 +135,14 @@ export interface TakeoffLine {
   excluded?: boolean;
   /** Product image from the linked supplier page, if any. */
   imageUrl?: string;
+  /** Trade that does (or fits) this line. Site set-up lines have none. */
+  trade?: Trade;
+  /** Custom item added by hand for this quote (its id). */
+  customId?: string;
+  /** VAT rate for this line when it differs from the quote's rate (e.g. 0 for zero-rated energy-saving materials). */
+  vatPercent?: number;
+  /** Provisional sum (adjusted to actual cost). */
+  provisional?: boolean;
 }
 
 export type Phase = "FIRST_FIX" | "SECOND_FIX" | "SITE";
@@ -167,9 +182,14 @@ export interface TakeoffTotals {
   costSubtotal: number;
   contingency: number;
   markup: number;
+  /** Price before any discount. */
+  netBeforeDiscount: number;
+  discount: number;
   net: number;
   vat: number;
   gross: number;
+  /** VAT by rate (one entry when everything is at the quote's rate). */
+  vatBreakdown: { percent: number; net: number; vat: number }[];
 }
 
 /** An option the client will choose later in their portal; priced at the default for now. */

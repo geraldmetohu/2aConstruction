@@ -5,7 +5,7 @@
 export type ActivityId =
   | "SITE_SETUP" | "SCAFFOLD" | "DEMOLITION" | "STRIP_OUT" | "EXCAVATION" | "CONCRETE" | "DRAINAGE" | "MASONRY" | "STRUCTURAL_STEEL"
   | "CARPENTRY" | "ROOFING" | "HOT_WORKS" | "ELECTRICAL" | "PLUMBING" | "PLASTERING" | "TILING" | "DECORATING" | "JOINERY"
-  | "KITCHEN" | "FLOORING" | "GLAZING" | "WASTE";
+  | "KITCHEN" | "FLOORING" | "GLAZING" | "WASTE" | "RENDERING" | "LANDSCAPING" | "TREE_WORK" | "EXTERIOR_CLEANING";
 
 /** Which rate keys mean which activity. Site set-up and waste are always present. */
 const DETECT: [ActivityId, RegExp][] = [
@@ -14,8 +14,12 @@ const DETECT: [ActivityId, RegExp][] = [
   ["STRIP_OUT", /^labour:(strip_out|hack_off_plaster|ceiling_pull_down|roof_strip|elec_strip_old)/],
   ["EXCAVATION", /^labour:(excavate_|load_spoil)|^mini_digger$/],
   ["CONCRETE", /^labour:(pour_concrete|floor_slab|screed)/],
-  ["DRAINAGE", /^labour:(drainage|water_main)/],
-  ["MASONRY", /^labour:(blockwork|facing_brickwork|party_wall_raise|render)/],
+  ["DRAINAGE", /^labour:(drainage|water_main|soakaway_build)/],
+  ["MASONRY", /^labour:(blockwork|facing_brickwork|party_wall_raise|render$|garden_wall)/],
+  ["RENDERING", /^labour:(render_|ewi_|masonry_paint_apply)/],
+  ["LANDSCAPING", /^labour:(garden_clearance|sub_base_lay|turf_lay|artificial_turf_lay|patio_lay|gravel_lay|block_paving_lay|resin_drive|tarmac_lay|kerb_lay|deck_|fence_|gate_fit|flowerbed_prep|planting|raised_bed|garden_maintenance|hedge_trim)/],
+  ["TREE_WORK", /^labour:(tree_|stump_grind)/],
+  ["EXTERIOR_CLEANING", /^labour:(window_clean|jet_wash|roof_moss_clean|gutter_clean|softwash|upvc_clean|deck_clean)/],
   ["STRUCTURAL_STEEL", /^labour:(beam_install|beam_prep_|knock_through)|^beam_/],
   ["CARPENTRY", /^labour:(floor_joists|floor_boarding|roof_structure_day|flat_roof_structure|pitched_roof_structure|stud_wall|mansard_frame|hip_to_gable|floor_joists_new|staircase_fit|roof_window_trim)/],
   ["ROOFING", /^labour:(roof_tiling_|grp_roof|felt_roof|flat_roof_covering|tile_hanging|roof_window_fit|fascia_soffit_fit|gutter_fit|chimney_|valley_fit|rooflight_fit)/],
@@ -39,7 +43,8 @@ export function activitiesOf(rateKeys: string[]): ActivityId[] {
 
 /** Order in which activities happen on site (used for documents). */
 export const ORDER: ActivityId[] = ["SITE_SETUP", "SCAFFOLD", "DEMOLITION", "STRIP_OUT", "EXCAVATION", "DRAINAGE", "CONCRETE", "MASONRY", "STRUCTURAL_STEEL",
-  "CARPENTRY", "ROOFING", "HOT_WORKS", "GLAZING", "ELECTRICAL", "PLUMBING", "PLASTERING", "TILING", "KITCHEN", "JOINERY", "FLOORING", "DECORATING", "WASTE"];
+  "CARPENTRY", "ROOFING", "HOT_WORKS", "GLAZING", "RENDERING", "ELECTRICAL", "PLUMBING", "PLASTERING", "TILING", "KITCHEN", "JOINERY", "FLOORING", "DECORATING",
+  "TREE_WORK", "LANDSCAPING", "EXTERIOR_CLEANING", "WASTE"];
 
 export type HazardId =
   | "HEIGHT" | "FALLING_OBJECTS" | "COLLAPSE" | "MANUAL_HANDLING" | "DUST" | "ASBESTOS" | "NOISE_VIBRATION" | "TOOLS" | "SLIPS"
@@ -163,6 +168,18 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   DECORATING: { title: "Decorating", hazards: ["HEIGHT", "COSHH", "DUST", "LEAD"],
     steps: ["Prepare: fill, sand (with extraction), caulk; old paint treated as containing lead where applicable", "Mist coat on new plaster, then finish coats", "Water-based low-odour paints; ventilate rooms"],
     plant: ["Podiums", "Dust-extracted sanders"], ppe: [...BASIC_PPE, "Masks when sanding"], competence: "Decorator" },
+  RENDERING: { title: "External render and external wall insulation (EWI)", hazards: ["HEIGHT", "FALLING_OBJECTS", "DUST", "COSHH", "WEATHER", "MANUAL_HANDLING", "PUBLIC"],
+    steps: ["Work from the scaffold only; brick guards and netting; exclusion zone below", "Hack off old render top down, lowering waste by chute; wet methods to keep dust down", "Mask windows, doors and neighbouring surfaces; protect the ground", "EWI boards fixed with adhesive and mechanical fixings to the system manufacturer's specification; fire breaks where required", "Beads, base coat and mesh, then finish coat; no rendering below 5 °C, in frost or rain", "Sills, downpipes and fittings re-fixed; clean down and remove waste daily"],
+    plant: ["Scaffold", "Render mixer / spray machine", "SDS breaker with dust suppression"], ppe: [...BASIC_PPE, "Hard hat at ground level", "Eye protection", "FFP3 when hacking off", "Waterproof gloves (wet cement)"], competence: "Renderers trained in the EWI system used (manufacturer approved installer)" },
+  TREE_WORK: { title: "Tree felling, pruning and stump grinding", hazards: ["FALLING_OBJECTS", "TOOLS", "NOISE_VIBRATION", "PUBLIC", "HEIGHT", "SERVICES"],
+    steps: ["Check for Tree Preservation Orders and conservation area before any work; nesting birds checked (Mar–Aug)", "Exclusion zone set out at least twice the tree height for felling; overhead lines and services identified", "Dismantle in sections from the top where space is tight, lowering with ropes", "Chainsaws used only by certified operators; chipper fed from the side", "Stumps ground out, arisings removed and the area made good"],
+    plant: ["Chainsaws", "Wood chipper", "Stump grinder", "Rigging & lowering kit"], ppe: [...BASIC_PPE, "Chainsaw trousers & boots", "Helmet with visor & ear defenders"], competence: "NPTC chainsaw certified arborist" },
+  LANDSCAPING: { title: "Landscaping: lawns, paving, drives, decking and fencing", hazards: ["MANUAL_HANDLING", "PLANT", "SERVICES", "DUST", "NOISE_VIBRATION", "TOOLS", "PUBLIC"],
+    steps: ["Set out levels and falls away from the house; check services with CAT & Genny before digging", "Excavate and remove spoil; lay and compact MOT Type 1 in layers", "Paving laid on full mortar bed with primer; slabs cut with water suppression; joints pointed", "Block paving / resin / tarmac laid to manufacturer's instructions with edge restraints and drainage (SuDS)", "Decking and fencing set out, posts concreted; timber cut with extraction", "Turf / artificial grass laid on prepared levelled base; site left clean"],
+    plant: ["Mini digger / dumper", "Plate compactor", "Disc cutter with water suppression", "Laser level"], ppe: [...BASIC_PPE, "Eye & hearing protection", "Knee pads", "FFP3 when cutting"], competence: "Landscapers / groundworkers; CPCS / NPORS plant operators" },
+  EXTERIOR_CLEANING: { title: "Exterior cleaning (windows, jet washing, roof & gutter cleaning)", hazards: ["HEIGHT", "SLIPS", "COSHH", "ELECTRIC", "PUBLIC"],
+    steps: ["Water-fed poles used from the ground wherever possible; ladders only for short access, footed", "Roof and high-level work from an access platform or roof ladders, never on wet or mossy slopes without fall protection", "Biocides mixed and applied per the label, plants protected, run-off kept from drains", "Jet washing with the area cordoned, outside sockets and lights protected", "Surfaces re-sanded / sealed after cleaning where included"],
+    plant: ["Water-fed pole system", "Pressure washer / surface cleaner", "Access platform (where needed)"], ppe: [...BASIC_PPE, "Eye protection", "Waterproofs", "Chemical gloves"], competence: "Trained exterior cleaning operatives; IPAF for access platforms" },
   WASTE: { title: "Waste and site clearance", hazards: ["MANUAL_HANDLING", "PUBLIC", "DELIVERIES", "FIRE"],
     steps: ["Waste segregated where practicable (inert, timber, plasterboard, metal, general)", "Skips not overfilled; covered when needed; skip licence on the highway", "Waste removed by licensed carriers; waste transfer notes kept", "Builders' clean on completion"],
     plant: ["Skips / grab lorry", "Wheelbarrows"], ppe: BASIC_PPE, competence: "General operatives" },
@@ -179,4 +196,6 @@ export const COSHH: Partial<Record<ActivityId, string[]>> = {
   DECORATING: ["Water-based paints", "Solvent-based paints / white spirit", "Fillers & caulk"], PLUMBING: ["Solder flux", "Solvent cement (PVC)", "Central heating inhibitor"],
   FLOORING: ["Flooring adhesives", "Self-levelling compound"], KITCHEN: ["Worktop adhesives & sealants"], DEMOLITION: ["Silica / brick dust", "Possible asbestos (survey)"],
   STRIP_OUT: ["Plaster / silica dust", "Possible lead paint"], STRUCTURAL_STEEL: ["Intumescent paint"],
+  RENDERING: ["Cement render & base coats", "Silicone render & primers", "EPS / mineral wool dust"], LANDSCAPING: ["Cement mortar & concrete", "Silica dust from cutting paving", "Resin binders", "Wood preservatives & decking oil"],
+  TREE_WORK: ["Petrol & chain oil"], EXTERIOR_CLEANING: ["Biocides / moss killers", "Patio sealers", "Detergents"],
 };

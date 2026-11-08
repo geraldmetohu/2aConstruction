@@ -3,11 +3,11 @@ import { bool, num, readValues, str, type Field, type Values } from "../package"
 import type { RoomInput } from "../schema";
 import { fmt, qty2 } from "../util";
 import { buildBathroom } from "./bathroom";
-import { buildKitchen } from "./kitchen";
+import { buildKitchen, fitByOptions } from "./kitchen";
 import { pipeOptions, plumbFixtures, type PipeSystem } from "./plumbing";
 import type { ElecSpec } from "./common";
 import {
-  boardAndSkim, bondAndSkim, coatOptions, elecItems, elecSummary, electricsItems, flooring, flooringOptions, gradeOptions, makeGood, newDoors, paint, paintSystemOptions,
+  boardAndSkim, bondAndSkim, coatOptions, doorConditionOptions, doorPartsFor, elecItems, elecSummary, electricsItems, flooring, flooringOptions, gradeOptions, makeGood, newDoors, paint, paintSystemOptions,
   fitWindows, radiators, skim, skirting, stripOut, tileOptions,
 } from "./common";
 
@@ -44,9 +44,10 @@ const elecLabels: Record<string, string> = {
 export const roomFields: Field[] = [
   { key: "strip", label: "Strip out", type: "select", default: "NONE", group: "Strip out", options: [["NONE", "Nothing to strip"], ["FLOORING", "Old flooring"], ["FULL", "Flooring, skirting & fittings"]] },
 
+  { key: "oldTiles", label: "Old tiles to remove", type: "number", unit: "m²", default: 0, min: 0, max: 200, group: "Strip out" },
   { key: "walls", label: "Walls", type: "select", default: "NONE", public: true, group: "Plastering", when: notRefit, options: [
     ["NONE", "No plastering"], ["MAKE_GOOD", "Fill & make good"], ["SKIM", "Skim (PVA + multi-finish)"], ["BOND_SKIM", "Bonding coat + skim"],
-    ["HACK_OFF", "Hack off, bonding + skim"], ["DRYLINE", "Dot & dab boards + skim"]] },
+    ["HACK_OFF", "Hack off, bonding + skim"], ["DRYLINE", "Dot & dab boards + skim"], ["LATH", "Lath & plaster: strip to studs, board + skim"]] },
   { key: "ceiling", label: "Ceiling", type: "select", default: "NONE", public: true, group: "Plastering", when: notRefit, options: [
     ["NONE", "No plastering"], ["SKIM", "Skim"], ["OVERBOARD", "Overboard + skim"], ["REPLACE", "Pull down, new board + skim"]] },
   yesNo("coving", "New coving", false, "Plastering", { when: notRefit }),
@@ -55,7 +56,15 @@ export const roomFields: Field[] = [
   yesNo("paintWalls", "Paint walls", true, "Painting", { public: true, when: notRefit }),
   yesNo("paintSkirting", "Paint skirting", true, "Painting", { public: true, when: notRefit }),
   yesNo("paintDoors", "Paint doors & frames", true, "Painting", { public: true, when: notRefit }),
+  { key: "doorLeaves", label: "Door leaves", type: "select", default: "AUTO", options: doorConditionOptions, group: "Painting", hint: "New / bare doors cost more to paint than a repaint", when: [...notRefit, { key: "paintDoors", is: true }] },
+  { key: "doorLeavesNew", label: "New door leaves (of the doors)", type: "int", default: 0, min: 0, max: 10, group: "Painting", when: [...notRefit, { key: "paintDoors", is: true }, { key: "doorLeaves", is: "MIXED" }] },
+  { key: "doorFrames", label: "Door frames / linings", type: "select", default: "AUTO", options: doorConditionOptions, group: "Painting", when: [...notRefit, { key: "paintDoors", is: true }] },
+  { key: "doorFramesNew", label: "New frames (of the doors)", type: "int", default: 0, min: 0, max: 10, group: "Painting", when: [...notRefit, { key: "paintDoors", is: true }, { key: "doorFrames", is: "MIXED" }] },
+  { key: "architraves", label: "Architraves", type: "select", default: "AUTO", options: doorConditionOptions, group: "Painting", when: [...notRefit, { key: "paintDoors", is: true }] },
+  { key: "architravesNew", label: "Doors with new architraves", type: "int", default: 0, min: 0, max: 10, group: "Painting", when: [...notRefit, { key: "paintDoors", is: true }, { key: "architraves", is: "MIXED" }] },
   yesNo("paintWindows", "Paint windows", false, "Painting", { when: notRefit }),
+  { key: "windowCondition", label: "Window condition", type: "select", default: "EXISTING", group: "Painting", options: [["EXISTING", "Existing – repaint"], ["NEW", "New / bare timber – full paint system"], ["STRIP", "Poor – strip back, prime & repaint"]], when: [...notRefit, { key: "paintWindows", is: true }] },
+  yesNo("paintStairs", "Paint staircase (spindles, strings, handrail)", false, "Painting", { when: [...notRefit, { key: "roomType", in: ["STAIRS", "HALL", "LANDING"] }] }),
   yesNo("paintRadiators", "Paint radiators", false, "Painting", { when: notRefit }),
   { key: "prep", label: "Preparation", type: "select", default: "STANDARD", group: "Painting", when: notRefit, options: [["STANDARD", "Standard (light filling included)"], ["HEAVY", "Heavy (cracks, stains, sanding)"]] },
   { key: "featureWalls", label: "Feature walls (2nd colour)", type: "int", default: 0, min: 0, max: 4, group: "Painting", when: [...notRefit, { key: "paintWalls", is: true }] },
@@ -68,7 +77,11 @@ export const roomFields: Field[] = [
   { key: "woodFinish", label: "Woodwork finish", type: "select", default: "SATIN", options: [["SATIN", "Satin"], ["GLOSS", "Gloss"], ["EGGSHELL", "Eggshell"]], clientChoice: true, group: "Painting", when: notRefit },
 
   { key: "flooring", label: "Flooring", type: "select", default: "NONE", options: flooringOptions, clientChoice: true, public: true, group: "Floor & joinery", when: notRefit },
+  { key: "subfloor", label: "Floor underneath", type: "select", default: "GOOD", group: "Floor & joinery", hint: "What the new floor goes onto", when: [...notRefit, { key: "flooring", not: "NONE" }], options: [
+    ["GOOD", "Sound and level – lay straight on"], ["LEVEL", "Uneven – prime & latex level"], ["PLY", "Old boards – 6 mm ply overlay"], ["RELAY", "Poor boards – lift & re-board"]] },
   yesNo("newSkirting", "New skirting", false, "Floor & joinery", { when: notRefit }),
+  yesNo("refitSkirting", "Take off & refit the existing skirting", false, "Floor & joinery", { when: [...notRefit, { key: "newSkirting", is: false }] }),
+  yesNo("refitArchitraves", "Take off & refit the existing architraves", false, "Floor & joinery", { when: notRefit }),
 
   { key: "electrics", label: "Electrics", type: "select", default: "NONE", group: "Electrics & heating", public: true, hint: "Items below start from typical numbers for this room – change any count", options: [["NONE", "No electrical work"], ["ADD", "New items as listed"], ["REWIRE", "Full rewire (all items listed)"]] },
   ...elecItems.map((i): Field => ({ key: i.key, label: elecLabels[i.key], type: "int", default: 0, min: 0, max: 40, group: "Electrics & heating", when: elecOn })),
@@ -93,7 +106,12 @@ export const roomFields: Field[] = [
   { key: "kitchenFloor", label: "Kitchen flooring", type: "select", default: "LVT", options: flooringOptions, clientChoice: true, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
   yesNo("washingMachine", "Washing machine point", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
   yesNo("dishwasher", "Dishwasher point", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
+  { key: "kitchenFitBy", label: "Who fits the kitchen", type: "select", default: "US", options: fitByOptions, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
+  yesNo("hobCircuit", "New hob / cooker circuit (10 mm² cable, 45 A switch)", false, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
   yesNo("hood", "Cooker hood ducted outside", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
+  { key: "hoodType", label: "Extract route", type: "select", default: "WALL", group: "Kitchen", options: [["WALL", "Through the wall (core drill)"], ["CEILING", "Through the ceiling void to outside"]], when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }, { key: "hood", is: true }] },
+  yesNo("boilerMove", "Move the boiler", false, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN", "UTILITY"] }] }),
+  { key: "boilerRun", label: "Boiler pipe & flue run", type: "number", unit: "m", default: 3, min: 0.5, max: 25, group: "Kitchen", hint: "Up to 3 m is the standard price; each metre after costs extra", when: [{ key: "roomType", in: ["KITCHEN", "UTILITY"] }, { key: "boilerMove", is: true }] },
   { key: "sinkSupplyRun", label: "Sink to nearest supply", type: "number", unit: "m", default: 3, min: 0.5, max: 25, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
   { key: "sinkWasteRun", label: "Sink to drain / stack", type: "number", unit: "m", default: 2, min: 0.5, max: 15, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
 
@@ -151,7 +169,14 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
     buildKitchen(ctx, s => s, { length: room.length, width: room.width, height: room.height, baseRun: num(v, "baseRun"), wallRun: num(v, "wallRun"),
       tallUnits: num(v, "tallUnits"), island: num(v, "island"), grade: str(v, "kitchenGrade"), worktop: str(v, "worktop"), appliances: num(v, "appliances"),
       splashback: true, points: 0, flooring: str(v, "kitchenFloor"), strip: str(v, "strip") !== "NONE", decorate: true, splashbackTile: str(v, "splashbackTile"),
-      washingMachine: bool(v, "washingMachine"), dishwasher: bool(v, "dishwasher"), hood: bool(v, "hood"), supplyRun: num(v, "sinkSupplyRun"), wasteRun: num(v, "sinkWasteRun"), pipe: str(v, "pipe") as PipeSystem }, R);
+      washingMachine: bool(v, "washingMachine"), dishwasher: bool(v, "dishwasher"), hood: bool(v, "hood"), supplyRun: num(v, "sinkSupplyRun"), wasteRun: num(v, "sinkWasteRun"), pipe: str(v, "pipe") as PipeSystem,
+      fitBy: (str(v, "kitchenFitBy") || "US") as "US", hob: bool(v, "hobCircuit"), hoodType: str(v, "hoodType") as "WALL" }, R);
+  }
+  if (bool(v, "boilerMove") && (room.type === "KITCHEN" || room.type === "UTILITY")) {
+    const run = num(v, "boilerRun");
+    ctx.labour("First fix", "boiler_move", 1, `${R}: move boiler (first 3 m)`);
+    if (run > 3) ctx.labour("First fix", "boiler_move_extra", qty2(run - 3), `${fmt(run)} m − 3 m included = ${fmt(run - 3)} m`);
+    did.push(`move the boiler (${fmt(run)} m run)`);
   }
   if (bool(v, "bathroomRefit")) {
     buildBathroom(ctx, s => s, { length: room.length, width: room.width, height: room.height, layout: str(v, "layout") as "BATH",
@@ -169,6 +194,12 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
     plumbFixtures(ctx, "First fix", [["UTILITY_SINK", bool(v, "utilitySink") ? 1 : 0], ["WASHING_MACHINE", bool(v, "utilityWasher") ? 1 : 0]], { pipe: str(v, "pipe") as PipeSystem, supplyRun: num(v, "utilityRun"), wasteRun: num(v, "utilityRun"), label: R });
     if (bool(v, "utilitySink")) ctx.material("Second fix", "sink_tap", 1, "utility sink & tap");
     did.push("utility plumbing");
+  }
+  const oldTiles = num(v, "oldTiles");
+  if (oldTiles > 0) {
+    ctx.labour("Strip out", "tile_remove", oldTiles, `${R} ${fmt(oldTiles)} m²`);
+    ctx.material("Strip out", "skip_8yd", Math.max(1, Math.ceil(oldTiles / 40 - 1e-9)), "1 skip per 40 m² of tiles", "Skip for old tiles");
+    did.push(`remove ${fmt(oldTiles)} m² of old tiles`);
   }
   const refit = bool(v, "kitchenRefit") || bool(v, "bathroomRefit");
   if (lowered && refit) {
@@ -194,6 +225,10 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
         ctx.material("Strip out", "skip_8yd", Math.max(1, Math.ceil(g.walls / 60)) , `1 skip per 60 m² of plaster`, "Skip for plaster waste");
         bondAndSkim(ctx, P, g.walls, `${R} walls`, beads); newPlaster += g.walls; did.push("hack off and re-plaster walls"); break;
       case "DRYLINE": boardAndSkim(ctx, P, g.walls, `${R} walls`, { fixing: "dab", beads }); newPlaster += g.walls; did.push("dry-line walls"); break;
+      case "LATH":
+        ctx.labour("Strip out", "lath_strip", g.walls, `${R} walls ${fmt(g.walls)} m²`);
+        ctx.material("Strip out", "skip_8yd", Math.max(1, Math.ceil(g.walls / 50)), `1 skip per 50 m² of lath & plaster`, "Skip for lath & plaster waste");
+        boardAndSkim(ctx, P, g.walls, `${R} walls`, { beads }); newPlaster += g.walls; did.push("strip the old lath & plaster, board and skim walls"); break;
     }
     switch (ceiling) {
       case "SKIM": skim(ctx, P, g.ceiling, `${R} ceiling`); newPlaster += g.ceiling; did.push("skim ceiling"); break;
@@ -212,27 +247,49 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
 
     // Joinery
     if (bool(v, "newSkirting")) { skirting(ctx, "Second fix", g.skirting); did.push("new skirting"); }
+    else if (bool(v, "refitSkirting")) { ctx.labour("Second fix", "skirting_refit", g.skirting, `${R} ${fmt(g.skirting)} m`); ctx.material("Second fix", "gripfill", Math.ceil(g.skirting / 10 - 1e-9), "1 tube per 10 m"); did.push("take off and refit the skirting"); }
+    if (bool(v, "refitArchitraves") && room.doors) { ctx.labour("Second fix", "architrave_refit", room.doors, `${room.doors} door${room.doors > 1 ? "s" : ""}`); did.push("refit the architraves"); }
 
     // Painting
     const paintWalls = bool(v, "paintWalls"), paintCeiling = bool(v, "paintCeiling") || lowered;
-    const doorsToPaint = bool(v, "paintDoors") ? room.doors : 0;
+    const fitted = num(v, "newDoors"), totalDoors = Math.max(room.doors, fitted);
+    const doorsToPaint = bool(v, "paintDoors") ? totalDoors : 0;
+    const parts = doorsToPaint ? doorPartsFor(totalDoors, fitted, { leaves: str(v, "doorLeaves"), frames: str(v, "doorFrames"), architraves: str(v, "architraves"),
+      leavesNew: num(v, "doorLeavesNew"), framesNew: num(v, "doorFramesNew"), architravesNew: num(v, "architravesNew") }) : undefined;
+    const wc = str(v, "windowCondition"), winPaint = bool(v, "paintWindows") ? room.windows : 0, stairs = bool(v, "paintStairs") ? 1 : 0;
     paint(ctx, "Decoration", {
       label: R,
       ceilings: paintCeiling ? g.ceiling : 0,
       walls: paintWalls ? g.walls : 0,
       skirting: bool(v, "paintSkirting") ? g.skirting : 0,
-      doors: doorsToPaint, windows: bool(v, "paintWindows") ? room.windows : 0, radiators: bool(v, "paintRadiators") ? room.radiators : 0,
+      doorParts: parts, windows: winPaint, windowsNew: wc === "NEW" ? winPaint : 0, windowsStrip: wc === "STRIP" ? winPaint : 0, stairs,
+      skirtingNew: bool(v, "newSkirting"), radiators: bool(v, "paintRadiators") ? room.radiators : 0,
       newPlaster: Math.min(newPlaster, (paintWalls ? g.walls : 0) + (paintCeiling ? g.ceiling : 0)),
       featureWalls: paintWalls ? num(v, "featureWalls") : 0,
       prep: str(v, "prep") as "STANDARD" | "HEAVY", system: str(v, "paintSystem"), wood: str(v, "woodPaint") as "STANDARD" | "PREMIUM",
-      newWood: bool(v, "newSkirting"), coats: Number(str(v, "coats")), mistCoat: bool(v, "mistCoat"),
+      coats: Number(str(v, "coats")), mistCoat: bool(v, "mistCoat"),
     });
-    const painted = [paintCeiling && "ceiling", paintWalls && "walls", bool(v, "paintSkirting") && "skirting", doorsToPaint && "doors", bool(v, "paintWindows") && room.windows && "windows", bool(v, "paintRadiators") && room.radiators && "radiators"].filter(Boolean);
+    const doorText = parts ? (() => {
+      const split = (nw: number, old: number, what: string) => nw && old ? `${what} (${nw} new, ${old} existing)` : `${nw ? "new " : ""}${what}`;
+      const allNew = parts.leavesOld + parts.framesOld + parts.architravesOld === 0, allOld = parts.leavesNew + parts.framesNew + parts.architravesNew === 0;
+      const d = `door${totalDoors > 1 ? "s" : ""}`;
+      return allNew ? `${totalDoors > 1 ? `${totalDoors} ` : ""}new ${d}, frames & architraves (full paint system)` : allOld ? `${d}, frames & architraves`
+        : [split(parts.leavesNew, parts.leavesOld, d), split(parts.framesNew, parts.framesOld, "frames"), split(parts.architravesNew, parts.architravesOld, "architraves")].join(", ");
+    })() : "";
+    const painted = [paintCeiling && "ceiling", paintWalls && "walls", bool(v, "paintSkirting") && (bool(v, "newSkirting") ? "new skirting" : "skirting"), doorText,
+      winPaint && (wc === "NEW" ? "new windows" : wc === "STRIP" ? "windows (stripped back)" : "windows"), bool(v, "paintRadiators") && room.radiators && "radiators", stairs && "staircase"].filter(Boolean);
     if (painted.length) did.push(`paint ${painted.join(", ")}${str(v, "prep") === "HEAVY" ? " (heavy preparation)" : ""}`);
 
     // Flooring
     const fl = str(v, "flooring");
-    if (fl !== "NONE") { flooring(ctx, "Second fix", g.floor, fl, { perimeter: g.skirting, doors: room.doors }); did.push(`${flooringOptions.find(([k]) => k === fl)?.[1].toLowerCase()} floor`); }
+    if (fl !== "NONE") {
+      const sub = str(v, "subfloor");
+      if (sub === "LEVEL") { ctx.material("Second fix", "latex_leveller", Math.ceil(g.floor / 4 - 1e-9), `${fmt(g.floor)} m² ÷ 4 m² per bag`); ctx.labour("Second fix", "floor_level", g.floor, `${R} ${fmt(g.floor)} m²`); }
+      if (sub === "PLY") { ctx.material("Second fix", "ply_6", Math.ceil(g.floor * 1.1 / 2.98 - 1e-9), `${fmt(g.floor)} m² × 1.1 ÷ 2.98 m²`); ctx.material("Second fix", "flooring_screws", 1, "1 box"); ctx.labour("Second fix", "ply_overlay", g.floor, `${R} ${fmt(g.floor)} m²`); }
+      if (sub === "RELAY") { ctx.material("Strip out", "floorboard_18", Math.ceil(g.floor * 1.1 / 0.72 - 1e-9), `${fmt(g.floor)} m² × 1.1 ÷ 0.72 m²`); ctx.material("Strip out", "flooring_screws", 1, "1 box"); ctx.labour("Strip out", "floor_relay", g.floor, `${R} ${fmt(g.floor)} m²`); }
+      flooring(ctx, "Second fix", g.floor, fl, { perimeter: g.skirting, doors: room.doors });
+      did.push(`${sub === "LEVEL" ? "level the floor and lay " : sub === "PLY" ? "ply-line the old boards and lay " : sub === "RELAY" ? "re-board the floor and lay " : ""}${flooringOptions.find(([k]) => k === fl)?.[1].toLowerCase()} floor`);
+    }
   }
 
   // Electrics, heating, doors, windows (all room types). Refits always include their electrics.
@@ -247,7 +304,7 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
     ctx.labour("First fix", "elec_reposition", lights, `${R}: ${lights} light point${lights > 1 ? "s" : ""} dropped to the new ceiling`);
   }
   if (num(v, "newRadiators")) { radiators(ctx, "First fix", num(v, "newRadiators")); did.push(`${num(v, "newRadiators")} new radiator${num(v, "newRadiators") > 1 ? "s" : ""}`); }
-  if (num(v, "newDoors")) { newDoors(ctx, "Second fix", num(v, "newDoors"), str(v, "doorType"), { paint: !refit && bool(v, "paintDoors"), label: R }); did.push(`${num(v, "newDoors")} new door${num(v, "newDoors") > 1 ? "s" : ""}`); }
+  if (num(v, "newDoors")) { newDoors(ctx, "Second fix", num(v, "newDoors"), str(v, "doorType"), { paint: false, label: R }); did.push(`${num(v, "newDoors")} new door${num(v, "newDoors") > 1 ? "s" : ""}`); }
   if (num(v, "refurbDoors")) { ctx.labour("Second fix", "door_refurb", num(v, "refurbDoors"), `${num(v, "refurbDoors")} doors`); did.push(`refurbish ${num(v, "refurbDoors")} door${num(v, "refurbDoors") > 1 ? "s" : ""}`); }
   const nw = num(v, "newWindows");
   if (nw) {

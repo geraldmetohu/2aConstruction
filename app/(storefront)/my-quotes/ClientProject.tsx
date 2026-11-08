@@ -136,8 +136,13 @@ function ActionItem({ a, busy, answer }: { a: ClientProjectView["actions"][numbe
   return (
     <li className={`rounded-xl border p-4 ${a.status === "OPEN" ? "border-amber-300 bg-amber-50" : ""}`}>
       <p className="font-semibold">{a.title}{a.dueDate && <span className="ml-2 text-xs font-normal text-neutral-600">by {day(a.dueDate)}</span>}</p>
-      {a.detail && <p className="mt-1 text-sm text-neutral-700">{a.detail}</p>}
-      {a.status === "DONE" ? <p className="mt-2 text-sm text-emerald-700"><CircleCheck className="mr-1 inline h-4 w-4" />Done{a.response ? ` – ${a.response}` : ""}</p> : <>
+      {a.kind === "VARIATION" && <p className="mt-1 text-[11px] font-bold uppercase tracking-wide text-[#8a6500]">Change to your contract – please approve or decline</p>}
+      {a.detail && <p className="mt-1 whitespace-pre-line text-sm text-neutral-700">{a.detail}</p>}
+      {a.kind === "VARIATION" ? (a.response ? <p className={`mt-2 text-sm font-semibold ${a.response.startsWith("APPROVED") ? "text-emerald-700" : "text-neutral-600"}`}>{a.response.startsWith("APPROVED") ? "You approved this change – it's added to your payment schedule." : "You declined this change."}</p>
+        : a.status === "OPEN" ? <div className="mt-3 flex flex-wrap gap-2">
+          <button disabled={busy} onClick={() => answer("APPROVED")} className={`${btn} bg-[#071a33] text-white`}>Approve this change</button>
+          <button disabled={busy} onClick={() => { if (confirm("Decline this change? We'll carry on as originally agreed.")) answer("DECLINED"); }} className={`${btn} border border-[#071a33]/20 text-[#071a33]`}>Decline</button></div> : null)
+      : a.status === "DONE" ? <p className="mt-2 text-sm text-emerald-700"><CircleCheck className="mr-1 inline h-4 w-4" />Done{a.response ? ` – ${a.response}` : ""}</p> : <>
         <textarea className={`${input} mt-2`} rows={2} placeholder="Your answer" value={r} onChange={e => setR(e.target.value)} />
         <button disabled={busy || !r.trim()} onClick={() => answer(r)} className={`${btn} mt-2 bg-[#071a33] text-white`}>{a.status === "ANSWERED" ? "Update answer" : "Send answer"}</button></>}
     </li>

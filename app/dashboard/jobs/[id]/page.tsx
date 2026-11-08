@@ -28,7 +28,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     documents: job.documents.map(d => ({ id: d.id, category: d.category, title: d.title, fileName: d.fileName, url: d.url, mimeType: d.mimeType, sizeBytes: d.sizeBytes, note: d.note, visibleToClient: d.visibleToClient, createdAt: new Date(d.createdAt).toISOString() })),
     docsReady,
     actions: job.actions.map(x => ({ ...x, createdAt: new Date(x.createdAt).toISOString(), respondedAt: x.respondedAt ? new Date(x.respondedAt).toISOString() : null })),
-    supplies: job.supplies, money: job.money, payments: job.payments.map(p => ({ ...p, createdAt: new Date(p.createdAt).toISOString() })),
+    supplies: job.supplies, money: job.money, variations: job.variations, payments: job.payments.map(p => ({ ...p, createdAt: new Date(p.createdAt).toISOString() })),
     finance: a.finance, expenses: a.expenses.map(e => ({ ...e, createdAt: new Date(e.createdAt).toISOString() })),
     team: a.team.map(t => ({ ...t, worker: { ...t.worker, createdAt: new Date(t.worker.createdAt).toISOString() } })),
     workers: a.workers.map(w => ({ id: w.id, name: w.name, trade: w.trade, kind: w.kind, payBasis: w.payBasis, dayRate: w.dayRate, phone: w.phone, email: w.email, rating: w.rating, active: w.active })),

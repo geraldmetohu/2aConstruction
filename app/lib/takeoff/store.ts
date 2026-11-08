@@ -150,6 +150,15 @@ export async function listClientQuotes(db: Sql, clientEmail: string) {
     ORDER BY q."updatedAt" DESC`, [email(clientEmail)]);
 }
 
+/** The quote layout each client had last (so a new quote for them starts the same way). Read-only. */
+export async function clientQuoteFormats(db: Sql) {
+  const rows = await db.query<{ email: string; format: string | null; groupBy: string | null }>(`
+    SELECT DISTINCT ON (q."clientEmail") q."clientEmail" AS "email", v."input" -> 'terms' ->> 'format' AS "format", v."input" -> 'terms' ->> 'groupBy' AS "groupBy"
+    FROM "TakeoffQuote" q JOIN "TakeoffQuoteVersion" v ON v."quoteId" = q."id" AND v."version" = q."currentVersion"
+    WHERE q."clientEmail" <> '' ORDER BY q."clientEmail", q."updatedAt" DESC LIMIT 2000`);
+  return Object.fromEntries(rows.filter(r => r.format).map(r => [r.email.toLowerCase(), { format: r.format!, groupBy: r.groupBy ?? "AREA" }]));
+}
+
 export async function getClientQuote(db: Sql, quoteId: string, clientEmail: string) {
   const [quote] = await db.query<QuoteRow>(`SELECT ${QUOTE_COLS} FROM "TakeoffQuote" WHERE "id" = $1::uuid AND "clientEmail" = $2 AND "publishedVersion" IS NOT NULL AND "status" <> 'DRAFT'`, [quoteId, email(clientEmail)]);
   if (!quote) return null;

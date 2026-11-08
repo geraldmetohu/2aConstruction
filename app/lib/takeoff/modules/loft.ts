@@ -2,6 +2,8 @@ import type { Ctx } from "../engine";
 import { bool, num, str, type Field, type Values, type WorkPackage } from "../package";
 import { beamSizes, partitionSizes, timberSizes, type BeamSize, type PartitionSize, type TimberSize } from "../ratebook";
 import { houseTypeLabels } from "../types";
+import { brickOptions } from "./extension-options";
+import { claddingOptions, cladNewWall, newRenderOptions, renderNewWall } from "./external";
 import { fmt, qty2 } from "../util";
 import type { ElecSpec } from "./common";
 import { buildBathroom } from "./bathroom";
@@ -75,24 +77,33 @@ export const loftPackage: WorkPackage = {
     { key: "rearWindows", label: "Dormer windows", type: "int", default: 2, min: 0, max: 6, public: true, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
     { key: "windowType", label: "Dormer window type", type: "select", default: "UPVC", options: [["UPVC", "uPVC"], ["ALU", "Aluminium"]], group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
     { key: "juliet", label: "Juliet balcony", type: "boolean", default: false, public: true, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
-    { key: "cladding", label: "Dormer cladding", type: "select", default: "TILE", public: true, options: [["TILE", "Tile hanging"], ["SLATE", "Slate hanging"], ["RENDER", "Render"]], group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
+    { key: "cladding", label: "Dormer cladding", type: "select", default: "TILE", public: true, clientChoice: true, options: claddingOptions, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
+    { key: "renderSystem", label: "Render", type: "select", default: "SILICONE", options: newRenderOptions, clientChoice: true, group: "Dormer & windows", when: [{ any: [{ key: "cladding", is: "RENDER" }, { key: "gableFinish", is: "RENDER" }] }] },
+    { key: "dormerBrick", label: "Brick", type: "select", default: "facing_brick", clientChoice: true, options: brickOptions, group: "Dormer & windows", when: [{ any: [{ key: "cladding", is: "BRICK" }, { key: "gableFinish", is: "BRICK" }] }] },
     { key: "fascia", label: "Fascia, soffit & guttering", type: "boolean", default: true, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
     ...rooflineFields("Roofline (dormer)", { fascia: "200", soffit: "150", downpipes: 1, height: 3 }).map(f => ({ ...f, when: [{ key: "loftType", not: "VELUX" }, { key: "fascia", is: true }] })),
 
     { key: "fitOut", label: "Full fit-out (stairs, insulation, plastering, services, decoration)", type: "boolean", default: true, public: true, group: "Fit-out" },
-    { key: "bedrooms", label: "Bedrooms in the loft", type: "int", default: 1, min: 1, max: 3, public: true, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "staircase", label: "New staircase", type: "boolean", default: true, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "ensuite", label: "En-suite shower room", type: "boolean", default: true, public: true, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "ensuiteGrade", label: "En-suite grade", type: "select", default: "MID", clientChoice: true, options: [["STANDARD", "Standard"], ["MID", "Mid range"], ["PREMIUM", "Premium"]], group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "ensuite", is: true }] },
+    { key: "fitOutBy", label: "How to price the fit-out", type: "select", default: "WHOLE", group: "Fit-out", when: [{ key: "fitOut", is: true }],
+      hint: "Room by room: add each loft room (bedroom, bathroom, office…) and choose its works like any room",
+      options: [["WHOLE", "Whole loft – by number of bedrooms"], ["ROOMS", "Room by room – I'll add each loft room"]] },
+    { key: "bedrooms", label: "Bedrooms in the loft", type: "int", default: 1, min: 1, max: 3, public: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "staircase", label: "New staircase", type: "boolean", default: true, group: "Stairs & access", when: [{ key: "fitOut", is: true }] },
+    { key: "stairType", label: "Staircase", type: "select", default: "STANDARD", clientChoice: true, group: "Stairs & access", when: [{ key: "fitOut", is: true }, { key: "staircase", is: true }],
+      options: [["STANDARD", "Straight / winder staircase with balustrade"], ["SPACE_SAVER", "Space-saver (alternating tread) – where Building Control allows"]] },
+    { key: "hatch", label: "Loft hatch with folding ladder instead", type: "boolean", default: false, group: "Stairs & access", hint: "Storage only – a habitable loft room needs a fixed staircase", when: [{ key: "fitOut", is: true }, { key: "staircase", is: false }] },
+    { key: "consumerUnit", label: "New consumer unit (fuse board)", type: "boolean", default: false, group: "Fit-out", hint: "Priced once for the whole job, even with other projects", when: [{ key: "fitOut", is: true }] },
+    { key: "ensuite", label: "En-suite shower room", type: "boolean", default: true, public: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "ensuiteGrade", label: "En-suite grade", type: "select", default: "MID", clientChoice: true, options: [["STANDARD", "Standard"], ["MID", "Mid range"], ["PREMIUM", "Premium"]], group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }, { key: "ensuite", is: true }] },
     { key: "fireDoors", label: "FD30 fire doors (protected stair)", type: "int", default: 3, min: 0, max: 10, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
     { key: "smokeAlarms", label: "Mains interlinked smoke / heat alarms", type: "int", default: 3, min: 0, max: 10, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
     { key: "internalWalls", label: "Internal stud walls (landing / en-suite)", type: "number", unit: "m", default: 5, min: 0, max: 30, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "radiators", label: "Radiators", type: "int", default: 2, min: 0, max: 8, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "extraSockets", label: "Extra double sockets (on top of 4 per bedroom)", type: "int", default: 0, min: 0, max: 30, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "loftSpotlights", label: "Spotlights per bedroom", type: "int", default: 6, min: 0, max: 20, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "flooring", label: "Flooring", type: "select", default: "CARPET", options: flooringOptions, public: true, clientChoice: true, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "decorate", label: "Decorate", type: "boolean", default: true, group: "Fit-out", when: [{ key: "fitOut", is: true }] },
-    { key: "paintSystem", label: "Paint type", type: "select", default: "STANDARD", options: paintSystemOptions, clientChoice: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "decorate", is: true }] },
+    { key: "radiators", label: "Radiators", type: "int", default: 2, min: 0, max: 8, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "extraSockets", label: "Extra double sockets (on top of 4 per bedroom)", type: "int", default: 0, min: 0, max: 30, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "loftSpotlights", label: "Spotlights per bedroom", type: "int", default: 6, min: 0, max: 20, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "flooring", label: "Flooring", type: "select", default: "CARPET", options: flooringOptions, public: true, clientChoice: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "decorate", label: "Decorate", type: "boolean", default: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }] },
+    { key: "paintSystem", label: "Paint type", type: "select", default: "STANDARD", options: paintSystemOptions, clientChoice: true, group: "Fit-out", when: [{ key: "fitOut", is: true }, { key: "fitOutBy", is: "WHOLE" }, { key: "decorate", is: true }] },
   ],
   needsScaffold: () => true,
   skips: v => (bool(v, "demolition") && str(v, "loftType") !== "VELUX" ? 4 : 2) + (bool(v, "lowerCeiling") ? 1 : 0) + (str(v, "loftType") === "L_SHAPE" ? 1 : 0),
@@ -293,8 +304,8 @@ export function buildLoft(ctx: Ctx, v: Values) {
       const brick = str(v, "gableFinish") === "BRICK";
       const total = qty2(n * gable);
       ctx.labour(S, "hip_to_gable", n, `${n} gable${n > 1 ? "s" : ""}`);
-      if (brick) { ctx.material(S, "facing_brick", Math.ceil(total * 60 * 1.05), `${n} × (${fmt(L)} × ${fmt(H)} ÷ 2 = ${fmt(gable)} m²) × 60 + 5%`, "Facing bricks – gable"); ctx.labour(S, "facing_brickwork", total, "gable outer leaf"); }
-      else { ctx.material(S, "dense_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Blocks – gable outer leaf"); ctx.material(S, "clad_render", Math.ceil(total), `${fmt(total)} m²`); ctx.labour(S, "blockwork", total, "gable outer leaf"); ctx.labour(S, "render", total, "gable"); }
+      if (brick) { ctx.material(S, str(v, "dormerBrick") || "facing_brick", Math.ceil(total * 60 * 1.05), `${n} × (${fmt(L)} × ${fmt(H)} ÷ 2 = ${fmt(gable)} m²) × 60 + 5%`, "Facing bricks – gable (to match)"); ctx.labour(S, "facing_brickwork", total, "gable outer leaf"); }
+      else { ctx.material(S, "dense_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Blocks – gable outer leaf"); ctx.labour(S, "blockwork", total, "gable outer leaf"); renderNewWall(ctx, S, total, str(v, "renderSystem"), "gable"); }
       ctx.material(S, "thermal_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Thermal blocks – gable inner leaf");
       ctx.labour(S, "blockwork", total, "gable inner leaf");
       ctx.material(S, "wall_ties", Math.ceil(total * 2.5), `${fmt(total)} m² × 2.5`);
@@ -346,18 +357,16 @@ export function buildLoft(ctx: Ctx, v: Values) {
     const outrigger = oA > 0 ? Math.max(0, (oL + oW) * H - oWin * 1.44) : 0;
     const clad = qty2(Math.max(0, rearFace - rearWindows * 1.44 - (bool(v, "juliet") ? 2.0 : 0)) + exposedCheeks * Math.max(0, g.flatRoofLength) * H + outrigger);
     const cladding = str(v, "cladding");
-    if (clad > 0) {
-      ctx.material(S, cladding === "SLATE" ? "clad_slate" : cladding === "RENDER" ? "clad_render" : "clad_tile_hanging", Math.ceil(clad * 1.05),
-        `rear face ${fmt(W)} × ${fmt(H)}${mansard ? " ÷ sin 72°" : ""} − windows${oA ? ` + outrigger (${fmt(oL)} + ${fmt(oW)}) × ${fmt(H)}` : ""}${exposedCheeks ? ` + ${exposedCheeks} exposed cheek${exposedCheeks > 1 ? "s" : ""} × ${fmt(g.flatRoofLength)} × ${fmt(H)}` : ""} = ${fmt(clad)} m² + 5%`);
-      ctx.labour(S, cladding === "RENDER" ? "render" : "tile_hanging", clad);
-    }
+    let cladText = "";
+    if (clad > 0) cladText = cladNewWall(ctx, S, clad, cladding, "dormer", { renderSystem: str(v, "renderSystem"), brick: str(v, "dormerBrick"),
+      formula: `rear face ${fmt(W)} × ${fmt(H)}${mansard ? " ÷ sin 72°" : ""} − windows${oA ? ` + outrigger (${fmt(oL)} + ${fmt(oW)}) × ${fmt(H)}` : ""}${exposedCheeks ? ` + ${exposedCheeks} exposed cheek${exposedCheeks > 1 ? "s" : ""} × ${fmt(g.flatRoofLength)} × ${fmt(H)}` : ""} = ${fmt(clad)} m²` });
     if (bool(v, "fascia")) {
       fasciaSoffit(ctx, S, { length: qty2(W + oW + oL), fascia: str(v, "fasciaWidth"), soffit: str(v, "soffitWidth"), colour: str(v, "rooflineColour"), corners: 2, label: "dormer" });
       rainwater(ctx, S, { length: qty2(W + oW + oL), downpipes: num(v, "downpipes"), height: num(v, "downpipeHeight"), angles90: num(v, "angles90"), angles135: num(v, "angles135"),
         stopEnds: num(v, "stopEnds"), profile: str(v, "gutterProfile"), pipe: str(v, "pipe") as "ROUND" | "SQUARE", label: "dormer" });
       ctx.material(S, "lead_flashing", qty2(2 * Math.max(0, g.flatRoofLength) + W), "abutments and cheek flashings");
     }
-    ctx.scope(`Supply and fit ${frontWindows + flatWindows} roof window${frontWindows + flatWindows === 1 ? "" : "s"} and ${rearWindows} ${str(v, "windowType") === "ALU" ? "aluminium" : "uPVC"} dormer window${rearWindows === 1 ? "" : "s"}${bool(v, "juliet") ? " and a Juliet balcony" : ""}; clad dormer in ${cladding === "SLATE" ? "slate" : cladding === "RENDER" ? "render" : "hanging tiles"}${bool(v, "fascia") ? ", new fascia, soffit and guttering" : ""}.`);
+    ctx.scope(`Supply and fit ${frontWindows + flatWindows} roof window${frontWindows + flatWindows === 1 ? "" : "s"} and ${rearWindows} ${str(v, "windowType") === "ALU" ? "aluminium" : "uPVC"} dormer window${rearWindows === 1 ? "" : "s"}${bool(v, "juliet") ? " and a Juliet balcony" : ""}; clad dormer in ${cladText || "hanging tiles"}${bool(v, "fascia") ? ", new fascia, soffit and guttering" : ""}.`);
   }
 
   ctx.assume(`Loft geometry: width ${fmt(W)} m (party wall to party wall), length ${fmt(L)} m (front to back), loft height ${fmt(H)} m, front slope at 45°.`);
@@ -376,9 +385,20 @@ export function buildLoft(ctx: Ctx, v: Values) {
   const openings = (rearWindows + oWin) * 1.44 + (frontWindows + flatWindows + rearRoofWindows) * 1.1;
   if (velux) ctx.assume("Roof-light conversion: knee walls 1.0 m high, flat ceiling at collar level; head height must be at least 2.2 m over the stair and most of the floor.");
 
+  const byRooms = str(v, "fitOutBy") === "ROOMS";
+  const loftRooms = ctx.input.rooms.filter(r => r.floor === "LOFT");
+  if (byRooms && !loftRooms.length) ctx.warn("Loft fit-out is room by room but no loft rooms are added yet – add them in Rooms (floor: Loft).");
+  if (!bool(v, "staircase") && bool(v, "hatch")) {
+    ctx.material("Staircase", "loft_ladder", 1, "1 hatch & ladder");
+    ctx.labour("Staircase", "loft_hatch_fit", 1, "1 hatch");
+    ctx.scope("Form a loft hatch opening with trimmers and fit an insulated hatch with folding ladder.");
+    ctx.assume("A loft ladder is only suitable for storage; habitable loft rooms need a fixed staircase under the Building Regulations.");
+  }
   if (bool(v, "staircase")) {
     const S = "Staircase";
-    ctx.material(S, "staircase", 1, "1 staircase incl. balustrade");
+    const saver = str(v, "stairType") === "SPACE_SAVER";
+    ctx.material(S, saver ? "staircase_spacesaver" : "staircase", 1, saver ? "1 space-saver staircase" : "1 staircase incl. balustrade");
+    if (saver) ctx.assume("A space-saver staircase is only allowed where there is no room for a normal stair and serves one habitable room plus a bathroom.");
     const trim = timberSizes[str(v, "joistSize") as TimberSize] ?? timberSizes["47x175"];
     ctx.material(S, trim.key, 10, "stairwell trimmers 4 × 2.5 m", `Stairwell trimmers – ${trim.label}`);
     ctx.labour(S, "staircase_fit", 1, "1 staircase");
@@ -394,7 +414,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
   ctx.labour(S1, "insulation_fit", slope + dormerWalls + floorTotal, `slope ${fmt(slope)} + walls ${fmt(dormerWalls)} + floor ${fmt(floorTotal)} m²`);
   const partitionFaces = studWall(ctx, S1, num(v, "internalWalls"), H, "landing / en-suite walls");
 
-  const spots = num(v, "loftSpotlights");
+  const spots = byRooms ? 0 : num(v, "loftSpotlights");
   const elec: ElecSpec = {
     downlights: bedrooms * spots + 3 + (bool(v, "ensuite") ? 3 : 0),
     switches: bedrooms + 2 + (bool(v, "ensuite") ? 1 : 0),
@@ -402,11 +422,14 @@ export function buildLoft(ctx: Ctx, v: Values) {
     data: bedrooms, tv: bedrooms,
     fanIsolators: bool(v, "ensuite") ? 1 : 0, shaver: bool(v, "ensuite") ? 1 : 0, spurs: bool(v, "ensuite") ? 1 : 0,
   };
-  electricsItems(ctx, S1, elec, { label: `loft – ${bedrooms} bedroom${bedrooms > 1 ? "s" : ""}, landing${bool(v, "ensuite") ? ", en-suite" : ""}` });
+  // Room by room: each loft room carries its own electrics; the landing is priced here.
+  const landing: ElecSpec = { downlights: 3, switches: 2, sockets: 1 };
+  if (byRooms) electricsItems(ctx, S1, landing, { label: "loft landing" });
+  else electricsItems(ctx, S1, elec, { label: `loft – ${bedrooms} bedroom${bedrooms > 1 ? "s" : ""}, landing${bool(v, "ensuite") ? ", en-suite" : ""}` });
   const alarms = num(v, "smokeAlarms");
   if (alarms) { ctx.material(S1, "smoke_alarm", alarms, `${alarms} alarms`); ctx.labour(S1, "smoke_alarms_fit", 1, "Interlinked on all floors"); }
   ctx.labour(S1, "heating_extend", 1, "Extend heating to loft");
-  radiators(ctx, S1, num(v, "radiators"));
+  if (!byRooms) radiators(ctx, S1, num(v, "radiators"));
   if (beams > 0) ctx.material(S1, "intumescent", beamMetres, `${beams} beams, ${fmt(beamMetres)} m total`, "Fire protection to steel beams");
 
   const S2 = "Plastering";
@@ -415,10 +438,10 @@ export function buildLoft(ctx: Ctx, v: Values) {
   boardAndSkim(ctx, S2, partyWalls, "party walls", { fixing: "dab" });
   ctx.assume("Loft walls lined with 12.5 mm plasterboard and skimmed; party walls dot & dab. Fire-rated board where Building Control requires it.");
 
-  if (bool(v, "ensuite")) {
+  if (!byRooms && bool(v, "ensuite")) {
     buildBathroom(ctx, s => `En-suite ${s.toLowerCase()}`, {
       length: 2.0, width: 1.6, height: Math.min(H, 2.3), layout: "SHOWER", supplyRun: 6, wasteRun: 3, grade: str(v, "ensuiteGrade") as "STANDARD" | "MID" | "PREMIUM",
-      wallTiling: "FULL", floorTiling: true, ufh: false, towelRail: true, extractor: true, downlights: 2, strip: false, ceiling: false, decorate: true,
+      wallTiling: "FULL", floorTiling: true, ufh: false, towelRail: true, extractor: true, downlights: 2, strip: false, ceiling: false, decorate: true, newDoor: true,
     }, "En-suite");
     ctx.material("En-suite first fix", "soil_110", 2, "2 × 3 m branch to the stack", "110 mm soil pipe – en-suite branch");
     ctx.material("En-suite first fix", "soil_coupler", 2, "boss & coupler");
@@ -429,6 +452,11 @@ export function buildLoft(ctx: Ctx, v: Values) {
   const fireDoors = num(v, "fireDoors");
   newDoors(ctx, S3, fireDoors, "door_fire", { paint: true, label: "protected stair" });
   const floorArea = qty2(floorTotal * (velux ? 0.7 : 0.85) - (bool(v, "ensuite") ? 3.2 : 0));
+  if (byRooms) {
+    // The loft shell is boarded and skimmed here; each loft room adds its own flooring, skirting, electrics, heating and decoration.
+    ctx.scope(`Loft shell: stairs, insulation, plasterboard and skim, ${fireDoors} FD30 fire doors, ${alarms} interlinked alarms and the heating extended; ${loftRooms.length ? `fit-out of ${loftRooms.map(r => r.name).join(", ")} is set out room by room` : "the loft rooms are fitted out room by room"}.`);
+    return;
+  }
   skirting(ctx, S3, 2 * (W + L));
   flooring(ctx, S3, floorArea, str(v, "flooring"), { perimeter: 2 * (W + L), doors: bedrooms + (bool(v, "ensuite") ? 1 : 0) });
   if (bool(v, "decorate")) {

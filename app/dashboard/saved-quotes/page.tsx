@@ -26,7 +26,7 @@ export default async function SavedQuotesPage() {
         <Link href="/dashboard/calculator" className="inline-flex items-center gap-2 rounded-full bg-neutral-950 px-4 py-2 text-sm font-semibold text-white"><Plus className="h-4 w-4" />New quote</Link>
       </header>
       {quotes.length === 0 && <p className="rounded-xl border border-dashed bg-white p-6 text-sm text-neutral-600">No saved quotes yet.</p>}
-      <div className="overflow-hidden rounded-xl border bg-white">
+      <div className="overflow-x-auto rounded-xl border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs text-neutral-500"><tr><th className="px-4 py-2">Quote</th><th className="px-2">Client</th><th className="px-2">Status</th><th className="px-2 text-right">Total inc. VAT</th><th className="px-4 text-right">Updated</th></tr></thead>
           <tbody>

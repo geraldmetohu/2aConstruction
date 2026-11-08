@@ -2,23 +2,29 @@ import type { Ctx } from "../engine";
 import type { Values, WorkPackage } from "../package";
 import type { RoomInput } from "../schema";
 import { roomValues } from "./rooms";
+import { newConsumerUnit } from "./common";
 
 /** Site set-up, plant, professional fees and health & safety, sized from the programme and packages. */
 export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPackage; values: Values }[], rooms: RoomInput[] = [], elec = { any: false, sockets: 0, cookers: 0 }) {
   const pr = ctx.input.prelims;
   const has = (id: string) => active.find(a => a.pkg.id === id);
   const loft = has("loft"), ext = has("extension"), roof = has("roofing");
-  const structural = !!loft || !!(ext && ext.values.knockThrough === true);
+  const demo = has("demolition");
+  const demoStructural = !!demo && (Number(demo.values.loadBearing) > 0 || Number(demo.values.chimneyBreasts) > 0);
+  const structural = !!loft || !!(ext && ext.values.knockThrough === true) || demoStructural;
   const roofOpen = (loft && loft.values.demolition === true) || (roof && roof.values.strip === true);
   const weeks = Math.max(1, Math.ceil(workDays / 5));
   const S = "Preliminaries";
+  // Outside-only jobs (garden, cleaning, render) need no internal protection, dust control or builders' clean.
+  const outdoorOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "garden" || a.pkg.id === "cleaning" || a.pkg.id === "external" || (a.pkg.id === "demolition" && !Number(a.values.kitchens) && !Number(a.values.bathrooms) && !Number(a.values.partitions) && !Number(a.values.loadBearing) && !Number(a.values.chimneyBreasts) && !Number(a.values.strip)));
+  const cleaningOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "cleaning");
 
-  if (pr.siteProtection) ctx.material(S, "site_protection", 1, "Fixed allowance");
+  if (pr.siteProtection && !outdoorOnly) ctx.material(S, "site_protection", 1, "Fixed allowance");
   if (pr.scaffold && active.some(a => a.pkg.needsScaffold?.(a.values))) {
     const scaffWeeks = Math.max(2, Math.ceil(weeks * (loft ? 0.8 : 0.6)) + 1);
     ctx.material(S, "scaffold_erect", 1, "Erect and dismantle");
     ctx.material(S, "scaffold_hire", scaffWeeks, `${scaffWeeks} weeks (roof works + 1 week)`);
-    ctx.scope("Erect, maintain and dismantle scaffolding for the duration of the roof works.");
+    ctx.scope(`Erect, maintain and dismantle scaffolding for the duration of the ${roof || loft ? "roof" : "external"} works.`);
   }
   // Rooms that make waste: strip out, kitchen/bathroom refits, new ceilings. Roughly one skip per two such rooms.
   const wasteRooms = rooms.filter(r => { const v = roomValues(r); return v.strip !== "NONE" || v.kitchenRefit === true || v.bathroomRefit === true || v.ceiling === "REPLACE"; }).length;
@@ -29,15 +35,16 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
     ctx.material(S, "skip_8yd", skips, pr.autoSkips ? parts.join(" + ") : `${skips} skips`);
     ctx.scope(`Remove all construction waste from site (${skips} skip${skips > 1 ? "s" : ""} allowed${ext ? " plus grab lorries for spoil" : ""}).`);
   }
-  if (pr.welfare) ctx.material(S, "welfare", weeks, `${weeks} weeks`);
+  if (pr.welfare && !cleaningOnly) ctx.material(S, "welfare", weeks, `${weeks} weeks`);
   if (pr.structuralEngineer && structural) ctx.material(S, "structural_engineer", 1, "Calculations and drawings");
-  if (pr.buildingControl && (loft || ext)) { ctx.material(S, "building_control", 1, "Provisional sum"); ctx.assume("Building control fee is a provisional sum and will be adjusted to the actual invoice."); }
+  if (pr.buildingControl && (loft || ext || demoStructural)) { ctx.material(S, "building_control", 1, "Provisional sum"); ctx.assume("Building control fee is a provisional sum and will be adjusted to the actual invoice."); }
   if (pr.partyWallNeighbours > 0) ctx.material(S, "party_wall", pr.partyWallNeighbours, `${pr.partyWallNeighbours} neighbour${pr.partyWallNeighbours > 1 ? "s" : ""}`);
-  if (pr.finalClean) ctx.material(S, "final_clean", 1, "On completion");
+  if (pr.finalClean && !outdoorOnly) ctx.material(S, "final_clean", 1, "On completion");
 
   // Electrics for the whole job: one board (optional) and one certificate, never per room.
   const E = "Electrical testing";
-  if (pr.consumerUnit) {
+  const board = newConsumerUnit(ctx.input);
+  if (board) {
     const rcbos = 6 + Math.ceil(elec.sockets / 12) + elec.cookers;
     ctx.material(E, "consumer_unit", 1, "1 board");
     ctx.material(E, "rcbo", rcbos, `6 base circuits (lights × 2, sockets × 2, smoke alarms, immersion/boiler) + ⌈${elec.sockets} sockets ÷ 12⌉ + ${elec.cookers} cooker`);
@@ -59,7 +66,7 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
   if (pr.moveStopcock && !pr.waterMainRun) { ctx.material(Wt, "stopcock_15", 1, "1 stopcock"); ctx.material(Wt, "drain_cock", 1, "1"); ctx.labour(Wt, "stopcock_move", 1, "move / renew stopcock"); }
   if (pr.outsideTaps) { ctx.material(Wt, "outside_tap_kit", pr.outsideTaps, `${pr.outsideTaps} taps`); ctx.labour(Wt, "outside_tap_fit", pr.outsideTaps, `${pr.outsideTaps} taps`); ctx.scope(`Fit ${pr.outsideTaps} outside tap${pr.outsideTaps > 1 ? "s" : ""} with double check valve.`); }
 
-  if (pr.electricalCertificate && (elec.any || pr.consumerUnit)) {
+  if (pr.electricalCertificate && (elec.any || board)) {
     ctx.labour(E, "elec_certificate", 1, "One test & certificate for all electrical work (Part P / EIC)");
     ctx.scope("Test, inspect and certify all electrical work (Part P notification / Electrical Installation Certificate).");
   }

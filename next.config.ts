@@ -2,7 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["pdfkit"],
-  outputFileTracingIncludes: { "/api/quotes/**": ["./app/lib/quotes/fonts/*"] },
+  // Fonts for the PDF quotes (pdfkit reads them from disk at run time).
+  outputFileTracingIncludes: {
+    "/api/quotes/**": ["./app/lib/quotes/fonts/*"],
+    "/dashboard/calculator": ["./app/lib/quotes/fonts/*"],
+    "/dashboard/calculator/**": ["./app/lib/quotes/fonts/*"],
+    "/my-quotes/**": ["./app/lib/quotes/fonts/*"],
+  },
   images: {
     remotePatterns: [
       {

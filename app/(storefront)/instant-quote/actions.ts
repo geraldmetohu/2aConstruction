@@ -57,7 +57,11 @@ export async function instantQuote(raw: PublicQuoteRequest) {
       commercial: { ...base.commercial, ...(commercial ?? {}) },
       priceEdits: {},
     };
-    const c = customerTakeoff(calculateTakeoff(input, prices, rates), input);
+    const r = calculateTakeoff(input, prices, rates);
+    // Garden and cleaning start at zero: ask for a measurement rather than showing a price for set-up only.
+    const empty = workPackages.filter(p => packages[p.id] && !r.lines.some(l => l.area === p.label && l.phase !== "SITE"));
+    if (empty.length) return { ok: false as const, message: `Please enter at least one measurement for ${empty.map(p => p.label.toLowerCase()).join(" and ")}.` };
+    const c = customerTakeoff(r, input);
     const vat = c.net > 0 ? c.gross / c.net : 1.2;
     return {
       ok: true as const,

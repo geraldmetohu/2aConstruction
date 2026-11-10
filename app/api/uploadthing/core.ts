@@ -1,6 +1,6 @@
 import { getAuthSession } from "@/app/lib/auth/session.server";
 import { createUploadthing, type FileRouter } from "uploadthing/next";
-import { UploadThingError, UTApi } from "uploadthing/server";
+import { UploadThingError } from "uploadthing/server";
 
 const f = createUploadthing();
 
@@ -154,28 +154,4 @@ export const ourFileRouter = {
 
 export type OurFileRouter = typeof ourFileRouter;
 
-/* -------------------------------------------
-   GLOBAL DELETE FUNCTION (ANY FILE)
--------------------------------------------- */
-export const deleteFile = async (url: string) => {
-  try {
-    const parsed = new URL(url);
-    const key = parsed.pathname.startsWith("/f/")
-      ? parsed.pathname.slice(3)
-      : url.split("/f/")[1];
-
-    if (!key) {
-      throw new UploadThingError("Invalid file URL");
-    }
-
-    const utapi = new UTApi();
-    await utapi.deleteFiles(key);
-
-    return { success: true };
-  } catch (err) {
-    console.error("Delete failed:", err);
-    throw new UploadThingError(
-      err instanceof Error ? err.message : "Delete failed"
-    );
-  }
-};
+// Deleting uploads: see ./delete-file.ts (an admin-only server action).

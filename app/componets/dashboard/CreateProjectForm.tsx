@@ -30,7 +30,7 @@ import Link from "next/link";
 import { useActionState, useState } from "react";
 import { useForm } from "@conform-to/react";
 import { parseWithZod } from "@conform-to/zod";
-import { deleteFile } from "@/app/api/uploadthing/core";
+import { deleteFile } from "@/app/api/uploadthing/delete-file";
 
 export function CreateProjectForm({
   sourceOptions,

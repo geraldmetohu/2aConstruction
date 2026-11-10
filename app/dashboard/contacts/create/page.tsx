@@ -17,7 +17,7 @@ import { useActionState, useState } from "react";
 import Image from "next/image";
 import { roles } from "@/app/lib/roles";
 import { SubmitButton } from "@/app/componets/SubmitButtons";
-import { deleteFile } from "@/app/api/uploadthing/core";
+import { deleteFile } from "@/app/api/uploadthing/delete-file";
 
 
 export default function ContactCreateRoute(){

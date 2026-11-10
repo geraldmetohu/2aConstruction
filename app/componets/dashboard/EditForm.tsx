@@ -31,7 +31,7 @@ import { ProjectSchema } from "@/app/lib/zodSchemas";
 import { Textarea } from "@/components/ui/textarea";
 import { type $Enums } from "@prisma/client";
 import SortTableImageList from "./SortTableImageList";
-import { deleteFile } from "@/app/api/uploadthing/core";
+import { deleteFile } from "@/app/api/uploadthing/delete-file";
 
 interface iAppProps {
   data: {

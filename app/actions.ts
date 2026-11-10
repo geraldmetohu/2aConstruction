@@ -6,7 +6,7 @@ import { bannerSchema, beforeafterSchema, ProjectSchema, ContactSchema, heroVide
 import { prisma } from "./lib/db";
 import { officeInbox, sendMail } from "@/app/lib/takeoff/mail.server";
 import { headers } from "next/headers";
-import { deleteFile } from "./api/uploadthing/core";
+import { deleteFile } from "./api/uploadthing/delete-file";
 import { randomUUID } from "crypto";
 import { ClientPhaseStatus, ClientPortalStage } from "@prisma/client";
 

@@ -4,11 +4,12 @@ import { catalogueCodeFor, defaultRateBook, mergeRateBook } from "./ratebook";
 import { currentSupplierPrices, latestRateSet, prismaDb, storageReady } from "./store";
 import type { PriceTable, RateBook, Trade } from "./types";
 import { companyFromOverrides, defaultCompany, type CompanyProfile } from "./company";
+import { supplierName } from "./supplier-parse";
 
-const LIVE_MAX_AGE_DAYS = 8;
+/** Prices are re-read on the 1st of every month, so a price stays current for 40 days. */
+const LIVE_MAX_AGE_DAYS = 40;
 const n = (v: { toString(): string } | null | undefined) => (v == null ? 0 : Number(v.toString()));
 const dateLabel = (d: Date) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Europe/London" });
-const supplierName = (s: string) => (s === "BUILDER_DEPOT" ? "Builder Depot" : s === "SELCO" ? "Selco" : s);
 
 function readEnvOverrides(): unknown {
   const raw = process.env.TAKEOFF_RATEBOOK_JSON;
@@ -33,7 +34,7 @@ export async function companyRates(): Promise<{ rates: RateBook; version: number
 
 /**
  * Resolve prices for every rate-book key. Strictly read-only.
- * Priority: live supplier price (Selco / Builder Depot links, refreshed daily, ≤ 8 days,
+ * Priority: live supplier price (merchant links, refreshed on the 1st of each month, ≤ 40 days,
  * lowest ex-VAT) → older supplier import table → catalogue item TK-<KEY> → company rates → defaults.
  */
 export async function resolveTakeoffPrices(now = new Date()): Promise<{ rates: RateBook; prices: PriceTable; notes: string[]; rateVersion: number }> {
@@ -90,7 +91,7 @@ export async function resolveTakeoffPrices(now = new Date()): Promise<{ rates: R
       const live = await currentSupplierPrices(db, LIVE_MAX_AGE_DAYS);
       for (const p of live) if (rates.materials[p.rateKey])
         prices[p.rateKey] = { price: Math.round(p.unitPriceExVat * 100) / 100, source: "LIVE_SUPPLIER", label: `${supplierName(p.supplier)} · ${dateLabel(p.observedAt)}`, observedAt: new Date(p.observedAt).toISOString(), imageUrl: p.imageUrl ?? undefined };
-      if (!live.length) notes.push("No live supplier prices yet. Add Selco / Builder Depot product links on the Supplier prices page.");
+      if (!live.length) notes.push("No live supplier prices yet. Link products (or let the monthly run find them) on the Supplier prices page.");
     } else notes.push("Quote saving, saved rates and live supplier prices need the new database tables (migration 20261101120000_add_takeoff_quotes).");
   } catch { notes.push("Live supplier prices are not available right now."); }
 

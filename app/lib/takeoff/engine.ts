@@ -35,7 +35,8 @@ export interface Ctx {
    * (minimum ½ day for small jobs); days from output per day. Returns the days.
    */
   labour(stage: string, labourKey: string, quantity: number, formula?: string, description?: string): number;
-  scope(text: string): void;
+  /** A sentence for the client's scope of works. Give the step it describes when it isn't the one just priced. */
+  scope(text: string, stage?: string): void;
   assume(text: string): void;
   warn(text: string): void;
 }
@@ -75,12 +76,15 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
   const makeCtx = (area: string, prefix: string): Ctx => {
     const st = (stage: string) => `${prefix} · ${stage}`;
     let current = "";
+    // Lines priced since the last scope sentence, by stage: a sentence describes the block of work just before it.
+    let block = new Map<string, number>();
+    const touch = (stage: string, weight: number) => { current = stage; block.set(stage, (block.get(stage) ?? 0) + weight); };
     return {
       input, rates,
       material(stage, rateKey, quantity, formula, description) {
         if (!rates.materials[rateKey]) { warnings.push(`Missing material rate "${rateKey}".`); return; }
         if (!(quantity > 0)) return;
-        current = st(stage);
+        touch(st(stage), 1);
         // A chosen type/size for this material in this area (same group, same unit) replaces the default.
         const materialKey = `${area}::${rateKey}`;
         const group = variantGroupOf(rateKey);
@@ -103,7 +107,7 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
         const item = rates.labour[key];
         if (!item) { warnings.push(`Missing labour rate "${key}".`); return 0; }
         if (!(quantity > 0)) return 0;
-        current = st(stage);
+        touch(st(stage), 2); // the job itself counts more than its materials
         const r = resolve(`labour:${key}`, item.price, item.confirmed);
         let days: number, charged = quantity, working: string;
         if (item.perDay) {
@@ -125,7 +129,15 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
           days: excluded ? 0 : days, crew: item.gang.reduce((s, m) => s + m.n, 0), gang: item.gang, excluded });
         return excluded ? 0 : days;
       },
-      scope: t => { scope.push(t); scopeItems.push({ text: t, area, stage: current || st("Start") }); },
+      scope: (t, stage) => {
+        if (stage) { scope.push(t); scopeItems.push({ text: t, area, stage: st(stage) }); block = new Map(); return; }
+        const ranked = [...block.entries()].sort((a, b) => b[1] - a[1]);
+        const total = ranked.reduce((n, [, w]) => n + w, 0);
+        // Work across three or more steps with no main one: a summary of the area, not one step.
+        const summary = ranked.length >= 3 && ranked[0][1] / total < 0.5;
+        scope.push(t); scopeItems.push({ text: t, area, stage: ranked[0]?.[0] ?? (current || st("Start")), ...(summary ? { summary: true } : {}) });
+        block = new Map();
+      },
       assume: t => { if (!assumptions.includes(t)) assumptions.push(t); },
       warn: t => warnings.push(t),
     };
@@ -241,7 +253,7 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
   const workingDays = Math.ceil(stages.reduce((s, x) => s + x.days, 0));
   const unconfirmedRates = [...new Set(lines.filter(l => !l.confirmed && !l.excluded && !l.clientSupplied).map(l => l.description))];
 
-  const scaffoldCost = money(lines.filter(l => l.rateKey === "scaffold_erect" || l.rateKey === "scaffold_hire").reduce((s, l) => s + l.total, 0));
+  const scaffoldCost = money(lines.filter(l => l.rateKey.startsWith("scaffold_") || l.rateKey === "chimney_scaffold").reduce((s, l) => s + l.total, 0));
   const clientOrders: ClientOrderItem[] = lines.filter(l => l.clientSupplied && !l.excluded).map(l => ({ area: l.area, description: l.description, quantity: l.quantity, unit: l.unit, estimate: money(l.quantity * l.unitPrice), imageUrl: l.imageUrl, materialKey: l.materialKey!,
     stage: l.stage, spec: specFor(l.rateKey, l.description, clientChoices.filter(c => c.area === l.area)) }));
   return {

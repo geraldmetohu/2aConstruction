@@ -1,5 +1,5 @@
 import "server-only";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import { isCatalogueAdmin } from "@/app/lib/catalogue/validation";
 import { prisma } from "@/app/lib/db";
@@ -14,7 +14,7 @@ export async function requireQuoteAdmin() {
 }
 export async function viewQuote(quoteId: string, version: number) {
   if (!z.string().uuid().safeParse(quoteId).success || !Number.isSafeInteger(version) || version < 1) return null;
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
   if (!user?.id || (!quoteEnabled() && process.env.QUOTE_STORAGE_READY !== "true")) return null;
   const admin = isCatalogueAdmin(user, process.env.ADMIN_EMAILS);
   // Ownership and release are part of the SQL predicate, not a client check.

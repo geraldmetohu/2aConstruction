@@ -6,7 +6,8 @@ const SHEET = 2.88; // 2.4 × 1.2 m board
 
 export const flooringOptions: [string, string][] = [
   ["NONE", "No new flooring"], ["CARPET", "Carpet & underlay"], ["LAMINATE", "Laminate"],
-  ["ENGINEERED", "Engineered oak"], ["LVT", "LVT"], ["TILE", "Porcelain tiles"],
+  ["ENGINEERED", "Engineered oak"], ["SOLID_WOOD", "Solid wood"], ["LVT", "LVT"], ["VINYL", "Sheet vinyl"],
+  ["TILE", "Porcelain tiles"], ["RESIN", "Poured resin"],
 ];
 export const gradeOptions: [string, string][] = [["STANDARD", "Standard"], ["MID", "Mid range"], ["PREMIUM", "Premium"]];
 export const paintSystemOptions: [string, string][] = [["STANDARD", "Standard trade emulsion"], ["DURABLE", "Durable / washable"], ["PREMIUM", "Premium designer paint"], ["KITCHEN_BATH", "Kitchen & bathroom paint"]];
@@ -199,13 +200,16 @@ export function flooring(ctx: Ctx, S: string, area: number, type: string, o: { p
   const a = qty2(area), buy = ceil(a * 1.1);
   const perimeter = o.perimeter ?? 4 * Math.sqrt(a), doors = o.doors ?? 1;
   if (doors > 0) ctx.material(S, "threshold_strip", doors, `${doors} doorway${doors > 1 ? "s" : ""}`);
-  if (type === "LAMINATE" || type === "ENGINEERED") ctx.material(S, "floor_beading", ceil(perimeter * 1.1 / 2.4), `${fmt(perimeter)} m perimeter + 10% ÷ 2.4 m`);
+  if (type === "LAMINATE" || type === "ENGINEERED" || type === "SOLID_WOOD") ctx.material(S, "floor_beading", ceil(perimeter * 1.1 / 2.4), `${fmt(perimeter)} m perimeter + 10% ÷ 2.4 m`);
   const w = `${fmt(a)} m² + 10% cutting`;
   switch (type) {
     case "CARPET": ctx.material(S, "floor_carpet", buy, w); break;
     case "LAMINATE": ctx.material(S, "floor_laminate", buy, w); ctx.material(S, "underlay", ceil(a), `${fmt(a)} m²`); ctx.labour(S, "laminate_floor", a); break;
     case "ENGINEERED": ctx.material(S, "floor_engineered", buy, w); ctx.material(S, "underlay", ceil(a), `${fmt(a)} m²`); ctx.labour(S, "engineered_floor", a); break;
+    case "SOLID_WOOD": ctx.material(S, "floor_solid_oak", buy, w); ctx.material(S, "flooring_screws", ceil(a / 10), `${fmt(a)} m² ÷ 10 m² per box`); ctx.labour(S, "solid_floor", a); break;
     case "LVT": ctx.material(S, "floor_lvt", buy, w); ctx.labour(S, "lvt_floor", a); break;
+    case "VINYL": ctx.material(S, "floor_vinyl", buy, w); ctx.material(S, "latex_screed", ceil(a / 5), `${fmt(a)} m² ÷ 5 m² per bag`); ctx.labour(S, "vinyl_floor", a); break;
+    case "RESIN": ctx.material(S, "resin_floor", ceil(a), `${fmt(a)} m²`); ctx.labour(S, "resin_floor_lay", a); break;
     case "TILE": tiles(ctx, S, { area: a, size: "PORCELAIN_600x600", surface: "floor", label: "floor" }); break;
   }
 }
@@ -336,6 +340,8 @@ export function newDoors(ctx: Ctx, S: string, n: number, doorType: string, o: { 
 export const tileOptions: [string, string][] = [
   ["CERAMIC_300x600", "Ceramic 300 × 600"], ["PORCELAIN_300x600", "Porcelain 300 × 600"], ["PORCELAIN_600x600", "Porcelain 600 × 600"],
   ["PORCELAIN_600x1200", "Large porcelain 600 × 1200"], ["METRO_75x150", "Metro 75 × 150"], ["MOSAIC", "Mosaic"], ["STONE_600x400", "Natural stone 600 × 400"],
+  ["CERAMIC_250x400", "Ceramic 250 × 400 (budget)"], ["METRO_100x200", "Metro 100 × 200"], ["ZELLIGE", "Handmade / zellige look"],
+  ["WOODLOOK_200x1200", "Wood-effect plank 200 × 1200"], ["TERRAZZO_600", "Terrazzo-effect 600 × 600"],
 ];
 const tileSpec: Record<string, { key: string; w: number; h: number; box: number; labour: string; large?: boolean; small?: boolean }> = {
   CERAMIC_300x600: { key: "tile_ceramic_300x600", w: 0.3, h: 0.6, box: 1.44, labour: "wall_tiling" },
@@ -345,6 +351,11 @@ const tileSpec: Record<string, { key: string; w: number; h: number; box: number;
   METRO_75x150: { key: "tile_metro_75x150", w: 0.075, h: 0.15, box: 1, labour: "wall_tiling_small", small: true },
   MOSAIC: { key: "tile_mosaic", w: 0.3, h: 0.3, box: 1, labour: "wall_tiling_small", small: true },
   STONE_600x400: { key: "tile_stone_600x400", w: 0.6, h: 0.4, box: 0.96, labour: "wall_tiling_large", large: true },
+  CERAMIC_250x400: { key: "tile_ceramic_250x400", w: 0.25, h: 0.4, box: 1, labour: "wall_tiling" },
+  METRO_100x200: { key: "tile_metro_100x200", w: 0.1, h: 0.2, box: 1, labour: "wall_tiling_small", small: true },
+  ZELLIGE: { key: "tile_zellige", w: 0.1, h: 0.1, box: 0.5, labour: "wall_tiling_small", small: true },
+  WOODLOOK_200x1200: { key: "tile_woodlook_200x1200", w: 0.2, h: 1.2, box: 1.44, labour: "wall_tiling_large", large: true },
+  TERRAZZO_600: { key: "tile_terrazzo_600", w: 0.6, h: 0.6, box: 1.08, labour: "wall_tiling" },
 };
 
 /**
@@ -437,4 +448,40 @@ export function rooflineFields(group: string, defaults: { fascia?: string; soffi
     { key: "angles135", label: "Gutter 135° (45°) angles", type: "int", default: 0, min: 0, max: 12, group },
     { key: "stopEnds", label: "Gutter stop ends", type: "int", default: 2, min: 0, max: 12, group },
   ];
+}
+
+// ---------------------------------------------------------------- Steel beam bearings
+
+/** What each end of a steel sits on – set per beam, per end, from the engineer's design. */
+export const bearingOptions: [string, string][] = [
+  ["PADSTONE", "Precast concrete padstone"], ["PADSTONE_HEAVY", "Precast padstone 140 mm (heavy load)"], ["PADSTONE_PLATE", "Padstone + steel spreader plate"],
+  ["CAST", "Cast-in-place concrete padstone"], ["PLATE", "Steel bearing / spreader plate only"], ["ENG_BRICK", "Engineering brick bearing (3 courses)"],
+  ["COLUMN", "Onto a steel column (cap plate)"], ["STEEL", "Bolted to another steel (end plate / cleat)"],
+];
+const bearingWords: Record<string, string> = {
+  PADSTONE: "precast padstone", PADSTONE_HEAVY: "heavy-duty padstone", PADSTONE_PLATE: "padstone and spreader plate", CAST: "cast-in-place padstone",
+  PLATE: "steel spreader plate", ENG_BRICK: "engineering brick bearing", COLUMN: "steel column cap plate", STEEL: "bolted steel connection",
+};
+/** Two fields per beam: end A and end B. */
+export function bearingFields(prefix: string, label: string, group: string, when: Field["when"], def = "PADSTONE"): Field[] {
+  return [
+    { key: `${prefix}EndA`, label: `${label} – end A sits on`, type: "select", default: def, options: bearingOptions, group, when },
+    { key: `${prefix}EndB`, label: `${label} – end B sits on`, type: "select", default: def, options: bearingOptions, group, when },
+  ];
+}
+/**
+ * Materials and labour for each bearing; returns the words for the scope ("padstones", "padstone one end, plate the other").
+ * Every masonry bearing is dry-packed (one bag per four bearings).
+ */
+export function bearings(ctx: Ctx, S: string, ends: string[], label: string) {
+  const count = (t: string) => ends.filter(e => e === t).length;
+  const k = (t: string, mat: string, per = 1) => { const n = count(t); if (n) ctx.material(S, mat, n * per, `${label}: ${n} end${n > 1 ? "s" : ""}${per > 1 ? ` × ${per}` : ""} on ${bearingWords[t]}`); return n; };
+  k("PADSTONE", "padstone"); k("PADSTONE_HEAVY", "padstone_large"); k("PADSTONE_PLATE", "padstone"); k("PADSTONE_PLATE", "bearing_plate"); k("PLATE", "bearing_plate");
+  if (k("CAST", "padstone_cast_mix")) ctx.labour(S, "bearing_cast", count("CAST"), `${label}: ${count("CAST")} cast padstones`);
+  if (k("ENG_BRICK", "engineering_brick", 12)) ctx.labour(S, "bearing_brick", count("ENG_BRICK"), `${label}: ${count("ENG_BRICK")} brick bearings`);
+  if (k("STEEL", "steel_cleat")) ctx.labour(S, "steel_connection", count("STEEL"), `${label}: ${count("STEEL")} steel-to-steel connections`);
+  const masonry = ends.filter(e => e !== "COLUMN" && e !== "STEEL").length;
+  if (masonry) ctx.material(S, "dry_pack", Math.ceil(masonry / 4), `${label}: ${masonry} bearings ÷ 4 per bag`);
+  const kinds = [...new Set(ends)];
+  return kinds.length === 1 ? `${bearingWords[kinds[0]]}s at both ends` : kinds.map(t => `${count(t)} × ${bearingWords[t]}`).join(", ");
 }

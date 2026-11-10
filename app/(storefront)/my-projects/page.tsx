@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LoginLink } from "@kinde-oss/kinde-auth-nextjs/components";
+import { SignInLink } from "@/app/componets/auth/AuthLinks";
 import { prisma } from "@/app/lib/db";
 import { portalEnabled, requirePortalOwner } from "@/app/lib/customer-portal/access";
 import { currentPublication } from "@/app/lib/customer-portal/service";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "My projects", robots: { index: false, follow: false } };
 export default async function MyProjects({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
   if (!portalEnabled()) return <main className="mx-auto max-w-4xl p-8"><h1 className="text-3xl font-bold">My projects</h1><p className="mt-4">The new project portal is not available yet.</p><Link href="/client-dashboard" className="mt-4 inline-block underline">Existing client dashboard</Link></main>;
-  let owner: string; try { owner = await requirePortalOwner(); } catch { return <main className="mx-auto max-w-4xl space-y-5 p-8"><h1 className="text-3xl font-bold">Your project, in one place</h1><p>Sign in with the account used for your estimate to view your project updates.</p><LoginLink postLoginRedirectURL="/my-projects">Sign in</LoginLink></main>; }
+  let owner: string; try { owner = await requirePortalOwner(); } catch { return <main className="mx-auto max-w-4xl space-y-5 p-8"><h1 className="text-3xl font-bold">Your project, in one place</h1><p>Sign in with the account used for your estimate to view your project updates.</p><SignInLink next="/my-projects" className="inline-block rounded-xl bg-[#071a33] px-5 py-3 font-bold text-white">Sign in</SignInLink></main>; }
   const query = await searchParams, page = Math.min(10000, Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1));
   const projects = await prisma.deliveryProject.findMany({ where: { client: { ownerId: owner } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * 20, take: 21, select: { id: true } });
   const shared = await Promise.all(projects.slice(0, 20).map(async p => ({ id: p.id, publication: await currentPublication(prisma, p.id) })));

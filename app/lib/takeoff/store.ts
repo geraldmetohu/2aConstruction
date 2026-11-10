@@ -214,7 +214,8 @@ export async function saveRateSet(db: Db, expectedVersion: number, overrides: un
 
 // ---------------------------------------------------------------- Supplier prices
 
-export interface LinkRow { id: string; rateKey: string; supplier: "SELCO" | "BUILDER_DEPOT"; url: string; packQuantity: number; vatIncluded: boolean; active: boolean }
+export type SupplierCode = "SELCO" | "BUILDER_DEPOT" | "TOOLSTATION" | "SCREWFIX" | "TRAVIS_PERKINS" | "WICKES" | "JEWSON" | "B_AND_Q" | "MKM" | "CITY_PLUMBING" | "CEF" | "TOPPS_TILES";
+export interface LinkRow { id: string; rateKey: string; supplier: SupplierCode; url: string; packQuantity: number; vatIncluded: boolean; active: boolean }
 
 export async function listLinks(db: Sql, activeOnly = false) {
   return db.query<LinkRow>(`SELECT "id"::text AS "id", "rateKey", "supplier", "url", "packQuantity"::float8 AS "packQuantity", "vatIncluded", "active" FROM "TakeoffSupplierLink" ${activeOnly ? `WHERE "active"` : ""} ORDER BY "rateKey", "supplier"`);
@@ -258,4 +259,35 @@ export async function linksDue(db: Sql, hours = 20, limit = 40) {
     LEFT JOIN LATERAL (SELECT max("observedAt") AS "at" FROM "TakeoffPriceObservation" o WHERE o."linkId" = l."id") last ON true
     WHERE l."active" AND (last."at" IS NULL OR last."at" < now() - ($1::int * interval '1 hour'))
     ORDER BY last."at" ASC NULLS FIRST LIMIT $2::int`, [hours, limit]);
+}
+
+// ---------------------------------------------------------------- Products found automatically (migration 20261110120000)
+
+export interface SuggestionRow { id: string; rateKey: string; supplier: SupplierCode; url: string; productName: string; packPrice: number | null; imageUrl: string | null; packGuess: number; packSure: boolean; score: number; createdAt: Date }
+
+export async function suggestionsReady(db: Sql): Promise<boolean> {
+  try { const [r] = await db.query<{ ok: boolean }>(`SELECT to_regclass('"TakeoffSupplierSuggestion"') IS NOT NULL AS ok`); return !!r?.ok; } catch { return false; }
+}
+
+/** Newest suggestion per material and merchant. */
+export async function listSuggestions(db: Sql) {
+  if (!(await suggestionsReady(db))) return [] as SuggestionRow[];
+  return db.query<SuggestionRow>(`SELECT DISTINCT ON ("rateKey", "supplier") "id"::text AS "id", "rateKey", "supplier", "url", "productName", "packPrice"::float8 AS "packPrice", "imageUrl", "packGuess"::float8 AS "packGuess", "packSure", "score"::float8 AS "score", "createdAt"
+    FROM "TakeoffSupplierSuggestion" ORDER BY "rateKey", "supplier", "createdAt" DESC`);
+}
+
+export async function addSuggestion(db: Sql, s: Omit<SuggestionRow, "id" | "createdAt">) {
+  await db.query(`INSERT INTO "TakeoffSupplierSuggestion" ("rateKey", "supplier", "url", "productName", "packPrice", "imageUrl", "packGuess", "packSure", "score")
+    VALUES ($1, $2, $3, $4, $5::numeric, $6, $7::numeric, $8::boolean, $9::numeric) RETURNING "id"`, [s.rateKey, s.supplier, s.url, s.productName.slice(0, 300), s.packPrice, s.imageUrl, s.packGuess, s.packSure, s.score]);
+}
+
+/** Materials with no active link for this merchant and no search in the last `days` days. */
+export async function materialsToSearch(db: Sql, supplier: SupplierCode, keys: string[], days = 25, limit = 10) {
+  if (!keys.length) return [] as string[];
+  const rows = await db.query<{ rateKey: string }>(`
+    SELECT k AS "rateKey" FROM unnest($1::text[]) AS k
+    WHERE NOT EXISTS (SELECT 1 FROM "TakeoffSupplierLink" l WHERE l."rateKey" = k AND l."supplier" = $2 AND l."active")
+      AND NOT EXISTS (SELECT 1 FROM "TakeoffSupplierSuggestion" s WHERE s."rateKey" = k AND s."supplier" = $2 AND s."createdAt" > now() - ($3::int * interval '1 day'))
+    LIMIT $4::int`, [keys, supplier, days, limit]);
+  return rows.map(r => r.rateKey);
 }

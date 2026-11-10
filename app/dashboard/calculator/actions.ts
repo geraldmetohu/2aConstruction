@@ -10,6 +10,7 @@ import { renderQuotationPdf } from "@/app/lib/takeoff/quote-pdf.server";
 import { customItemSchema, takeoffInputSchema } from "@/app/lib/takeoff/schema";
 import { createQuote, getQuote, latestRateSet, prismaDb, saveRateSet, saveVersion, sendQuote, storageReady, StoreError } from "@/app/lib/takeoff/store";
 import { emailQuoteSent, emailQuoteUpdated } from "@/app/lib/takeoff/quote-mail.server";
+import { notifyOffice } from "@/app/lib/takeoff/notify.server";
 
 const clientSchema = z.object({
   clientName: z.string().trim().min(1, "Enter the client's name").max(200),
@@ -55,7 +56,9 @@ export async function sendTakeoffQuote(quoteId: string) {
     const db = await ready();
     const id = z.string().uuid().parse(quoteId);
     const r = await sendQuote(db, id, actor);
-    const mail = r.already ? { sent: false } : await emailQuoteSent({ quoteId: id, reference: r.reference, clientName: r.clientName, clientEmail: r.clientEmail, pdf: await quotationPdf(db, id) });
+    const pdf = r.already ? null : await quotationPdf(db, id);
+    const mail = r.already ? { sent: false } : await emailQuoteSent({ quoteId: id, reference: r.reference, clientName: r.clientName, clientEmail: r.clientEmail, pdf });
+    if (!r.already) await notifyOffice(db, id, { kind: "QUOTE_SENT", emailed: mail.sent, pdf }); // office copy with the PDF
     revalidatePath("/dashboard/saved-quotes");
     return { ok: true as const, version: r.version, emailed: mail.sent };
   } catch (e) { return { ok: false as const, message: message(e) }; }

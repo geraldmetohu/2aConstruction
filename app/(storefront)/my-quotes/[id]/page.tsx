@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import { roomFields } from "@/app/lib/takeoff/modules/rooms";
@@ -18,9 +18,9 @@ import { unreadSince } from "@/app/lib/takeoff/jobs-store";
 export const metadata: Metadata = { title: "Your quote", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-export default async function ClientQuotePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const user = await getKindeServerSession().getUser();
+export default async function ClientQuotePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string }> }) {
+  const [{ id }, { tab }] = await Promise.all([params, searchParams]);
+  const user = await getAuthSession().getUser();
   if (!user?.email) redirect("/my-quotes");
   if (!z.string().uuid().safeParse(id).success) notFound();
   const db = prismaDb(prisma);
@@ -52,7 +52,7 @@ export default async function ClientQuotePage({ params }: { params: Promise<{ id
   const job = await loadJob(id, { forClient: true });
   if (!job) return quoteView;
   const c = job.company;
-  return <ClientProject greetingName={greetingName} quoteView={<ClientQuote {...quoteProps} embedded />} v={{
+  return <ClientProject initialTab={tab} greetingName={greetingName} quoteView={<ClientQuote {...quoteProps} embedded />} v={{
     quoteId: id, reference: q.quote.reference, title: job.docs.title, siteAddress: q.quote.siteAddress, status: job.job.status, startDate: job.docs.start ?? null, finish: job.docs.finish ?? null,
     progress: { stages: job.progress.stages, percent: job.progress.percent },
     events: job.events.map(e => ({ id: e.id, kind: e.kind, message: e.message, actorKind: e.actorKind, createdAt: new Date(e.createdAt).toISOString() })),
@@ -64,5 +64,9 @@ export default async function ClientQuotePage({ params }: { params: Promise<{ id
     bank: { accountName: c.accountName || c.registeredName, sortCode: c.sortCode, accountNumber: c.accountNumber, bankName: c.bankName },
     office: { phone: c.phone, email: c.email, siteManager: c.siteManager, siteManagerPhone: c.siteManagerPhone },
     contacts: job.job.clientContacts, accessNotes: job.job.accessNotes, unread,
+    portalOn: job.portalOn, requestedStart: job.portal.requestedStart,
+    manager: { name: job.portal.managerName, phone: job.portal.managerPhone, email: job.portal.managerEmail },
+    invoices: job.invoices.map(i => { const r = job.money.rows.find(x => x.n === i.scheduleNo); return { number: i.number, label: i.label, scheduleNo: i.scheduleNo, issuedOn: i.issuedOn, dueOn: i.dueOn, gross: i.gross, balance: r ? r.balance : i.gross }; }),
+    snags: job.snags.map(s => ({ id: s.id, title: s.title, detail: s.detail, location: s.location, photoUrl: s.photoUrl, status: s.status, raisedByKind: s.raisedByKind, doneByKind: s.doneByKind, doneAt: s.doneAt ? new Date(s.doneAt).toISOString() : null, createdAt: new Date(s.createdAt).toISOString() })),
   }} />;
 }

@@ -23,7 +23,7 @@ export const navSections: NavSection[] = [
       { name: "Quote calculator", href: "/dashboard/calculator", icon: Calculator, hint: "Price a job room by room" },
       { name: "Saved quotes", href: "/dashboard/saved-quotes", icon: FolderOpen, hint: "Drafts, sent and accepted quotes, client choices" },
       { name: "Labour & material rates", href: "/dashboard/rates", icon: SlidersHorizontal, hint: "Your standard prices per job and material" },
-      { name: "Supplier prices", href: "/dashboard/supplier-prices", icon: Tag, hint: "Daily Selco & Builder Depot prices" },
+      { name: "Supplier prices", href: "/dashboard/supplier-prices", icon: Tag, hint: "Monthly merchant prices, price lists" },
       { name: "Company & documents", href: "/dashboard/company", icon: FileSignature, hint: "Details on quotes, contracts & H&S documents" },
       { name: "Catalogue quotes", href: "/dashboard/quotes", icon: FileText, hint: "Older catalogue-based quotes" },
       { name: "Price catalogue", href: "/dashboard/items", icon: Package, hint: "Materials, labour and prices" },
@@ -51,7 +51,10 @@ export const navSections: NavSection[] = [
   },
   {
     title: "Company",
-    links: [{ name: "Company settings", href: "/dashboard/settings", icon: Settings, hint: "Markup, VAT, payment terms, working days" }],
+    links: [
+      { name: "Company settings", href: "/dashboard/settings", icon: Settings, hint: "Markup, VAT, payment terms, working days" },
+      { name: "Accounts & sign-in", href: "/dashboard/accounts", icon: Users, hint: "Clients, trades and staff who can sign in" },
+    ],
   },
 ];
 

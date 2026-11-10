@@ -61,8 +61,19 @@ export const packageInputSchema = z.object({
   values: z.record(value).default({}),
 });
 
+export const scaffoldElevationOptions = [["FRONT", "Front"], ["REAR", "Rear"], ["LEFT", "Left side"], ["RIGHT", "Right side"]] as const;
+export const scaffoldModeOptions = [["AUTO", "Only where the works need it"], ["YES", "Yes – scaffold needed"], ["NO", "No scaffold"]] as const;
+
 export const prelimsSchema = z.object({
   scaffold: z.boolean().default(true),
+  /** Always asked: AUTO = the projects decide (roof, loft, two-storey walls), YES / NO = your call. */
+  scaffoldMode: z.enum(keys(scaffoldModeOptions)).default("AUTO"),
+  /** Elevations to scaffold; empty = worked out from the projects. Priced per m² of elevation. */
+  scaffoldElevations: z.array(z.enum(keys(scaffoldElevationOptions))).max(4).default([]),
+  /** Hire weeks; 0 = from the programme. */
+  scaffoldWeeks: count(52).default(0),
+  /** Chimney scaffold / roof access as well. */
+  chimneyScaffold: z.boolean().default(false),
   autoSkips: z.boolean().default(true),
   skips: count(30).default(3),
   welfare: z.boolean().default(true),
@@ -105,11 +116,16 @@ export const termsSchema = z.object({
   stagePayments: z.number().int().min(1).max(8).default(3),
   finalPercent: z.number().finite().min(0).max(30).default(10),
   paymentDays: z.number().int().min(0).max(60).default(7),
-  validityDays: z.number().int().min(7).max(180).default(30),
+  /** Days the price is held (300 by default). */
+  validityDays: z.number().int().min(7).max(365).default(300),
   guaranteeYears: z.number().int().min(1).max(10).default(5),
   /** Client's correspondence address if different from the site. */
   clientAddress: text(300),
   clientPhone: text(40),
+  /** People and emergency details for this job's health & safety documents. */
+  siteSupervisor: text(80),
+  siteSupervisorPhone: text(40),
+  nearestHospital: text(200),
   exclusions: text(3000),
   /** How the price is set out for the client: simple (scope + price per activity), normal (grouped, what each step includes) or itemised (every product and job priced). */
   format: z.enum(["SIMPLE", "NORMAL", "ITEMISED"]).default("SIMPLE"),
@@ -172,7 +188,17 @@ export const wordingSchema = z.object({
 });
 export type Wording = z.output<typeof wordingSchema>;
 
+/** How the quote is built: the whole home, room by room, a chosen project, or one trade's services. */
+export const quoteModeOptions = [
+  ["WHOLE_HOME", "Whole home", "Lofts, extensions, refurbishment of whole floors, render, demolition – everything together"],
+  ["ROOMS", "Room by room", "Add each room or hallway and its works one by one – refurbishments and single trades"],
+  ["PROJECT", "A project", "Garage conversion, garden room, summer house, garden, render, roof, loft or extension"],
+  ["TRADE", "One trade", "Electrician, plumber, painter, carpenter, flooring… only that trade's services"],
+] as const;
+export type QuoteMode = (typeof quoteModeOptions)[number][0];
+
 export const takeoffInputSchema = z.object({
+  mode: z.enum(["WHOLE_HOME", "ROOMS", "PROJECT", "TRADE"]).default("ROOMS"),
   property: propertySchema,
   rooms: z.array(roomSchema).max(40).default([]),
   /** Whole-house projects keyed by package id (loft, extension, roofing). */

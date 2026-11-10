@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
-import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components"; 
+import Link from "next/link";
 interface iAppProps {
     email: string;
     name:string;
@@ -26,7 +26,7 @@ export function UserDropdown({email,name,userImage}: iAppProps) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator/>
                 <DropdownMenuItem asChild>
-                    <LogoutLink>Log Out</LogoutLink>
+                    <Link href="/logout">Log Out</Link>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

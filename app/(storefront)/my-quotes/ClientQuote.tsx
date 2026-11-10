@@ -38,7 +38,8 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
 
   async function check() { setBusy(true); const r = await previewChoices(id, payload()); setBusy(false); if (r.ok) setPreview(r); else setMsg({ ok: false, text: r.message }); }
   async function confirm() { setBusy(true); const r = await confirmChoices(id, version, payload()); setBusy(false); setMsg(r.ok ? { ok: true, text: "Thank you – your choices are saved and the quote has been updated." } : { ok: false, text: r.message }); setPreview(null); router.refresh(); }
-  async function accept() { setBusy(true); const r = await acceptClientQuote(id, version, name, agree); setBusy(false); setMsg(r.ok ? { ok: true, text: "Thank you – you have accepted the quote. We will be in touch to book your start date." } : { ok: false, text: r.message }); router.refresh(); }
+  const [start, setStart] = useState("");
+  async function accept() { setBusy(true); const r = await acceptClientQuote(id, version, name, agree, start); setBusy(false); setMsg(r.ok ? { ok: true, text: `Thank you – you have accepted the quote. ${start ? "We'll confirm your start date shortly." : "We will be in touch to book your start date."}` } : { ok: false, text: r.message }); router.refresh(); }
 
   const card = "rounded-2xl border border-[#071a33]/10 bg-white p-5 sm:p-6";
   const h2 = "text-lg font-semibold tracking-[-0.01em] text-[#071a33]";
@@ -124,7 +125,7 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
           {c.rooms.length > 0 && <table className="mt-3 w-full text-xs"><tbody>{c.rooms.map(r => <tr key={r.id} className="border-b border-[#071a33]/10"><td className="py-1.5">{r.name}</td><td className="text-right">{r.length} × {r.width} m</td></tr>)}</tbody></table>}</div>
         <div className={card}><h2 className={`flex items-center gap-2 ${h2}`}><CalendarDays className="h-5 w-5 text-[#c99400]" />Programme</h2>
           <p className="mt-2 text-sm text-neutral-700">About <strong>{c.programme.workingDays} working days</strong> (≈ {c.programme.weeks} weeks) on site.</p>
-          <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-neutral-600">{c.trades.map(t => <li key={t.trade}>{t.trade}: {t.days} days</li>)}</ul></div>
+          <p className="mt-2 text-xs text-neutral-600">Monday to Friday, excluding bank holidays. The dates for each stage are in the programme section of your quotation.</p></div>
       </section>
 
       <details className={`${card} group`} open={!embedded}>
@@ -138,9 +139,10 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
           <div className="p-5 sm:p-7">
             <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f5b400] text-sm font-bold text-[#071a33]">3</span>
               <div><h2 className="text-xl font-semibold">Happy with everything? Accept online.</h2>
-                <p className="mt-1 text-sm text-white/70">You&apos;re accepting version {version} for <strong className="text-white">{gbp(c.gross)}</strong> inc. VAT. We&apos;ll then call you to agree your start date and send the deposit request.</p></div></div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-              <label className="block text-sm font-medium text-white/80">Your full name<input className="mt-1.5 block w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-white placeholder:text-white/40 focus:border-[#f5b400] focus:outline-none" value={name} onChange={e => setName(e.target.value)} /></label>
+                <p className="mt-1 text-sm text-white/70">You&apos;re accepting version {version} for <strong className="text-white">{gbp(c.gross)}</strong> inc. VAT. Typing your name signs the contract online. Tell us when you&apos;d like to start and we&apos;ll confirm the date and send the deposit invoice.</p></div></div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+              <label className="block text-sm font-medium text-white/80">Your full name (your signature)<input autoComplete="name" className="mt-1.5 block w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 font-serif text-lg italic text-white placeholder:text-white/40 focus:border-[#f5b400] focus:outline-none" value={name} onChange={e => setName(e.target.value)} /></label>
+              <label className="block text-sm font-medium text-white/80">Preferred start (optional)<input type="date" min={new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date())} className="mt-1.5 block w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-white [color-scheme:dark] focus:border-[#f5b400] focus:outline-none" value={start} onChange={e => setStart(e.target.value)} /></label>
               <button disabled={busy || changed || !agree} onClick={accept} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f5b400] px-6 py-3 text-sm font-bold text-[#071a33] transition-colors hover:bg-white disabled:opacity-40" title={changed ? "Confirm or reset your choices first" : !agree ? "Tick the box first" : ""}><Check className="h-4 w-4" />Accept quote</button>
             </div>
             <label className="mt-4 flex items-start gap-3 text-sm text-white/80"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#f5b400]" checked={agree} onChange={e => setAgree(e.target.checked)} />I have read and accept the quotation, contract terms, payment schedule and guarantee in “Your documents”.</label>

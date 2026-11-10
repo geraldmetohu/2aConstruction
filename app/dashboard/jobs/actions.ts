@@ -3,12 +3,15 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { variationDetail } from "@/app/lib/takeoff/variations";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
-import { db, jobsAvailable } from "@/app/lib/takeoff/jobs.server";
+import { db, jobsAvailable, loadJob, sendInvoice } from "@/app/lib/takeoff/jobs.server";
+import { addSnag, issueInvoice, listSnags, portalReady, setManager, setSnagStatus } from "@/app/lib/takeoff/portal-store";
+import { addDaysIso, invoiceAmounts, invoiceNumber, londonDay } from "@/app/lib/takeoff/jobs";
 import {
   addAction, addEvent, addExpense, addPhotos, assignWorker, checkIn, rateWorker, recordPayment, reviewPayment, saveClientInfo, saveWorker,
-  setActionStatus, setOrder, setStage, setSupply, setWorkerToken, updateJob, updatePhoto, voidExpense, getWorker,
+  setActionStatus, setOrder, setStage, setSupply, setWorkerToken, updateJob, updatePhoto, voidExpense, getWorker, getJob, listStages,
 } from "@/app/lib/takeoff/jobs-store";
 import { StoreError } from "@/app/lib/takeoff/store";
+import { notifyClient } from "@/app/lib/takeoff/notify.server";
 import { hashCrewToken, newCrewToken } from "@/app/lib/takeoff/crew-token.server";
 import { sendMail, siteUrl } from "@/app/lib/takeoff/mail.server";
 import { addDocuments, updateDocument } from "@/app/lib/takeoff/job-documents";
@@ -33,14 +36,24 @@ async function run<T extends object>(quoteId: string | null, fn: (actor: string)
 export async function updateJobAction(quoteId: string, raw: unknown) {
   return run(quoteId, async actor => {
     const p = z.object({ status: z.enum(["PLANNED", "IN_PROGRESS", "ON_HOLD", "COMPLETED"]).optional(), startDate: day.nullable().optional() }).parse(raw);
-    await updateJob(db(), uuid.parse(quoteId), p, actor);
+    const id = uuid.parse(quoteId), before = await getJob(db(), id);
+    await updateJob(db(), id, p, actor);
+    if (p.startDate && p.startDate !== before.startDate) await notifyClient(db(), id, { kind: "START_DATE", date: p.startDate, changed: !!before.startDate });
+    if (p.status && p.status !== before.status) {
+      if (p.status === "IN_PROGRESS" && before.status === "PLANNED") await notifyClient(db(), id, { kind: "STARTED" });
+      if (p.status === "ON_HOLD") await notifyClient(db(), id, { kind: "ON_HOLD" });
+      if (p.status === "COMPLETED") { const job = await loadJob(id).catch(() => null); await notifyClient(db(), id, { kind: "COMPLETED", guaranteeYears: job?.docs.guarantee.years }); }
+    }
   });
 }
 
 export async function setStageAction(quoteId: string, raw: unknown) {
   return run(quoteId, async actor => {
     const p = z.object({ stage: z.string().min(1).max(200), label: z.string().max(200), status: z.enum(["NOT_STARTED", "IN_PROGRESS", "DONE"]), percent: z.number().int().min(0).max(100), note: z.string().trim().max(500) }).parse(raw);
-    await setStage(db(), uuid.parse(quoteId), p.stage, p, actor, p.label);
+    const id = uuid.parse(quoteId);
+    const was = (await listStages(db(), id)).find(s => s.stage === p.stage)?.status;
+    await setStage(db(), id, p.stage, p, actor, p.label);
+    if (p.status === "DONE" && was !== "DONE") await notifyClient(db(), id, { kind: "STAGE_DONE", label: p.label || p.stage, note: p.note });
   });
 }
 
@@ -54,7 +67,12 @@ export async function addPhotosAction(quoteId: string, raw: unknown) {
 export async function updatePhotoAction(quoteId: string, id: string, raw: unknown) {
   return run(quoteId, async actor => {
     const p = z.object({ caption: z.string().trim().max(200).optional(), stage: z.string().max(200).optional(), visibleToClient: z.boolean().optional(), favourite: z.boolean().optional(), hidden: z.boolean().optional() }).parse(raw);
-    await updatePhoto(db(), uuid.parse(id), p, actor);
+    const r = await updatePhoto(db(), uuid.parse(id), p, actor);
+    // Sharing photos: one email per job per day at most (photos are usually shared a few at a time).
+    if (p.visibleToClient === true) {
+      const [c] = await db().query<{ n: number }>(`SELECT count(*)::int AS "n" FROM "TakeoffJobEvent" WHERE "quoteId" = $1::uuid AND "kind" = 'PHOTO' AND "createdAt" >= date_trunc('day', now() AT TIME ZONE 'Europe/London') AT TIME ZONE 'Europe/London'`, [r.quoteId]);
+      if (c?.n === 1) await notifyClient(db(), r.quoteId, { kind: "PHOTOS", count: 1 });
+    }
   });
 }
 
@@ -62,6 +80,7 @@ export async function postMessageAction(quoteId: string, text: string, internal:
   return run(quoteId, async actor => {
     const t = z.string().trim().min(1, "Write a message").max(4000).parse(text);
     await addEvent(db(), uuid.parse(quoteId), internal ? "NOTE" : "MESSAGE", t, "ADMIN", actor, !internal);
+    if (!internal) await notifyClient(db(), uuid.parse(quoteId), { kind: "MESSAGE", text: t });
   });
 }
 
@@ -71,10 +90,13 @@ export async function addClientActionAction(quoteId: string, raw: unknown) {
       price: z.number().finite().min(0).max(1_000_000).optional(), vatPercent: z.number().finite().min(0).max(100).optional() }).parse(raw);
     if (p.kind === "VARIATION") {
       if (p.price === undefined) throw new StoreError("A variation needs a price.");
-      await addAction(db(), uuid.parse(quoteId), { kind: p.kind, title: p.title, detail: variationDetail(p.price, p.vatPercent ?? 20, p.detail), dueDate: p.dueDate }, actor);
+      const detail = variationDetail(p.price, p.vatPercent ?? 20, p.detail);
+      await addAction(db(), uuid.parse(quoteId), { kind: p.kind, title: p.title, detail, dueDate: p.dueDate }, actor);
+      await notifyClient(db(), uuid.parse(quoteId), { kind: "REQUEST", title: p.title, detail, dueDate: p.dueDate, variation: true });
       return;
     }
     await addAction(db(), uuid.parse(quoteId), { kind: p.kind, title: p.title, detail: p.detail, dueDate: p.dueDate }, actor);
+    await notifyClient(db(), uuid.parse(quoteId), { kind: "REQUEST", title: p.title, detail: p.detail, dueDate: p.dueDate, variation: false });
   });
 }
 
@@ -100,11 +122,16 @@ export async function recordPaymentAction(quoteId: string, raw: unknown) {
   return run(quoteId, async actor => {
     const p = z.object({ scheduleNo: z.number().int().min(1).max(20).nullable(), amount: money, method: z.enum(["BANK_TRANSFER", "CARD", "CASH", "CHEQUE"]), reference: z.string().trim().max(80), paidOn: day, note: z.string().trim().max(500) }).parse(raw);
     await recordPayment(db(), uuid.parse(quoteId), p, actor, "ADMIN");
+    await notifyClient(db(), uuid.parse(quoteId), { kind: "PAYMENT_CONFIRMED", amount: p.amount, paidOn: p.paidOn });
   });
 }
 
 export async function reviewPaymentAction(quoteId: string, id: string, status: "CONFIRMED" | "REJECTED") {
-  return run(quoteId, async actor => { await reviewPayment(db(), uuid.parse(id), z.enum(["CONFIRMED", "REJECTED"]).parse(status), actor); });
+  return run(quoteId, async actor => {
+    const st = z.enum(["CONFIRMED", "REJECTED"]).parse(status);
+    const p = await reviewPayment(db(), uuid.parse(id), st, actor);
+    await notifyClient(db(), p.quoteId, { kind: st === "CONFIRMED" ? "PAYMENT_CONFIRMED" : "PAYMENT_NOT_FOUND", amount: p.amount, paidOn: p.paidOn });
+  });
 }
 
 export async function addExpenseAction(raw: unknown) {
@@ -187,6 +214,7 @@ export async function addDocumentsAction(quoteId: string, raw: unknown) {
       files: z.array(z.object({ url: z.string().url().max(1000), fileName: z.string().max(300), mimeType: z.string().max(120), sizeBytes: z.number().int().min(0) })).min(1).max(20),
     }).parse(raw);
     await addDocuments(db(), uuid.parse(quoteId), p.files.map(f => ({ ...f, category: p.category, visibleToClient: p.visibleToClient })), actor);
+    if (p.visibleToClient) await notifyClient(db(), uuid.parse(quoteId), { kind: "DOCUMENTS", titles: p.files.map(f => f.fileName.replace(/\.[a-z0-9]{1,5}$/i, "")) });
   });
 }
 
@@ -194,5 +222,65 @@ export async function updateDocumentAction(quoteId: string, id: string, raw: unk
   return run(quoteId, async actor => {
     const p = z.object({ title: z.string().trim().min(1).max(200).optional(), category: docCategory.optional(), note: z.string().trim().max(1000).optional(), visibleToClient: z.boolean().optional(), hidden: z.boolean().optional() }).parse(raw);
     await updateDocument(db(), uuid.parse(quoteId), uuid.parse(id), p, actor);
+  });
+}
+
+// ---------------------------------------------------------------- Client portal: project manager, invoices, snags
+
+async function portal() { if (!(await portalReady(db()))) throw new StoreError("Run the client-portal migration first (20261112120000_client_portal)."); }
+
+export async function setManagerAction(quoteId: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    await portal();
+    const p = z.object({ name: z.string().trim().max(80), phone: z.string().trim().max(40), email: z.string().trim().max(120).refine(e => !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e), "Enter a valid email") }).parse(raw);
+    const id = uuid.parse(quoteId), before = (await loadJob(id))?.portal;
+    await setManager(db(), id, p, actor);
+    if (p.name && (p.name !== before?.managerName || p.phone !== before?.managerPhone)) await notifyClient(db(), id, { kind: "MANAGER", ...p });
+  });
+}
+
+/** Raise a stage invoice now (normally they are raised automatically when the stage is done). */
+export async function issueInvoiceAction(quoteId: string, scheduleNo: number) {
+  return run(quoteId, async actor => {
+    await portal();
+    const id = uuid.parse(quoteId);
+    const job = await loadJob(id);
+    if (!job || job.quote.status !== "ACCEPTED") throw new StoreError("Invoices are raised once the quote is accepted.");
+    const row = job.schedule.find(r => r.n === scheduleNo);
+    if (!row) throw new StoreError("Payment not found.");
+    if (job.invoices.some(i => i.scheduleNo === scheduleNo)) throw new StoreError("That invoice has already been issued.");
+    const today = londonDay(new Date());
+    const inv = await issueInvoice(db(), id, { scheduleNo, number: invoiceNumber(job.quote.reference, scheduleNo), label: row.label, description: row.when, issuedOn: today, dueOn: addDaysIso(today, job.docs.paymentDays || 7),
+      ...invoiceAmounts(row, { net: job.docs.price.net, gross: job.docs.price.gross }) }, actor, "ADMIN");
+    if (inv) await sendInvoice(id, job.quote, job.docs, job.schedule, [...job.invoices, inv], inv, job.money.received);
+  });
+}
+
+/** Email an invoice again (client with the PDF, office copy) – e.g. one raised before email was set up. */
+export async function resendInvoiceAction(quoteId: string, number: string) {
+  return run(quoteId, async () => {
+    await portal();
+    const id = uuid.parse(quoteId);
+    const job = await loadJob(id);
+    const inv = job?.invoices.find(i => i.number === number);
+    if (!job || !inv) throw new StoreError("Invoice not found.");
+    const r = await sendInvoice(id, job.quote, job.docs, job.schedule, job.invoices, inv, job.money.received);
+    if (!r.sent) throw new StoreError(`The email didn't go: ${"reason" in r && r.reason ? r.reason : "check the mail settings"}.`);
+  });
+}
+
+export async function addSnagAction(quoteId: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    await portal();
+    const p = z.object({ title: z.string().trim().min(3, "Describe the snag").max(200), detail: z.string().trim().max(2000), location: z.string().trim().max(120), photoUrl: z.string().trim().max(500) }).parse(raw);
+    await addSnag(db(), uuid.parse(quoteId), p, actor, "ADMIN");
+  });
+}
+
+export async function setSnagAction(quoteId: string, snagId: string, done: boolean) {
+  return run(quoteId, async actor => {
+    const id = uuid.parse(quoteId), was = (await listSnags(db(), id)).find(s => s.id === snagId);
+    const s = await setSnagStatus(db(), id, uuid.parse(snagId), done ? "DONE" : "OPEN", actor, "ADMIN");
+    if (done && was?.status !== "DONE") await notifyClient(db(), id, { kind: "SNAG_FIXED", title: s.title });
   });
 }

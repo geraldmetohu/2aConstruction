@@ -426,7 +426,7 @@ test('totals: waste, contingency, markup and VAT in order', () => {
 });
 
 test('every project builds without warnings and within sane ranges (inc VAT)', () => {
-  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000] };
+  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000], conversion: [12000, 40000], outbuilding: [12000, 45000] };
   const sample = { garden: { patio: 25, fencing: 12, turf: 40 }, cleaning: { windows: 12, jetWash: 40, gutters: 20 }, demolition: { kitchens: 1, bathrooms: 1, partitions: 15, chimneyBreasts: 1 } };
   for (const p of workPackages) {
     const r = only(p.id, sample[p.id]);
@@ -435,6 +435,101 @@ test('every project builds without warnings and within sane ranges (inc VAT)', (
     assert.ok(r.totals.gross > lo && r.totals.gross < hi, `${p.id} £${r.totals.gross}`);
   }
   for (const t of ['BEDROOM', 'KITCHEN', 'BATHROOM', 'HALL']) assert.deepEqual(rooms([room(t, { walls: 'SKIM', bathroomRefit: true, kitchenRefit: true })]).warnings, [], t);
+});
+
+
+// ---------------- Quote types, scaffold, conversions, garden buildings, more materials ----------------
+test('quote mode and 300-day validity are part of the input', () => {
+  const d = takeoffInputSchema.parse({ property: { houseType: 'TERRACED', width: 5, length: 7 }, prelims: {}, commercial: {} });
+  assert.equal(d.mode, 'ROOMS'); assert.equal(d.terms.validityDays, 300);
+  assert.equal(takeoffInputSchema.parse({ ...d, mode: 'TRADE', terms: { validityDays: 365 } }).terms.validityDays, 365);
+  assert.throws(() => takeoffInputSchema.parse({ ...d, terms: { validityDays: 400 } }));
+});
+
+test('scaffold priced per m² of elevation; always / never / auto', () => {
+  const roof = only('roofing', {}, { property: { houseType: 'SEMI_OR_END', width: 6, length: 8, storeys: 2 } });
+  const s = key(roof, 'scaffold_area');
+  // front + rear + one side: (6+1.2)×2 + (8+1.2) = 23.6 m × (2×2.7+1) = 6.4 m → 152 m²
+  assert.equal(s.quantity, 152);
+  assert.ok(roof.scaffolding.included && roof.scaffolding.cost > 0);
+  const rear = only('roofing', {}, { prelims: { scaffoldElevations: ['REAR'], scaffoldWeeks: 6 } });
+  assert.ok(key(rear, 'scaffold_area').quantity < s.quantity);
+  assert.equal(key(rear, 'scaffold_area_hire').quantity, key(rear, 'scaffold_area').quantity * 4, '4 extra weeks after the first 2');
+  assert.equal(only('roofing', {}, { prelims: { scaffoldMode: 'NO' } }).scaffolding.included, false);
+  assert.equal(only('garden', { patio: 20 }, { prelims: { scaffoldMode: 'YES' } }).scaffolding.included, true);
+  assert.ok(key(only('roofing', { chimneyRemove: 1 }), 'chimney_scaffold'));
+});
+
+test('garage conversion: infill wall, floor, lining, fire door, building control', () => {
+  const r = only('conversion', {});
+  for (const k of ['labour:garage_infill', 'labour:infill_footing', 'labour:floor_raise', 'labour:insulated_lining', 'door_fire', 'smoke_alarm', 'garage_window', 'building_control', 'dpm'])
+    assert.ok(key(r, k), k);
+  assert.ok(r.assumptions.some(a => /Building Regulations/.test(a)));
+  const bif = only('conversion', { infill: 'BIFOLD', wc: true, macerator: true, garageType: 'DETACHED', heating: 'PANEL' });
+  for (const k of ['bifold_alu', 'wc_cloakroom', 'macerator', 'sub_board', 'panel_heater', 'extractor_fan']) assert.ok(key(bif, k), k);
+  assert.ok(!key(bif, 'garage_window'));
+  assert.ok(only('conversion', { use: 'BEDROOM', infill: 'WALL_SOLID' }).warnings.some(w => /escape window/.test(w)));
+});
+
+test('garden buildings: bespoke frame or kit, base, power, annexe needs building control', () => {
+  const r = only('outbuilding', {});
+  for (const k of ['labour:outbuilding_base_screws', 'outbuilding_frame_mat', 'clad_composite', 'epdm_system', 'swa_cable', 'labour:swa_connect', 'panel_heater', 'bifold_alu'])
+    assert.ok(key(r, k), k);
+  assert.ok(!key(r, 'building_control') && !key(r, 'final_clean'), 'garden room: no building control, no builders clean');
+  const kit = only('outbuilding', { build: 'KIT', insulated: false, power: false, type: 'SUMMER_HOUSE' });
+  assert.ok(key(kit, 'outbuilding_kit_mat') && !key(kit, 'outbuilding_frame_mat') && !key(kit, 'swa_cable'));
+  assert.ok(key(only('outbuilding', { type: 'ANNEXE', habitable: true }), 'building_control'));
+});
+
+test('more material choices: every option exists with the same unit; new floor finishes', () => {
+  for (const g of materialVariants) {
+    const units = new Set(g.keys.map(k => { assert.ok(defaultRateBook.materials[k], `${g.id}: ${k}`); return defaultRateBook.materials[k].unit; }));
+    assert.equal(units.size, 1, `${g.id} units`);
+  }
+  assert.ok(materialVariants.find(g => g.id === 'skirting').keys.length >= 20);
+  assert.ok(materialVariants.find(g => g.id === 'door').keys.length >= 12);
+  for (const [type, k] of [['SOLID_WOOD', 'floor_solid_oak'], ['VINYL', 'floor_vinyl'], ['RESIN', 'resin_floor']])
+    assert.ok(key(rooms([room('LIVING', { flooring: type })]), k), type);
+  const pick = rooms([room('LIVING', { flooring: 'LAMINATE' })], { materialChoices: {} });
+  const lam = key(pick, 'floor_laminate');
+  assert.equal(lam.variantGroup, 'laminate');
+});
+
+
+test('every steel end has its own bearing: padstone, plate, cast, brick, column or steel', () => {
+  const r = only('loft', { beamCount: 2, beam1EndA: 'PLATE', beam1EndB: 'CAST', beam2EndA: 'COLUMN', beam2EndB: 'STEEL' });
+  assert.equal(key(r, 'bearing_plate').quantity, 1);
+  assert.equal(key(r, 'padstone_cast_mix').quantity, 1); assert.ok(key(r, 'labour:bearing_cast'));
+  assert.equal(key(r, 'steel_cleat').quantity, 1); assert.ok(key(r, 'labour:steel_connection'));
+  assert.ok(!key(r, 'padstone'), 'no padstones chosen');
+  assert.ok(r.scope.some(x => /spreader plate/.test(x) && /cast-in-place/.test(x)));
+  const std = only('loft', { beamCount: 3 });
+  assert.equal(key(std, 'padstone').quantity, 6);
+  const ext = only('extension', { knockThrough: true, openingSteelEndA: 'PADSTONE_PLATE', openingSteelEndB: 'ENG_BRICK' });
+  assert.ok(key(ext, 'bearing_plate') && key(ext, 'labour:bearing_brick'));
+  assert.equal(only('demolition', { loadBearing: 2, wallSteelEndA: 'PLATE', wallSteelEndB: 'PLATE' }).lines.filter(l => l.rateKey === 'bearing_plate').reduce((s, l) => s + l.quantity, 0), 4);
+});
+
+test('project pack: a RAMS per activity with its own risks, permits, regulations and hold points', () => {
+  const input = takeoffInputSchema.parse({ property: { houseType: 'TERRACED', width: 5, length: 8 }, packages: { loft: { enabled: true }, extension: { enabled: true } }, prelims: {}, commercial: {}, terms: { nearestHospital: 'North Middlesex Hospital' } });
+  const r = calculateTakeoff(input);
+  const d = buildDocuments({ customer: customerTakeoff(r, input), input, company: defaultCompany, client: { name: 'A B', email: 'a@b.com', siteAddress: '1 Road' }, reference: 'Q', version: 1, issueDate: '2026-11-10' });
+  const p = d.pack;
+  const ids = p.rams.map(x => x.id);
+  for (const id of ['SCAFFOLD', 'STRUCTURAL_STEEL', 'EXCAVATION', 'ELECTRICAL', 'ROOFING']) assert.ok(ids.includes(id), id);
+  const steel = p.rams.find(x => x.id === 'STRUCTURAL_STEEL');
+  assert.ok(steel.scope.some(x => /steel beams/.test(x)) && steel.permits.some(x => /Temporary works/.test(x)) && steel.regs.some(x => /Part A/.test(x)));
+  assert.ok(steel.risks.length >= 3 && steel.ppe.every(x => x.standard));
+  assert.notDeepEqual(steel.specific, p.rams.find(x => x.id === 'ROOFING').specific);
+  assert.ok(p.people.hospital.includes('North Middlesex'));
+  assert.ok(p.permits.some(x => x.id === 'HOT_WORK') && p.permits.some(x => x.id === 'DIG'));
+  assert.ok(p.registers.some(x => /Scaffold inspection/.test(x.title)) && p.registers.some(x => /Excavation/.test(x.title)));
+  assert.ok(p.buildingRegs.stages.length >= 5 && p.toolbox.length === p.rams.length && p.tempWorks && p.lifting);
+  assert.equal(p.f10.notifiable, false);
+  assert.ok(p.completion.certificates.some(x => /Electrical Installation Certificate/.test(x)));
+  const garden = only('garden', { patio: 20 });
+  const gd = buildDocuments({ customer: customerTakeoff(garden), input: takeoffInputSchema.parse({ property: { houseType: 'TERRACED', width: 5, length: 7 }, packages: { garden: { enabled: true, values: { patio: 20 } } }, prelims: {}, commercial: {} }), company: defaultCompany, client: { name: 'A', email: 'a@b.com', siteAddress: '' }, reference: 'Q', version: 1, issueDate: '2026-11-10' });
+  assert.ok(!gd.pack.rams.some(x => x.id === 'STRUCTURAL_STEEL') && !gd.pack.tempWorks?.some(x => /needles/.test(x)));
 });
 
 // ---------------- Prices ----------------
@@ -509,9 +604,9 @@ test('external walls: render with or without insulation; EWI costs more and adds
   const ewi = only('external', { area: 80, system: 'SILICONE', insulation: true, board: 'ewi_eps_100', sills: 5 });
   assert.ok(!key(plain, 'ewi_eps_100') && key(ewi, 'ewi_eps_100') && key(ewi, 'ewi_fixings') && key(ewi, 'ewi_sill'));
   assert.ok(ewi.totals.net > plain.totals.net);
-  assert.ok(key(plain, 'scaffold_erect'), 'two storeys needs scaffold');
+  assert.ok(key(plain, 'scaffold_area'), 'two storeys needs scaffold');
   const paintOnly = only('external', { area: 50, system: 'PAINT_ONLY', storeys: 'ONE' });
-  assert.ok(key(paintOnly, 'labour:masonry_paint_apply') && !key(paintOnly, 'scaffold_erect'));
+  assert.ok(key(paintOnly, 'labour:masonry_paint_apply') && !key(paintOnly, 'scaffold_area'));
   const hack = only('external', { area: 50, system: 'SAND_CEMENT', hackOff: true });
   assert.ok(key(hack, 'labour:render_hack_off') && hack.assumptions.some(a => /Approved Document L/.test(a)));
 });
@@ -519,7 +614,7 @@ test('external walls: render with or without insulation; EWI costs more and adds
 test('garden and cleaning packages price only what is measured', () => {
   const g = only('garden', { patio: 20, fencing: 15, artificial: 30, driveway: 25, driveType: 'RESIN', treesSmall: 2, maintenance: 4 });
   for (const k of ['labour:patio_lay', 'paving_porcelain', 'labour:fence_closeboard', 'artificial_turf_30', 'labour:resin_drive', 'labour:tree_fell_small', 'labour:garden_maintenance', 'muck_away']) assert.ok(key(g, k), `garden missing ${k}`);
-  assert.ok(!key(g, 'scaffold_erect') && !key(g, 'final_clean'), 'no scaffold or builders clean for a garden');
+  assert.ok(!key(g, 'scaffold_area') && !key(g, 'final_clean'), 'no scaffold or builders clean for a garden');
   assert.ok(g.lines.filter(l => l.kind === 'LABOUR').every(l => l.trade), 'every labour line has a trade');
   const c = only('cleaning', { windows: 12, visits: 4, jetWash: 40, gutters: 20 });
   near(key(c, 'labour:window_clean').quantity, 12 * (1 + 3 * 0.9), 'repeat visits at the contract rate');
@@ -589,7 +684,7 @@ test('wording edits: new titles and text, hidden rows fold into the group, optio
 test('EWI is zero-rated for VAT; other work and scaffold stay at 20%', () => {
   const r = only('external', { area: 60, system: 'SILICONE', insulation: true });
   assert.ok(r.lines.filter(l => l.area === 'External walls & render').every(l => l.vatPercent === 0));
-  assert.ok(key(r, 'scaffold_erect').vatPercent === undefined);
+  assert.ok(key(r, 'scaffold_area').vatPercent === undefined);
   assert.equal(r.totals.vatBreakdown.length, 2);
   near(sum(r.totals.vatBreakdown, v => v.net), r.totals.net, 'breakdown nets');
   assert.ok(r.totals.vat < r.totals.net * 0.2);
@@ -715,7 +810,7 @@ test('extension: types, foundations, walls & DPC, floors, UFH, manholes, columns
   for (const t of ['SIDE', 'DOUBLE_SIDE', 'WRAP_DOUBLE_REAR', 'WRAP_DOUBLE_SIDE']) {
     const r = only('extension', { extType: t });
     assert.ok(r.totals.net > 20000, t);
-    if (t !== 'SIDE') assert.ok(key(r, 'scaffold_erect') && lines(r, l => l.stage.includes('First floor')).length, `${t} has a first floor`);
+    if (t !== 'SIDE') assert.ok(key(r, 'scaffold_area') && lines(r, l => l.stage.includes('First floor')).length, `${t} has a first floor`);
   }
   const wrapRear = only('extension', { extType: 'WRAP_DOUBLE_REAR' }), dbl = only('extension', { extType: 'DOUBLE' });
   assert.ok(wrapRear.totals.net > dbl.totals.net * 0.9);

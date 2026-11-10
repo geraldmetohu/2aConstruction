@@ -1,8 +1,8 @@
 import { prisma } from "@/app/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { LoginLink } from "@kinde-oss/kinde-auth-nextjs/components";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { SignInLink as LoginLink } from "@/app/componets/auth/AuthLinks";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { CalendarClock, CheckCircle2, Clock3, FileText, FolderOpen, Hammer, Mail, Phone, Video } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -37,7 +37,7 @@ async function getClientDashboardData(userId: string) {
 }
 
 export default async function ClientDashboardPage() {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
 
   if (!user?.id) {
@@ -52,7 +52,7 @@ export default async function ClientDashboardPage() {
             </p>
             <div className="mt-6">
               <Button asChild className="rounded-full bg-amber-500 px-5 text-black hover:bg-amber-400">
-                <LoginLink authUrlParams={{ prompt: "login" }} postLoginRedirectURL="/api/auth/creation">
+                <LoginLink next="/client-dashboard">
                   Sign in to your dashboard
                 </LoginLink>
               </Button>

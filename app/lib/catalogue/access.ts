@@ -1,10 +1,10 @@
 import "server-only";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { isCatalogueAdmin } from "./validation";
 
 export class CatalogueError extends Error {}
 export async function requireCatalogueAdmin() {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
   if (!isCatalogueAdmin(user, process.env.ADMIN_EMAILS)) throw new CatalogueError("You do not have permission to manage the catalogue.");
   return user!.id;

@@ -1,10 +1,10 @@
 "use server";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { redirect } from "next/navigation";
 import {parseWithZod} from "@conform-to/zod"
 import { bannerSchema, beforeafterSchema, ProjectSchema, ContactSchema, heroVideoSchema } from "./lib/zodSchemas";
 import { prisma } from "./lib/db";
-import nodemailer from "nodemailer";
+import { officeInbox, sendMail } from "@/app/lib/takeoff/mail.server";
 import { headers } from "next/headers";
 import { deleteFile } from "./api/uploadthing/core";
 import { randomUUID } from "crypto";
@@ -23,7 +23,7 @@ type ClientPhaseInput = {
 };
 
 export async function CreateProject(prevState: unknown,formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -55,7 +55,7 @@ export async function CreateProject(prevState: unknown,formData: FormData) {
 }
 
 export async function EditProject(prevState: any,formData: FormData ) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (!user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -92,7 +92,7 @@ export async function EditProject(prevState: any,formData: FormData ) {
 }
 
 export async function DeleteProject(formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -119,7 +119,7 @@ export async function DeleteProject(formData: FormData) {
 
 
 export async function CreateBeforeAfter(prevState: any, formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -147,7 +147,7 @@ export async function CreateBeforeAfter(prevState: any, formData: FormData) {
 }
 
 export async function DeleteBeforeAfter (formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -181,7 +181,7 @@ const id = formData.get("beforeafterId") as string;
 
 
 export async function CreateContact(prevState: unknown,formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -212,7 +212,7 @@ export async function CreateContact(prevState: unknown,formData: FormData) {
 }
 
 export async function EditContact(prevState: any,formData: FormData ) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -248,7 +248,7 @@ export async function EditContact(prevState: any,formData: FormData ) {
 }
 
 export async function DeleteContact(formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -275,7 +275,7 @@ export async function DeleteContact(formData: FormData) {
 
 
 export async function CreateBanner(prevState: any, formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if (  !user ||  (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -305,7 +305,7 @@ export async function CreateBanner(prevState: any, formData: FormData) {
 }
 
 export async function DeleteBanner (formData: FormData) {
-    const { getUser} = getKindeServerSession();
+    const { getUser} = getAuthSession();
     const user = await getUser();
 
     if ( !user || (user.email !== "geraldmetohu@gmail.com" && user.email !== "hasanajaleksios@icloud.com" && user.email !== "ensisako11@gmail.com")){
@@ -377,21 +377,8 @@ export async function sendContact(prevState: any, formData: FormData) {
   `;
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST!,
-      port: Number(process.env.SMTP_PORT ?? 465),
-      secure: String(process.env.SMTP_SECURE ?? "true") === "true",
-      auth: { user: process.env.SMTP_USER!, pass: process.env.SMTP_PASS! },
-    });
-
-    await transporter.sendMail({
-      from: process.env.CONTACT_FROM ?? process.env.SMTP_USER!,
-      to: process.env.CONTACT_TO!,
-      subject: `New enquiry from ${name}`,
-      replyTo: email,
-      text,
-      html,
-    });
+    const r = await sendMail({ to: officeInbox(), subject: `New enquiry from ${name}`, replyTo: email, text, html });
+    if (!r.sent) throw new Error(r.reason);
 
     return { ok: true, message: "Sent! We’ll get back to you shortly." };
   } catch (err) {
@@ -918,7 +905,7 @@ export async function submitEstimator(formData: FormData) {
 }
 
 export async function saveClientProjectPortal(formData: FormData) {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
   const admins = getAdminEmails();
 
@@ -987,7 +974,7 @@ export async function saveClientProjectPortal(formData: FormData) {
 }
 
 export async function deleteClient(formData: FormData) {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
   const admins = getAdminEmails();
 

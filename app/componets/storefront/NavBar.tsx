@@ -6,14 +6,11 @@ import { NavbarLinks } from "./NavBarLinks";
 // import { portalEnabled } from "@/app/lib/customer-portal/access";
 
 import MobileNav from "./MobileNav";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/app/lib/db";
-import {
-  LoginLink,
-  LogoutLink,
-  RegisterLink,
-} from "@kinde-oss/kinde-auth-nextjs/components";
+import { SignOutButton } from "../auth/AuthLinks";
+import { CircleUser } from "lucide-react";
 
 const ADMIN_EMAILS = new Set([
   "geraldmetohu@gmail.com",
@@ -22,10 +19,10 @@ const ADMIN_EMAILS = new Set([
 ]);
 
 export async function NavBar() {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
 
-  const isAdmin = !!user?.email && ADMIN_EMAILS.has(user.email);
+  const isAdmin = user?.role === "ADMIN" || (!!user?.email && ADMIN_EMAILS.has(user.email));
 
   const displayName =
     user?.given_name ||
@@ -71,9 +68,26 @@ export async function NavBar() {
   const dashboardHref = isAdmin
     ? "/dashboard"
     : user
-      ? "/my-quotes"
+      ? user.role === "TRADE" || user.role === "STAFF" ? "/trade" : "/my-quotes"
       : null;
   void hasClientDashboard;
+
+  // "Your area" links at the top of the phone menu, by role.
+  const accountLinks: { href: string; label: string; hint?: string }[] = !user ? [] : isAdmin ? [
+    { href: "/dashboard", label: "Dashboard", hint: "Today's list and the business at a glance" },
+    { href: "/dashboard/jobs", label: "Jobs", hint: "Progress, photos, payments, snagging" },
+    { href: "/dashboard/calculator", label: "New quote" },
+    { href: "/dashboard/saved-quotes", label: "Saved quotes" },
+    { href: "/account", label: "Account & password" },
+  ] : user.role === "TRADE" || user.role === "STAFF" ? [
+    { href: "/trade", label: "My jobs" },
+    { href: "/account", label: "Account & password" },
+  ] : [
+    { href: "/my-quotes", label: "My quotes & projects", hint: "Progress, payments, messages, documents" },
+    ...(hasClientDashboard ? [{ href: "/client-dashboard", label: "Earlier projects" }] : []),
+    { href: "/account", label: "Account & password" },
+    { href: "/contact", label: "Contact us" },
+  ];
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-black/[0.08] bg-white text-neutral-900 shadow-sm">
@@ -110,10 +124,7 @@ export async function NavBar() {
                 asChild
                 className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
               >
-                <LoginLink
-                  authUrlParams={{ prompt: "login" }}
-                  postLoginRedirectURL="/api/auth/creation"
-                >
+                <Link href="/login">
                   <span className="relative z-10 flex items-center gap-4">
                     <span>Sign in</span>
 
@@ -123,14 +134,14 @@ export async function NavBar() {
                   </span>
 
                   <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-                </LoginLink>
+                </Link>
               </Button>
 
               <Button
                 asChild
                 className="group relative mt-0 inline-flex items-center gap-4 overflow-hidden rounded-none border border-black/90 bg-transparent px-6 py-3 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
               >
-                <RegisterLink>
+                <Link href="/signup">
                   <span className="relative z-10 flex items-center gap-4">
                     <span>Create account</span>
 
@@ -140,7 +151,7 @@ export async function NavBar() {
                   </span>
 
                   <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-                </RegisterLink>
+                </Link>
               </Button>
             </>
           ) : (
@@ -156,24 +167,28 @@ export async function NavBar() {
                 </Button>
               )}
 
-              <span className="max-w-[160px] truncate px-2 text-sm text-neutral-600">
+              <Link href="/account" title="Your account & password" className="max-w-[160px] truncate rounded-full px-3 py-2 text-sm text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-black">
                 Hi, {displayName}
-              </span>
+              </Link>
 
-              <Button
-                asChild
-                variant="ghost"
-                className="rounded-full text-neutral-700 transition-all duration-300 hover:bg-neutral-100 hover:text-black"
-              >
-                <LogoutLink>Sign out</LogoutLink>
-              </Button>
+              <SignOutButton className="rounded-full px-4 py-2 text-sm font-medium text-neutral-700 transition-all duration-300 hover:bg-neutral-100 hover:text-black" />
             </>
           )}
         </div>
 
-        {/* Mobile navigation */}
-        <div className="md:hidden">
+        {/* Mobile navigation: a quick button to your area, then the menu */}
+        <div className="flex items-center gap-2 md:hidden">
+          {user && dashboardHref && (
+            <Link href={dashboardHref} aria-label={isAdmin ? "Admin dashboard" : "Your client area"}
+              className="flex h-11 items-center gap-1.5 rounded-full bg-[#f5b400] px-3.5 text-sm font-semibold text-black shadow-sm active:scale-95">
+              <CircleUser className="h-5 w-5" />
+              <span className="max-[359px]:hidden">{isAdmin ? "Dashboard" : user.role === "TRADE" || user.role === "STAFF" ? "My jobs" : "My area"}</span>
+            </Link>
+          )}
           <MobileNav
+            accountLinks={accountLinks}
+            user={user ? { name: displayName, email: user.email } : null}
+            isAdmin={isAdmin}
             dashboardHref={dashboardHref}
             dashboardLabel={
               isAdmin ? "Admin Dashboard" : "My account"

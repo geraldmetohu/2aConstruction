@@ -1,4 +1,4 @@
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
@@ -14,7 +14,7 @@ export const runtime = "nodejs";
 /** The quotation PDF for the version the signed-in client can see. */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
   if (!user?.email) return new Response("Please sign in.", { status: 401 });
   if (!z.string().uuid().safeParse(id).success) return new Response("Not found", { status: 404 });
   const db = prismaDb(prisma);

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 /** Quotation, contract, guarantee and health & safety documents for the version the client can see. */
 export default async function ClientDocumentsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
   if (!user?.email) redirect("/my-quotes");
   if (!z.string().uuid().safeParse(id).success) notFound();
   const db = prismaDb(prisma);
@@ -34,7 +34,7 @@ export default async function ClientDocumentsPage({ params }: { params: Promise<
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 print:p-0">
       <Link href={`/my-quotes/${id}`} className="mb-4 inline-block text-sm text-neutral-600 hover:text-neutral-900 print:hidden">← Back to your quote</Link>
-      <DocumentsViewer docs={docs} />
+      <DocumentsViewer docs={docs} audience="client" />
     </main>
   );
 }

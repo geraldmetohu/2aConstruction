@@ -96,3 +96,14 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;            /* Chrome/Safari */
 }
+
+/* Phones: 16px form fields so iOS doesn't zoom in when you tap one; no grey flash on tap. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+}
+a, button { -webkit-tap-highlight-color: transparent; }
+
+/* Client portal on phones: keep the page end (footer) clear of the bottom tab bar. */
+@media (max-width: 767px) {
+  body:has([data-portal-tabbar]) { padding-bottom: calc(4rem + env(safe-area-inset-bottom)); }
+}

@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import { calculateTakeoff, customerTakeoff } from "@/app/lib/takeoff/engine";
@@ -9,6 +9,8 @@ import { workPackages } from "@/app/lib/takeoff/modules/index";
 import { takeoffInputSchema, type TakeoffInput } from "@/app/lib/takeoff/schema";
 import { acceptQuote, getClientQuote, prismaDb, saveClientChoices, StoreError } from "@/app/lib/takeoff/store";
 import { emailQuoteAccepted } from "@/app/lib/takeoff/quote-mail.server";
+import { jobsReady } from "@/app/lib/takeoff/jobs-store";
+import { portalReady, setRequestedStart } from "@/app/lib/takeoff/portal-store";
 import type { PriceTable, RateBook } from "@/app/lib/takeoff/types";
 import { defaultRateBook } from "@/app/lib/takeoff/ratebook";
 
@@ -16,7 +18,7 @@ const choiceSchema = z.array(z.object({ scope: z.enum(["room", "package", "extra
 const msg = (e: unknown) => e instanceof StoreError ? e.message : e instanceof z.ZodError ? "Please check your choices." : "Something went wrong. Please try again or contact us.";
 
 async function clientEmail() {
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
   if (!user?.email) throw new StoreError("Please log in with the email address the quote was sent to.");
   return user.email;
 }
@@ -90,15 +92,21 @@ export async function confirmChoices(quoteId: string, version: number, raw: unkn
   } catch (e) { return { ok: false as const, message: msg(e) }; }
 }
 
-export async function acceptClientQuote(quoteId: string, version: number, fullName: string, agreed: boolean) {
+export async function acceptClientQuote(quoteId: string, version: number, fullName: string, agreed: boolean, preferredStart = "") {
   try {
     if (!agreed) throw new StoreError("Please tick the box to confirm you accept the quote and its terms.");
     const name = z.string().trim().min(3).max(120).parse(fullName);
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+    const start = preferredStart ? z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(preferredStart) : "";
+    if (start && (start < today || start > `${Number(today.slice(0, 4)) + 2}${today.slice(4)}`)) throw new StoreError("Choose a start date from today onwards (or leave it empty).");
     const email = await clientEmail();
     const id = z.string().uuid().parse(quoteId);
-    const r = await acceptQuote(prismaDb(prisma), id, email, version, name);
-    await emailQuoteAccepted({ quoteId: id, reference: r.reference, siteAddress: r.siteAddress, clientEmail: r.clientEmail, acceptedName: name, version });
+    const d = prismaDb(prisma);
+    const r = await acceptQuote(d, id, email, version, name);
+    // The start date they would like; we confirm the actual date. Skipped quietly if the portal tables aren't set up yet.
+    if (start) await (async () => { if (await jobsReady(d) && await portalReady(d)) await setRequestedStart(d, id, start, email); })().catch(e => console.error("[accept] requested start", e));
+    await emailQuoteAccepted({ quoteId: id, reference: r.reference, siteAddress: r.siteAddress, clientEmail: r.clientEmail, acceptedName: name, version, requestedStart: start || null });
     revalidatePath(`/my-quotes/${quoteId}`);
     return { ok: true as const };
-  } catch (e) { return { ok: false as const, message: e instanceof z.ZodError ? "Please type your full name." : msg(e) }; }
+  } catch (e) { return { ok: false as const, message: e instanceof z.ZodError ? "Please type your full name (and a valid start date, if you chose one)." : msg(e) }; }
 }

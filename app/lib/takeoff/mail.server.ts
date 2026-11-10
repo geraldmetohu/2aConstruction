@@ -1,35 +1,74 @@
 import "server-only";
-import nodemailer from "nodemailer";
 
 /**
- * Automated emails (daily digest, reminders, check-in links). Configure SMTP_URL
- * (e.g. smtps://user:pass@smtp.gmail.com:465) or SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS, and MAIL_FROM.
- * Without these, nothing is sent and the app shows the information on screen only.
+ * Every automated email (sign-in links, quotes, invoices, reminders, enquiries) goes out through one sender:
+ * - Resend (preferred): RESEND_API_KEY and MAIL_FROM / RESEND_FROM, e.g. "2A Construction <quotes@2aconstruction.co.uk>"
+ *   – the from-address must be on a domain verified in Resend.
+ * - SMTP (fallback): SMTP_URL, or SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASS.
+ * Without either, nothing is sent and the app shows the information on screen (and in the dev terminal) instead.
  */
+const resendKey = () => { const k = process.env.RESEND_API_KEY?.trim(); return k && k.startsWith("re_") ? k : ""; };
+const smtpConfigured = () => !!(process.env.SMTP_URL || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS));
+
 export function mailConfigured() {
-  return !!(process.env.SMTP_URL || (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS));
+  return !!resendKey() || smtpConfigured();
 }
 
-export async function sendMail(m: { to: string | string[]; subject: string; text: string; html?: string; attachments?: { filename: string; content: Buffer; contentType?: string }[] }) {
-  if (!mailConfigured()) return { sent: false as const, reason: "Email is not set up (SMTP settings missing)." };
+/** Who emails come from. With Resend this must be on the verified domain (never a gmail.com address). */
+export function mailFrom() {
+  const pick = [process.env.MAIL_FROM, process.env.RESEND_FROM, process.env.CONTACT_FROM, process.env.SMTP_USER].map(x => x?.trim()).filter(Boolean) as string[];
+  if (resendKey()) return pick.find(f => !/@(gmail|googlemail|icloud|outlook|hotmail|yahoo)\./i.test(f)) ?? "2A Construction <quotes@2aconstruction.co.uk>";
+  return pick[0] ?? "";
+}
+
+type Mail = { to: string | string[]; subject: string; text: string; html?: string; replyTo?: string; attachments?: { filename: string; content: Buffer; contentType?: string }[] };
+type Sent = { sent: true } | { sent: false; reason: string };
+
+export async function sendMail(m: Mail): Promise<Sent> {
+  if (!mailConfigured()) return { sent: false as const, reason: "Email is not set up (RESEND_API_KEY missing)." };
   const to = (Array.isArray(m.to) ? m.to : [m.to]).map(x => x.trim()).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
   if (!to.length) return { sent: false as const, reason: "No valid email address." };
-  // Short timeouts so a slow or unreachable mail server never holds up the page that triggered the email.
-  const timeouts = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000 };
-  const transport = process.env.SMTP_URL ? nodemailer.createTransport(process.env.SMTP_URL)
-    : nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT ?? 587), secure: Number(process.env.SMTP_PORT) === 465, auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, ...timeouts });
+  const replyTo = m.replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.replyTo.trim()) ? m.replyTo.trim() : undefined;
   try {
-    await transport.sendMail({ from: process.env.MAIL_FROM ?? process.env.SMTP_USER, to, subject: m.subject, text: m.text, html: m.html, ...(m.attachments?.length ? { attachments: m.attachments } : {}) });
+    if (resendKey()) await viaResend({ ...m, to, replyTo });
+    else await viaSmtp({ ...m, to, replyTo });
     return { sent: true as const };
   } catch (e) {
-    console.error("[mail] send failed", e);
+    console.error("[mail] send failed", e instanceof Error ? e.message : e);
     return { sent: false as const, reason: e instanceof Error ? e.message : "Email failed." };
   }
 }
 
+async function viaResend(m: Mail & { to: string[] }) {
+  // Short timeout so a slow mail service never holds up the page that triggered the email.
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 15_000);
+  try {
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST", signal: ctrl.signal,
+      headers: { Authorization: `Bearer ${resendKey()}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: mailFrom(), to: m.to, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), ...(m.replyTo ? { reply_to: m.replyTo } : {}),
+        ...(m.attachments?.length ? { attachments: m.attachments.map(a => ({ filename: a.filename, content: a.content.toString("base64"), ...(a.contentType ? { content_type: a.contentType } : {}) })) } : {}),
+      }),
+    });
+    if (!r.ok) throw new Error(`Resend ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  } finally { clearTimeout(timer); }
+}
+
+async function viaSmtp(m: Mail & { to: string[] }) {
+  const { default: nodemailer } = await import("nodemailer");
+  const timeouts = { connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000 };
+  const transport = process.env.SMTP_URL ? nodemailer.createTransport(process.env.SMTP_URL)
+    : nodemailer.createTransport({ host: process.env.SMTP_HOST, port: Number(process.env.SMTP_PORT ?? 587),
+      // 465 = SSL from the start; 587 / 25 = STARTTLS. SMTP_SECURE overrides.
+      secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : Number(process.env.SMTP_PORT) === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, ...timeouts });
+  await transport.sendMail({ from: mailFrom(), to: m.to, subject: m.subject, text: m.text, html: m.html, replyTo: m.replyTo, ...(m.attachments?.length ? { attachments: m.attachments } : {}) });
+}
+
 export const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL || process.env.KINDE_SITE_URL || "").replace(/\/$/, "");
 
-/** Where office notifications go: CONTACT_TO, else ADMIN_EMAILS, else the SMTP account itself. */
+/** Where office notifications (enquiries, acceptances) go: CONTACT_TO, else ADMIN_EMAILS, else the SMTP account. */
 export function officeInbox(): string[] {
   const list = (process.env.CONTACT_TO || process.env.ADMIN_EMAILS || process.env.SMTP_USER || "").split(/[,;\s]+/).filter(Boolean);
   return [...new Set(list)];

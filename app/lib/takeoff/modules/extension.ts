@@ -6,7 +6,7 @@ import type { Ctx } from "../engine";
 import { claddingOptions, cladNewWall, newRenderOptions, renderNewWall } from "./external";
 import { brickOptions } from "./extension-options";
 import { buildKitchen, kitchenFields } from "./kitchen";
-import { boardAndSkim, elecSummary, electricsItems, fasciaSoffit, fitWindows, flooring, flooringOptions, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting } from "./common";
+import { bearingFields, bearings, boardAndSkim, elecSummary, electricsItems, fasciaSoffit, fitWindows, flooring, flooringOptions, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting } from "./common";
 
 const rooflightOptions: [string, string][] = [["rooflight_600", "600 × 600 flat"], ["rooflight_800", "800 × 800 flat"], ["rooflight_1000", "1000 × 1000 flat"], ["rooflight_1000x1500", "1000 × 1500 flat"], ["rooflight_1000x2000", "1000 × 2000 flat"], ["lantern_2000x1000", "Lantern 2000 × 1000"], ["lantern_3000x1000", "Lantern 3000 × 1000"], ["lantern_3000x1500", "Lantern 3000 × 1500"]];
 
@@ -38,6 +38,7 @@ export const extensionPackage: WorkPackage = {
     { key: "upperWindows", label: "First floor windows", type: "int", default: 2, min: 0, max: 8, public: true, group: "First floor", when: [isDouble] },
     { key: "upperOpening", label: "Open into the house at first floor (steel)", type: "boolean", default: true, group: "First floor", when: [isDouble] },
     { key: "upperOpeningWidth", label: "First floor opening width", type: "number", unit: "m", default: 1, min: 0.8, max: 6, group: "First floor", when: [isDouble, { key: "upperOpening", is: true }] },
+    ...bearingFields("upperSteel", "First floor steel", "First floor", [isDouble, { key: "upperOpening", is: true }]),
     { key: "upperRadiators", label: "First floor radiators", type: "int", default: 1, min: 0, max: 6, group: "First floor", when: [isDouble] },
 
     { key: "foundation", label: "Foundations", type: "select", default: "TRENCH_FILL", group: "Foundations", hint: "As the engineer / Building Control require", options: [
@@ -73,14 +74,17 @@ export const extensionPackage: WorkPackage = {
 
     { key: "doors", label: "Rear doors", type: "select", default: "BIFOLD", public: true, clientChoice: true, options: [["BIFOLD", "Aluminium bi-fold"], ["SLIDING", "Aluminium sliding"], ["FRENCH", "uPVC French doors"], ["NONE", "None"]], group: "Openings" },
     { key: "doorWidth", label: "Door opening width", type: "number", unit: "m", default: 3, min: 1, max: 8, public: true, group: "Openings", when: [{ key: "doors", not: "NONE" }] },
+    ...bearingFields("doorSteel", "Steel over the doors (openings over 2.4 m)", "Openings", [{ key: "doors", not: "NONE" }, { key: "doorWidth", gt: 2.4 }, { key: "customSteels", not: true }]),
     { key: "windows", label: "Windows", type: "int", default: 1, min: 0, max: 8, public: true, group: "Openings" },
     { key: "knockThrough", label: "Open up into the house (steel beam)", type: "boolean", default: true, public: true, group: "Openings" },
     { key: "openingWidth", label: "Opening width into house", type: "number", unit: "m", default: 3.6, min: 1, max: 10, group: "Openings", when: [{ key: "knockThrough", is: true }] },
+    ...bearingFields("openingSteel", "Steel into the house", "Openings", [{ key: "knockThrough", is: true }, { key: "customSteels", not: true }]),
     { key: "customSteels", label: "Specify each steel beam myself", type: "boolean", default: false, group: "Steel beams", hint: "Otherwise sized automatically from the openings" },
     { key: "steelCount", label: "Number of steels", type: "int", default: 2, min: 1, max: 4, group: "Steel beams", when: [{ key: "customSteels", is: true }] },
     ...[1, 2, 3, 4].flatMap(i => [
       { key: `steel${i}Size`, label: `Steel ${i} size`, type: "select" as const, default: "203x133", options: Object.entries(beamSizes).map(([k, b]) => [k, b.label] as [string, string]), group: "Steel beams", when: [{ key: "customSteels", is: true }, { key: "steelCount", gt: i - 1 }] },
       { key: `steel${i}Length`, label: `Steel ${i} length`, type: "number" as const, unit: "m", default: 4, min: 0.5, max: 15, group: "Steel beams", when: [{ key: "customSteels", is: true }, { key: "steelCount", gt: i - 1 }] },
+      ...bearingFields(`steel${i}`, `Steel ${i}`, "Steel beams", [{ key: "customSteels", is: true }, { key: "steelCount", gt: i - 1 }]),
     ]),
 
     ...rooflineFields("Roofline", { fascia: "200", soffit: "NONE", downpipes: 1, height: 3 }),
@@ -210,7 +214,7 @@ export const extensionPackage: WorkPackage = {
       ctx.labour(G, "pad_foundation", cols, `${cols} pad${cols > 1 ? "s" : ""} ${fmt(ps)} m cube`);
       ctx.material(G, "concrete_c25", r1(Vp * 1.05), `${cols} × ${fmt(ps)}³ = ${fmt(Vp)} m³ + 5%`, "Concrete – column pads");
     }
-    ctx.scope(`${breakOut ? `Break out ${fmt(breakOut)} m² of existing patio / concrete. ` : ""}Excavate${bool(v, "diggerAccess") ? "" : " by hand"} and remove spoil (${loads} ${byGrab ? "grab loads" : "skips"}); ${foundText}${cols ? `, ${cols} column pad${cols > 1 ? "s" : ""}` : ""}${underpin ? `, underpin ${fmt(underpin)} m of the existing wall` : ""}; ${eng ? "engineering bricks and " : ""}blockwork to DPC with damp-proof course.`);
+    ctx.scope(`${breakOut ? `Break out ${fmt(breakOut)} m² of existing patio / concrete. ` : ""}Excavate${bool(v, "diggerAccess") ? "" : " by hand"} and remove spoil (${loads} ${byGrab ? "grab loads" : "skips"}); ${foundText}${cols ? `, ${cols} column pad${cols > 1 ? "s" : ""}` : ""}${underpin ? `, underpin ${fmt(underpin)} m of the existing wall` : ""}; ${eng ? "engineering bricks and " : ""}blockwork to DPC with damp-proof course.`, G);
 
     const Dr = "Drainage";
     const run = num(v, "drainRun");
@@ -270,7 +274,7 @@ export const extensionPackage: WorkPackage = {
       ctx.labour(Sl, "break_out_concrete", houseFloor, `existing floor in the house ${fmt(houseFloor)} m²`, "Take up existing floor in the house");
       groundFloor(houseFloor, "house floor");
     }
-    ctx.scope(`Floor (${fmt(A)} m²): ${floorText}${houseFloor ? `; take up ${fmt(houseFloor)} m² of the existing floor in the house and relay to the same level` : ""}.`);
+    ctx.scope(`Floor (${fmt(A)} m²): ${floorText}${houseFloor ? `; take up ${fmt(houseFloor)} m² of the existing floor in the house and relay to the same level` : ""}.`, Sl);
 
     // ---------- Superstructure ----------
     const Su = "Walls";
@@ -306,18 +310,18 @@ export const extensionPackage: WorkPackage = {
     ctx.material(Su, "cavity_closer", Math.ceil(closers), `door ${fmt(dw)} + 2 × 2.1 m, ${windows} windows × 4.8 m`);
     if (windows + upperWindows) ctx.material(Su, "lintel", qty2((windows + upperWindows) * 1.5), `${windows + upperWindows} windows × 1.5 m`, "Steel lintels – windows");
     if (dw) {
-      if (dw > 2.4 && bool(v, "customSteels")) ctx.material(Su, "padstone", 0, "");
+      if (dw > 2.4 && bool(v, "customSteels")) { /* priced with the steels you specified */ }
       else if (dw > 2.4) {
         const b = beamSizes[beamForSpan(dw)];
         ctx.material(Su, b.key, qty2(dw + 0.3), `${fmt(dw)} m opening + 0.3 m bearings`, `Steel over rear doors – ${b.label}`);
-        ctx.material(Su, "padstone", 2, "2 bearings");
+        bearings(ctx, Su, [str(v, "doorSteelEndA"), str(v, "doorSteelEndB")], "steel over the rear doors");
       } else ctx.material(Su, "lintel", qty2(dw + 0.3), `${fmt(dw)} m + 0.3 m`, "Steel lintel – rear doors");
     }
     ctx.material(Su, "wall_starter", 4, "2 junctions × 2 leaves");
     ctx.material(Su, "weep_vent", Math.ceil(P / 0.9) + 2 * (windows + (dw ? 1 : 0)), `⌈${fmt(P)} m ÷ 0.9⌉ + 2 per opening`);
     const trays = num(v, "cavityTrays");
     if (trays) { ctx.material(Su, "cavity_tray", Math.ceil(trays), `${fmt(trays)} m`); ctx.labour(Su, "cavity_tray_fit", trays, `${fmt(trays)} m`); }
-    ctx.scope(`Build ${fmt(net)} m² of cavity wall: ${brick ? `${ctx.rates.materials[brickKey]?.name.replace("Facing brick – ", "").toLowerCase() ?? "facing"} facing brick` : clad ? `blockwork with ${wallType === "CLAD_COMPOSITE" ? "composite" : "timber"} cladding` : "rendered blockwork"} outer leaf, 100 mm insulated cavity, thermal block inner leaf, with lintels, cavity closers and ties${trays ? `; ${fmt(trays)} m of cavity trays cut into the house wall` : ""}.`);
+    ctx.scope(`Build ${fmt(net)} m² of cavity wall: ${brick ? `${ctx.rates.materials[brickKey]?.name.replace("Facing brick – ", "").toLowerCase() ?? "facing"} facing brick` : clad ? `blockwork with ${wallType === "CLAD_COMPOSITE" ? "composite" : "timber"} cladding` : "rendered blockwork"} outer leaf, 100 mm insulated cavity, thermal block inner leaf, with lintels, cavity closers and ties${trays ? `; ${fmt(trays)} m of cavity trays cut into the house wall` : ""}.`, Su);
 
     // ---------- Roof ----------
     const R = "Roof";
@@ -355,10 +359,11 @@ export const extensionPackage: WorkPackage = {
       ctx.labour(O, "door_set_fit", 1);
     }
     fitWindows(ctx, O, windows + upperWindows, "window_upvc", `windows (${windows} ground${upperWindows ? ` + ${upperWindows} first floor` : ""})`);
-    ctx.scope(`Supply and fit ${dw ? `${fmt(dw)} m ${doors === "BIFOLD" ? "aluminium bi-fold" : doors === "SLIDING" ? "aluminium sliding" : "uPVC French"} doors` : "no rear doors"}${windows ? `, ${windows} window${windows > 1 ? "s" : ""}` : ""}${lights ? `, ${lights} rooflight${lights > 1 ? "s" : ""}${lantern ? " / lantern" : ""} (${lightKeys.map((k, i) => k === "TBC" ? "size to be confirmed" : k.startsWith("CUSTOM") ? `${fmt(num(v, `rooflight${i + 1}W`))} × ${fmt(num(v, `rooflight${i + 1}L`))} m ${k === "CUSTOM_LANTERN" ? "lantern" : "made to size"}` : ctx.rates.materials[k].name.replace(/^(Flat rooflight|Aluminium roof lantern) /, "")).join(", ")})` : ""}.`);
+    ctx.scope(`Supply and fit ${dw ? `${fmt(dw)} m ${doors === "BIFOLD" ? "aluminium bi-fold" : doors === "SLIDING" ? "aluminium sliding" : "uPVC French"} doors` : "no rear doors"}${windows ? `, ${windows} window${windows > 1 ? "s" : ""}` : ""}${lights ? `, ${lights} rooflight${lights > 1 ? "s" : ""}${lantern ? " / lantern" : ""} (${lightKeys.map((k, i) => k === "TBC" ? "size to be confirmed" : k.startsWith("CUSTOM") ? `${fmt(num(v, `rooflight${i + 1}W`))} × ${fmt(num(v, `rooflight${i + 1}L`))} m ${k === "CUSTOM_LANTERN" ? "lantern" : "made to size"}` : ctx.rates.materials[k].name.replace(/^(Flat rooflight|Aluminium roof lantern) /, "")).join(", ")})` : ""}.`, O);
 
     // ---------- Knock-through ----------
     const K = "Structural opening";
+    let steelBearings = "";
     if (bool(v, "customSteels")) {
       const n = num(v, "steelCount");
       let metres = 0;
@@ -367,7 +372,7 @@ export const extensionPackage: WorkPackage = {
         metres += len;
         ctx.material(K, b.key, qty2(len), `${fmt(len)} m as specified`, `Steel ${i} – ${b.label}`);
       }
-      ctx.material(K, "padstone", n * 2, `${n} steels × 2 bearings`);
+      steelBearings = bearings(ctx, K, Array.from({ length: n }, (_, j) => [str(v, `steel${j + 1}EndA`), str(v, `steel${j + 1}EndB`)]).flat(), `${n} steel${n > 1 ? "s" : ""}`);
       ctx.material(K, "beam_transport", n, `${n} steels × £100`);
       ctx.material(K, "intumescent", qty2(metres), `${fmt(metres)} m total`, "Fire protection to steel");
     }
@@ -376,14 +381,14 @@ export const extensionPackage: WorkPackage = {
       if (!bool(v, "customSteels")) {
         const b = beamSizes[beamForSpan(ow)];
         ctx.material(K, b.key, qty2(ow + 0.3), `${fmt(ow)} m opening + 2 × 150 mm bearings`, `Steel beam into house – ${b.label}`);
-        ctx.material(K, "padstone", 2, "2 bearings");
+        steelBearings = bearings(ctx, K, [str(v, "openingSteelEndA"), str(v, "openingSteelEndB")], "steel into the house");
         ctx.material(K, "intumescent", qty2(ow + 0.3), `${fmt(ow + 0.3)} m`, "Fire protection to steel");
       }
       ctx.material(K, "cement_bag", 2, "dry pack & make good");
       ctx.material(K, "sand_bag", 3, "dry pack & make good");
       ctx.material(K, "props_hire", 2, "2 weeks temporary support");
       ctx.labour(K, "knock_through", ow, `${fmt(ow)} m opening`);
-      ctx.scope(`Form ${fmt(ow)} m structural opening in the rear wall on temporary supports, install steel on padstones, fire protect and make good.`);
+      ctx.scope(`Form ${fmt(ow)} m structural opening in the rear wall on temporary supports, install steel on ${steelBearings || "padstones"}, fire protect and make good.`, K);
       ctx.assume("Steel sizes are indicative unless specified; final sizes from the structural engineer.");
     }
 
@@ -400,7 +405,7 @@ export const extensionPackage: WorkPackage = {
       if (bool(v, "upperOpening")) {
         const ow = num(v, "upperOpeningWidth"), b = beamSizes[beamForSpan(ow)];
         ctx.material(FF, b.key, qty2(ow + 0.3), `${fmt(ow)} m + 0.3 m bearings`, `Steel / lintel – first floor opening – ${b.label}`);
-        ctx.material(FF, "padstone", 2, "2 bearings");
+        bearings(ctx, FF, [str(v, "upperSteelEndA"), str(v, "upperSteelEndB")], "first floor opening steel");
         ctx.labour(FF, "knock_through", ow, `${fmt(ow)} m first floor opening`);
       }
       ctx.scope(`Double storey${UA !== A ? ` over ${fmt(UA)} m²` : ""}: first floor of ${t.label} joists, 18 mm boarding and acoustic insulation (${fmt(UA)} m²), ${upperWindows} first floor window${upperWindows === 1 ? "" : "s"}${bool(v, "upperOpening") ? `, ${fmt(num(v, "upperOpeningWidth"))} m opening into the house` : ""}.`);

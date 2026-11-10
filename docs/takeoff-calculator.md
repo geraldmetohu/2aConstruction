@@ -17,7 +17,8 @@ Nothing existing is changed, renamed or deleted. One **additive** migration adds
 | `TakeoffQuoteEvent` | History: created, saved, sent, updated after send, viewed, client choice, accepted. Append-only. |
 | `TakeoffQuoteSeen` | When the admin / client last looked (for "new" badges). |
 | `TakeoffRateSet` | Versions of your labour and material price list. Append-only. |
-| `TakeoffSupplierLink` | Selco / Builder Depot product link per material. Rows cannot be deleted. |
+| `TakeoffSupplierLink` | Merchant product link per material (12 merchants after `20261110120000_more_suppliers`). Rows cannot be deleted. |
+| `TakeoffSupplierSuggestion` | Products found automatically, waiting for you to confirm (migration `20261110120000_more_suppliers`). |
 | `TakeoffPriceObservation` | Each daily price check (price, image, error). Append-only. |
 
 Apply it yourself when you are ready. Take a backup first, then run:
@@ -46,24 +47,26 @@ Do **not** use `prisma migrate dev` or `db push` against the live database. Unti
 For each line, the first price found is used:
 
 1. A price edited on this quote.
-2. Live supplier price: the lowest Selco / Builder Depot price, ex VAT per unit, checked within the last 8 days.
+2. Live supplier price: the lowest merchant price, ex VAT per unit, checked within the last 40 days (refreshed monthly).
 3. The older supplier price table, if present.
 4. Catalogue item `TK-<KEY>`.
 5. Your saved rates (Rates page, or the `TAKEOFF_RATEBOOK_JSON` environment variable).
 6. Default rates (London 2026 estimates, marked "confirm").
 
-### Daily supplier prices
+### Monthly supplier prices (1st of every month)
 
-Selco and Builder Depot have no public price API. The system reads the price from each product page you link, once a day, politely (4 at a time, 1 second apart). It also stores the product image, which is shown on the quote lines and in the client's order list. If a page shows more than one price, nothing is saved and the error appears on the Supplier prices page: link the exact product variant instead.
+Merchants: Selco, Builder Depot, Toolstation, Screwfix, Travis Perkins, Wickes, Jewson, B&Q, MKM, City Plumbing, CEF, Topps Tiles (the last ten need migration `20261110120000_more_suppliers`).
 
-To run the daily check, set `TAKEOFF_CRON_SECRET` (at least 24 random characters). Then call:
+None of them has a public price API. On the 1st of every month (and the 2nd, to finish anything left) the system:
 
-```
-GET /api/takeoff/prices/refresh
-Authorization: Bearer <TAKEOFF_CRON_SECRET>
-```
+1. Re-reads every linked product page and stores the price (schema.org Product / Offer data on the page), politely: 4 at a time, a second apart, identifying itself, and only where the site's robots.txt allows it.
+2. Searches Screwfix, Toolstation, Selco and Builder Depot for materials with no link yet and saves the best match as a **suggestion** (product, price, image, pack size guess). You confirm it once on the Supplier prices page ("Use this product") – nothing changes your prices until you do, because a wrong pack size would give a wrong price.
 
-Call it once a day, e.g. with Vercel Cron or any scheduler. Each call checks up to 40 links that are due; call again if `remaining` is above 0.
+A price stays current for 40 days. Quotes use the cheapest current price, ex VAT per unit.
+
+Sites that block automatic reading (403 / 429) or disallow it in robots.txt show an error on the product; for those, import the price list from your trade account (CSV: `rateKey` or material name, `supplier`, `price`, optional `packQuantity`, `vatIncluded`, `url`).
+
+Schedule: `vercel.json` runs `GET /api/takeoff/prices/refresh` at 04:00 on the 1st and 2nd. Set `CRON_SECRET` in Vercel (Vercel sends it as `Authorization: Bearer <CRON_SECRET>`). `TAKEOFF_CRON_SECRET` also works for any other scheduler. "Run the monthly update now" on the Supplier prices page does the same by hand.
 
 ## How labour is priced
 

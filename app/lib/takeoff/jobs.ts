@@ -118,3 +118,33 @@ const shift = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); 
 
 export interface Todo { level: "urgent" | "soon" | "info"; kind: string; text: string; href: string; quoteId?: string }
 export const todoOrder = (a: Todo, b: Todo) => ["urgent", "soon", "info"].indexOf(a.level) - ["urgent", "soon", "info"].indexOf(b.level);
+
+// ---------------------------------------------------------------- Stage invoices
+
+/**
+ * Which payment-schedule rows should have an invoice by now. An invoice is raised once and never changes:
+ * deposit and approved variations straight away; a stage payment when all of its stages are marked done
+ * (or, for schedules without stage links, on its planned date); the final payment when the job is completed.
+ */
+export function invoicesDue(schedule: ScheduleRow[], stages: StageProgress[], jobStatus: string, today: string, already: Set<number>): ScheduleRow[] {
+  const done = new Set(stages.filter(s => s.status === "DONE").map(s => s.stage)), known = new Set(stages.map(s => s.stage));
+  return schedule.filter(r => {
+    if (already.has(r.n) || !(r.amount > 0)) return false;
+    const kind = r.kind ?? (/^Deposit/.test(r.label) ? "DEPOSIT" : /^Final/.test(r.label) ? "FINAL" : /^Variation/.test(r.label) ? "VARIATION" : "STAGE");
+    if (kind === "DEPOSIT" || kind === "VARIATION") return true;
+    if (kind === "FINAL") return jobStatus === "COMPLETED";
+    const mine = (r.stages ?? []).filter(s => known.has(s));
+    if (mine.length) return mine.every(s => done.has(s));
+    return !!r.date && r.date <= today;
+  });
+}
+
+/** Invoice amounts: gross from the schedule, VAT split in proportion to the contract (handles mixed VAT rates). */
+export function invoiceAmounts(row: ScheduleRow, contract: { net: number; gross: number }) {
+  const gross = r2(row.amount);
+  const net = row.net !== undefined ? r2(row.net) : contract.gross > 0 ? r2(gross * contract.net / contract.gross) : gross;
+  return { net, vat: r2(gross - net), gross };
+}
+
+export const invoiceNumber = (reference: string, n: number) => `${reference}-INV${String(n).padStart(2, "0")}`;
+export const addDaysIso = (d: string, n: number) => shift(d, n);

@@ -12,7 +12,10 @@ import {
 } from "./jobs-store";
 import { listDocuments } from "./job-documents";
 import { approvedVariations } from "./variations";
-import { clientSupplies, londonDay, ordersToPlace, paymentsDue, payOwed, stageProgress, todoOrder, type Todo } from "./jobs";
+import { addDaysIso, clientSupplies, invoiceAmounts, invoiceNumber, invoicesDue, londonDay, ordersToPlace, paymentsDue, payOwed, stageProgress, todoOrder, type Todo } from "./jobs";
+import { getPortalInfo, issueInvoice, listInvoices, listSnags, markInvoiceEmailed, portalReady, type InvoiceRow, type PortalInfo, type SnagRow } from "./portal-store";
+import { emailInvoice } from "./quote-mail.server";
+import { renderInvoicePdf } from "./invoice-pdf.server";
 
 export const db = () => prismaDb(prisma);
 export async function jobsAvailable() { const d = db(); return (await storageReady(d)) && (await jobsReady(d)); }
@@ -41,10 +44,20 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
   // Approved variations are added to the payment schedule (payable with the next stage payment).
   const variations = approvedVariations(actions);
   const schedule = [...docs.payments, ...variations.list.map((v, i) => ({ n: docs.payments.length + i + 1, label: `Variation: ${v.action.title}`,
-    when: "Approved by you – payable with the next stage payment", percent: 0, amount: v.price.gross }))];
+    when: "Approved by you – payable with the next stage payment", percent: 0, amount: v.price.gross, net: v.price.net, kind: "VARIATION" as const }))];
   const money = paymentsDue(schedule, payments, today);
+  // Client portal: project manager, requested start, stage invoices (raised automatically) and snags.
+  const portalOn = await portalReady(d);
+  let portal: PortalInfo = { requestedStart: null, managerName: "", managerPhone: "", managerEmail: "" }, invoices: InvoiceRow[] = [], snags: SnagRow[] = [];
+  if (portalOn) {
+    [portal, invoices, snags] = await Promise.all([getPortalInfo(d, quoteId), listInvoices(d, quoteId), listSnags(d, quoteId)]);
+    if (q.quote.status === "ACCEPTED") {
+      const fresh = await syncInvoices(quoteId, q.quote, schedule, progress, job.status, docs, today, invoices);
+      if (fresh.length) invoices = await listInvoices(d, quoteId);
+    }
+  }
   const supplyList = clientSupplies(customer, docs.programme, supplies, today);
-  const base = { quote: q.quote, versionNo, job, input, customer, company, docs, today, progress, events, photos, documents, actions, payments, money, supplies: supplyList,
+  const base = { quote: q.quote, versionNo, job, input, customer, company, docs, today, progress, events, photos, documents, actions, payments, money, supplies: supplyList, portalOn, portal, invoices, snags, schedule,
     variations: { net: variations.net, gross: variations.gross, count: variations.list.length } };
   if (opts.forClient) return { ...base, admin: null };
   const result = version.result as TakeoffResult;
@@ -64,6 +77,35 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
   };
 }
 export type LoadedJob = NonNullable<Awaited<ReturnType<typeof loadJob>>>;
+
+/** Raise the invoices that have fallen due and email each new one to the client once. */
+async function syncInvoices(quoteId: string, q: QuoteRow, schedule: QuoteDocs["payments"], progress: ReturnType<typeof stageProgress>, status: string, docs: QuoteDocs, today: string, existing: InvoiceRow[]) {
+  const d = db();
+  const due = invoicesDue(schedule, progress.stages, status, today, new Set(existing.map(i => i.scheduleNo)));
+  const created: InvoiceRow[] = [];
+  for (const r of due) {
+    const a = invoiceAmounts(r, { net: docs.price.net, gross: docs.price.gross });
+    const inv = await issueInvoice(d, quoteId, { scheduleNo: r.n, number: invoiceNumber(q.reference, r.n), label: r.label, description: r.when, issuedOn: today, dueOn: addDaysIso(today, docs.paymentDays || 7), ...a }, "system").catch(e => { console.error("[invoices]", e); return null; });
+    if (!inv) continue;
+    created.push(inv);
+    await sendInvoice(quoteId, q, docs, schedule, [...existing, ...created], inv);
+  }
+  return created;
+}
+
+/**
+ * Email a new invoice: the client gets it with the PDF attached, the office gets a copy.
+ * If the PDF can't be made, the emails still go (with the link to the invoice page).
+ */
+export async function sendInvoice(quoteId: string, q: Pick<QuoteRow, "reference" | "clientName" | "clientEmail">, docs: QuoteDocs, schedule: QuoteDocs["payments"], all: InvoiceRow[], inv: InvoiceRow, paidToDate?: number) {
+  const pdf = await renderInvoicePdf(docs, inv, {
+    contract: Math.round(schedule.reduce((s, r) => s + r.amount, 0) * 100) / 100,
+    earlier: all.map(i => ({ number: i.number, label: i.label, issuedOn: i.issuedOn, gross: i.gross })), paidToDate,
+  }).catch(e => { console.error("[invoices] pdf", e); return null; });
+  const sent = await emailInvoice({ quoteId, reference: q.reference, clientName: q.clientName, clientEmail: q.clientEmail, number: inv.number, label: inv.label, gross: inv.gross, dueOn: inv.dueOn, pdf });
+  if (sent.sent) await markInvoiceEmailed(db(), inv.id);
+  return sent;
+}
 
 /** The activity panel: what needs doing today, and how the company is doing. */
 export async function companyOverview() {
@@ -97,7 +139,10 @@ export async function companyOverview() {
     if (j.status === "IN_PROGRESS" && loaded.admin.team.some(t => t.assignment.active) && !loaded.admin.checkIns.some(c => londonDay(c.at) === today))
       todos.push({ level: "info", kind: "team", text: `${ref}: nobody has checked in today`, href: `${href}?tab=team`, quoteId: j.quoteId });
     for (const t of loaded.admin.team) if (t.owed.balance > 0.5) todos.push({ level: "info", kind: "pay", text: `${ref}: ${t.worker?.name} is owed £${t.owed.balance.toFixed(2)}`, href: `${href}?tab=team`, quoteId: j.quoteId });
-    if (!loaded.job.startDate && !loaded.input.terms.startDate) todos.push({ level: "info", kind: "start", text: `${ref}: set the start date`, href, quoteId: j.quoteId });
+    if (!loaded.job.startDate && !loaded.input.terms.startDate) todos.push({ level: loaded.portal.requestedStart ? "soon" : "info", kind: "start", text: `${ref}: ${loaded.portal.requestedStart ? `client would like to start from ${loaded.portal.requestedStart} – confirm the start date` : "set the start date"}`, href, quoteId: j.quoteId });
+    const clientSnags = loaded.snags.filter(s => s.status === "OPEN" && s.raisedByKind === "CLIENT").length;
+    if (clientSnags) todos.push({ level: "soon", kind: "snag", text: `${ref}: ${clientSnags} snag${clientSnags > 1 ? "s" : ""} raised by the client`, href: `${href}?tab=snags`, quoteId: j.quoteId });
+    if (!loaded.portal.managerName && loaded.portalOn) todos.push({ level: "info", kind: "manager", text: `${ref}: name the project manager for the client`, href, quoteId: j.quoteId });
   }
   const sum = (k: "moneyIn" | "moneyOut") => months.reduce((s, m) => s + m[k], 0);
   const thisMonth = months[months.length - 1] ?? { moneyIn: 0, moneyOut: 0 };
@@ -114,3 +159,16 @@ export async function companyOverview() {
 }
 
 export type QuoteLite = QuoteRow;
+
+/** One invoice with its paid status and the running account on the contract (for the invoice page). */
+export function invoiceFor(job: LoadedJob, number: string) {
+  const inv = job.invoices.find(i => i.number === number);
+  if (!inv) return null;
+  const row = job.money.rows.find(r => r.n === inv.scheduleNo);
+  return {
+    inv: { number: inv.number, label: inv.label, description: inv.description, issuedOn: inv.issuedOn, dueOn: inv.dueOn, net: inv.net, vat: inv.vat, gross: inv.gross },
+    status: { paid: row?.paid ?? 0, balance: row ? row.balance : inv.gross },
+    account: { contract: Math.round(job.schedule.reduce((s, r) => s + r.amount, 0) * 100) / 100, paidToDate: job.money.received,
+      invoiced: job.invoices.map(i => ({ number: i.number, label: i.label, issuedOn: i.issuedOn, gross: i.gross })) },
+  };
+}

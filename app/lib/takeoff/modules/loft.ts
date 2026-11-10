@@ -7,7 +7,7 @@ import { claddingOptions, cladNewWall, newRenderOptions, renderNewWall } from ".
 import { fmt, qty2 } from "../util";
 import type { ElecSpec } from "./common";
 import { buildBathroom } from "./bathroom";
-import { boardAndSkim, elecSummary, electricsItems, fasciaSoffit, fitWindows, makeGood, flooring, flooringOptions, newDoors, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting, studWall } from "./common";
+import { bearingFields, bearings, boardAndSkim, elecSummary, electricsItems, fasciaSoffit, fitWindows, makeGood, flooring, flooringOptions, newDoors, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting, studWall } from "./common";
 
 /** Geometry shared by the formulas (exported for tests and the UI). */
 export function loftGeometry(width: number, length: number, loftHeight: number) {
@@ -33,6 +33,7 @@ function beamFields(): Field[] {
     const when = [{ key: "beams", is: true }, { key: "beamCount", gt: i - 1 }];
     out.push({ key: `beam${i}Size`, label: `Beam ${i} size`, type: "select", default: i === 1 ? "203x203" : "203x133", options: beamOptions, group: "Steel beams", when });
     out.push({ key: `beam${i}Length`, label: `Beam ${i} length (0 = width + 20 cm)`, type: "number", unit: "m", default: 0, min: 0, max: 15, group: "Steel beams", when });
+    out.push(...bearingFields(`beam${i}`, `Beam ${i}`, "Steel beams", when));
   }
   return out;
 }
@@ -147,7 +148,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
   const beamMetres = qty2(beamList.reduce((s, b) => s + b.length, 0));
   if (beams > 0) {
     const S1 = "Beam preparation";
-    ctx.material(S1, "padstone", beams * 2, `${beams} beams × 2 padstones`);
+    const bearingText = bearings(ctx, S1, beamList.flatMap(b => [str(v, `beam${b.n}EndA`), str(v, `beam${b.n}EndB`)]), `${beams} beam${beams > 1 ? "s" : ""}`);
     ctx.material(S1, "cement_bag", beams, `${beams} beams × 1 bag`);
     ctx.material(S1, "sand_bag", beams * 2, `${beams} beams × 2 bags`);
     if (beams <= 3) ctx.labour(S1, "beam_prep_small", 1, `${beams} beam${beams > 1 ? "s" : ""} (1–3 beams: 1 day, 2 people)`);
@@ -165,7 +166,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
     ctx.material(S2, "beam_site_entry", deliveries, `${deliveries} deliver${deliveries > 1 ? "ies" : "y"} into site`);
     const installs = Math.ceil(beams / 5);
     ctx.labour(S2, "beam_install", installs, installs > 1 ? `${beams} beams → ${installs} installation days` : "1 day, 3 people");
-    ctx.scope(`Supply and install ${beams} steel beam${beams > 1 ? "s" : ""} (${beamList.map(b => `${b.size.label} × ${fmt(b.length)} m`).join(", ")}) on concrete padstones, to the structural engineer's design.`);
+    ctx.scope(`Supply and install ${beams} steel beam${beams > 1 ? "s" : ""} (${beamList.map(b => `${b.size.label} × ${fmt(b.length)} m`).join(", ")}) on ${bearingText}, to the structural engineer's design.`);
   }
 
   // 4. Floor: joists + boarding
@@ -244,10 +245,11 @@ export function buildLoft(ctx: Ctx, v: Values) {
         ctx.material(S2, finish === "FELT" ? "felt_system" : "grp_system", coverArea, `${fmt(g.flatRoofArea)} m² + 10% laps and upstands`);
         ctx.material(S2, "roof_trims", qty2(W + 2 * g.flatRoofLength), `${fmt(W)} m + 2 × ${fmt(g.flatRoofLength)} m edges`);
         ctx.labour(S2, "flat_roof_covering", coverArea, `${coverArea} m²`);
+        ctx.scope(`Lay the ${finish === "FELT" ? "torch-on felt" : "GRP fibreglass"} flat roof covering with edge trims and drip details, dressed into the abutments (${fmt(g.flatRoofArea)} m²).`, S2);
       };
-      ctx.scope(`Construct new flat roof: ${flatJoists} no. ${ft.label} joists with firrings, 12 mm OSB, 150 mm PIR insulation, 18 mm OSB deck and ${finish === "FELT" ? "torch-on felt" : "GRP fibreglass"} finish (${fmt(g.flatRoofArea)} m²).`);
+      ctx.scope(`Construct new flat roof: ${flatJoists} no. ${ft.label} joists with firrings, 12 mm OSB, 150 mm PIR insulation and 18 mm OSB deck (${fmt(g.flatRoofArea)} m²).`, S);
     }
-    ctx.scope(`Re-form front roof slope: ${rafters} no. ${rt.label} rafters at 45°${frontWindows ? `, trimmed for ${frontWindows} roof window${frontWindows > 1 ? "s" : ""}` : ""}.`);
+    ctx.scope(`Re-form front roof slope: ${rafters} no. ${rt.label} rafters at 45°${frontWindows ? `, trimmed for ${frontWindows} roof window${frontWindows > 1 ? "s" : ""}` : ""}.`, S);
 
     const c = num(v, "studCentres");
     const sideLen = Math.max(0, g.flatRoofLength);
@@ -324,7 +326,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
       ctx.scope(`Hip to gable: remove ${n} hip${n > 1 ? "s" : ""}, build ${n} cavity gable wall${n > 1 ? "s" : ""} (${fmt(total)} m², ${brick ? "facing brick" : "rendered"}), extend the ridge and re-tile the new slopes (${fmt(infill)} m²).`);
     }
     ctx.assume(`Partitions framed with studs at ${Math.round(c * 1000)} mm centres, top and bottom plates and one noggin row. Partition labour is included in the roof structure days.`);
-    ctx.scope(`Frame dormer side walls (×2, ${sideSize}) and back wall (${backSize}) ready for windows, insulation and boarding.`);
+    ctx.scope(`Frame dormer side walls (×2, ${sideSize}) and back wall (${backSize}) ready for windows, insulation and boarding.`, "Roof structure");
   }
 
   // 6. Roof-light conversion: windows in both slopes, no dormer
@@ -465,9 +467,10 @@ export function buildLoft(ctx: Ctx, v: Values) {
       windows: rearWindows + oWin + frontWindows + flatWindows + rearRoofWindows, radiators: num(v, "radiators"), system: str(v, "paintSystem"), newWood: true });
   }
 
-  ctx.scope(`Insulate front slope (100 + 50 mm PIR), dormer walls (100 mm PIR) and floor (acoustic wool); plasterboard and skim throughout (${fmt(ceiling + slope + dormerWalls + partyWalls)} m²).`);
-  ctx.scope(`Electrics for ${bedrooms} bedroom${bedrooms > 1 ? "s" : ""} and landing (${elecSummary(elec)}), ${alarms} mains interlinked smoke/heat alarms, ${num(v, "radiators")} radiators, ${fireDoors} FD30 fire doors to the protected stair.`);
-  ctx.scope(`Skirting, ${flooringOptions.find(([k]) => k === str(v, "flooring"))?.[1].toLowerCase() ?? "flooring"} (${fmt(floorArea)} m²)${bool(v, "decorate") ? " and full decoration" : ""}.`);
+  ctx.scope(`Insulate the front slope (100 + 50 mm PIR), dormer walls (100 mm PIR) and floor (acoustic wool). First fix electrics for ${bedrooms} bedroom${bedrooms > 1 ? "s" : ""} and landing (${elecSummary(elec)}) and ${alarms} mains interlinked smoke / heat alarms; extend the heating with ${num(v, "radiators")} radiator${num(v, "radiators") === 1 ? "" : "s"}.`, S1);
+  ctx.scope(`Plasterboard and skim the ceilings, slopes, dormer and stud walls; dot & dab and skim the party walls (${fmt(ceiling + slope + dormerWalls + partyWalls)} m² in all).`, S2);
+  ctx.scope(`Hang ${fireDoors} FD30 fire door${fireDoors === 1 ? "" : "s"} with closers to the protected stair; fit skirting and ${flooringOptions.find(([k]) => k === str(v, "flooring"))?.[1].toLowerCase() ?? "flooring"} (${fmt(floorArea)} m²).`, S3);
+  if (bool(v, "decorate")) ctx.scope("Mist coat and two coats to new plaster; prepare, prime and paint all new woodwork, windows and radiators.", "Decoration");
 }
 
 /**

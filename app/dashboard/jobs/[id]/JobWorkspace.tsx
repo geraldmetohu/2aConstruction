@@ -3,17 +3,18 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Banknote, Camera, CircleCheck, ClipboardList, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
+  ArrowLeft, Banknote, Camera, CircleCheck, ClipboardCheck, ClipboardList, Receipt, UserCog, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
 } from "lucide-react";
 import { UploadDropzone } from "@/app/lib/uploadthing";
 import type { DueRow, OrderNeed, PayOwed, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
 import { daysWorked } from "@/app/lib/takeoff/jobs";
 import { DOC_CATEGORIES, docCategoryLabel, type DocCategory } from "@/app/lib/takeoff/job-documents";
 import { docKinds } from "@/app/componets/takeoff/QuoteDocuments";
+import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
 import type { ActionRow, CheckInRow, ClientContact, ExpenseRow, JobEvent, JobStatus, PaymentRow, AssignmentRow } from "@/app/lib/takeoff/jobs-store";
 import {
   addClientActionAction, addExpenseAction, addPhotosAction, adminCheckInAction, assignWorkerAction, postMessageAction, rateWorkerAction, recordPaymentAction, reviewPaymentAction,
-  addDocumentsAction, saveClientInfoAction, setClientActionStatusAction, updateDocumentAction, setOrderAction, setStageAction, setSupplyAction, updateJobAction, updatePhotoAction, voidExpenseAction,
+  addDocumentsAction, addSnagAction, issueInvoiceAction, resendInvoiceAction, saveClientInfoAction, setManagerAction, setSnagAction, setClientActionStatusAction, updateDocumentAction, setOrderAction, setStageAction, setSupplyAction, updateJobAction, updatePhotoAction, voidExpenseAction,
 } from "../actions";
 
 type Iso<T, K extends keyof T> = Omit<T, K> & { [P in K]: string };
@@ -30,6 +31,10 @@ export interface JobView {
   expenses: Iso<ExpenseRow, "createdAt">[]; team: { assignment: AssignmentRow; worker: WorkerLite & { createdAt: string }; owed: PayOwed }[]; workers: WorkerLite[];
   checkIns: Iso<CheckInRow, "at">[]; toOrder: OrderNeed[]; orders: { stage: string; status: "ORDERED" | "DELIVERED"; supplier: string; note: string; updatedAt: string }[];
   stageMaterials: { stage: string; label: string; start: string | null; items: { description: string; quantity: number; unit: string }[] }[];
+  /** Client portal (empty until the client-portal migration has run). */
+  portalOn: boolean; requestedStart: string | null; manager: { name: string; phone: string; email: string };
+  invoices: { number: string; label: string; scheduleNo: number; issuedOn: string; dueOn: string; gross: number; balance: number; emailed: boolean }[];
+  snags: SnagView[];
 }
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -37,7 +42,7 @@ const when = (d: string) => new Date(d).toLocaleString("en-GB", { day: "numeric"
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const input = "w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm";
 const btn = "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold disabled:opacity-40";
-const TABS = [["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["team", "Team", Users], ["orders", "Orders", Package]] as const;
+const TABS = [["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["snags", "Snagging", ClipboardCheck], ["team", "Team", Users], ["orders", "Orders", Package]] as const;
 type Tab = (typeof TABS)[number][0];
 const stateTone: Record<DueRow["state"], string> = { PAID: "bg-emerald-100 text-emerald-800", PART_PAID: "bg-sky-100 text-sky-800", DUE: "bg-amber-100 text-amber-800", OVERDUE: "bg-red-100 text-red-800", UPCOMING: "bg-neutral-100 text-neutral-700" };
 
@@ -74,7 +79,8 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
               <option value="PLANNED">Planned</option><option value="IN_PROGRESS">In progress</option><option value="ON_HOLD">On hold</option><option value="COMPLETED">Completed</option>
             </select></label>
           <label className="text-xs font-semibold">Start date
-            <input type="date" className={input} defaultValue={j.startDate} onBlur={e => e.target.value !== j.startDate && act(() => updateJobAction(j.quoteId, { startDate: e.target.value || null }), "Start date saved – programme and payment dates updated.")} /></label>
+            <input type="date" className={input} defaultValue={j.startDate} onBlur={e => e.target.value !== j.startDate && act(() => updateJobAction(j.quoteId, { startDate: e.target.value || null }), "Start date saved – programme and payment dates updated.")} />
+            {!j.startDate && j.requestedStart && <button type="button" disabled={busy} onClick={() => act(() => updateJobAction(j.quoteId, { startDate: j.requestedStart }), "Start date confirmed – the client can see it.")} className="mt-1 block text-[11px] font-semibold text-amber-700 hover:underline">Client asked for {j.requestedStart} – confirm</button>}</label>
           <div className="w-40"><p className="text-xs font-semibold">Progress {j.progress.percent}%</p><div className="mt-1 h-2 rounded-full bg-neutral-200"><div className="h-2 rounded-full bg-amber-500" style={{ width: `${j.progress.percent}%` }} /></div></div>
         </div>
       </header>
@@ -91,6 +97,9 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
       {tab === "documents" && <DocumentsTab {...p} />}
       {tab === "client" && <ClientTab {...p} />}
       {tab === "money" && <MoneyTab {...p} />}
+      {tab === "snags" && (j.portalOn ? <SnagList snags={j.snags} audience="admin" busy={busy}
+        add={d => act(() => addSnagAction(j.quoteId, d), "Snag added – the client can see it.")} toggle={(id, isDone) => act(() => setSnagAction(j.quoteId, id, isDone), isDone ? "Marked as done – the client can see it." : "Reopened.")} />
+        : <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">The snagging list needs the client-portal migration (20261112120000_client_portal).</p>)}
       {tab === "team" && <TeamTab {...p} />}
       {tab === "orders" && <OrdersTab {...p} />}
     </div>
@@ -196,7 +205,7 @@ function DocumentsTab({ j, act, busy }: P) {
   return (
     <div className="space-y-4">
       <Card title="Documents we produce" right={<Link href={`/dashboard/jobs/${j.quoteId}/documents`} className={`${btn} bg-neutral-900 text-white`}><ExternalLink className="h-3.5 w-3.5" />Open & print</Link>}>
-        <p className="text-sm text-neutral-600">Written automatically from the accepted quote and kept up to date with the start date. The client sees them under “Quote &amp; documents”.</p>
+        <p className="text-sm text-neutral-600">Written automatically from the accepted quote and kept up to date with the start date: client documents, a RAMS for every activity, toolbox talks, induction, permits, registers, Building Regulations checklist and the completion set. The client sees the client documents under “Quote &amp; documents”.</p>
         <div className="mt-3 flex flex-wrap gap-2">{docKinds.map(([k, l]) => <span key={k} className="inline-flex items-center gap-1.5 rounded-full border bg-neutral-50 px-3 py-1 text-xs font-semibold"><FileText className="h-3.5 w-3.5 text-amber-600" />{l}</span>)}</div>
       </Card>
 
@@ -257,6 +266,7 @@ function ClientTab({ j, act, busy }: P) {
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <div className="space-y-5">
+        {j.portalOn && <ManagerCard j={j} act={act} busy={busy} />}
         <Card title="Messages & notes">
           <div className="flex flex-col gap-2">
             <textarea className={input} rows={3} placeholder={internal ? "Internal note (only you see this)" : "Message to the client (shown in their panel)"} value={text} onChange={e => setText(e.target.value)} />
@@ -334,6 +344,7 @@ function MoneyTab({ j, act, busy }: P) {
         <table className="w-full text-sm [&_td]:pr-3 [&_th]:pr-3"><thead className="text-left text-xs text-neutral-500"><tr><th>#</th><th>Payment</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Paid</th><th className="text-right">Balance</th><th></th></tr></thead>
           <tbody>{j.money.rows.map(r => <tr key={r.n} className="border-t"><td className="py-1.5">{r.n}</td><td>{r.label}<span className="block text-xs text-neutral-500">{r.when}</span></td><td className="whitespace-nowrap">{r.date ?? "—"}</td><td className="text-right">{gbp(r.amount)}</td><td className="text-right">{gbp(r.paid)}</td><td className="text-right font-semibold">{gbp(r.balance)}</td><td className="pl-2"><span className={`rounded px-1.5 text-xs font-semibold ${stateTone[r.state]}`}>{r.state.replace("_", " ").toLowerCase()}</span></td></tr>)}</tbody></table>
       </Card>
+      {j.portalOn && j.status === "ACCEPTED" && <InvoicesCard j={j} act={act} busy={busy} />}
       <div className="grid gap-5 xl:grid-cols-2">
         <Card title="Payments received">
           <ul className="divide-y text-sm">{j.payments.map(p => (
@@ -464,5 +475,43 @@ function OrderBlock({ title, items, st, supplier, setSupplier, mark, busy, urgen
         <button disabled={busy} onClick={() => mark("DELIVERED")} className={`${btn} border`}><HardHat className="h-3.5 w-3.5" />Delivered</button>
       </div>
     </details>
+  );
+}
+
+// ---------------------------------------------------------------- Client portal: project manager and invoices
+
+function ManagerCard({ j, act, busy }: P) {
+  const [m, setM] = useState(j.manager);
+  const changed = m.name !== j.manager.name || m.phone !== j.manager.phone || m.email !== j.manager.email;
+  return (
+    <Card title="Project manager" right={<span className="text-xs text-neutral-500">Shown to the client as their main contact</span>}>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <input className={input} placeholder="Name" value={m.name} onChange={e => setM({ ...m, name: e.target.value })} />
+        <input className={input} placeholder="Mobile" type="tel" value={m.phone} onChange={e => setM({ ...m, phone: e.target.value })} />
+        <input className={input} placeholder="Email" type="email" value={m.email} onChange={e => setM({ ...m, email: e.target.value })} />
+      </div>
+      <button disabled={busy || !changed} onClick={() => act(() => setManagerAction(j.quoteId, m), "Project manager saved – the client can see their details.")} className={`${btn} mt-2 bg-neutral-900 text-white`}><UserCog className="h-3.5 w-3.5" />Save</button>
+    </Card>
+  );
+}
+
+/** Invoices are raised automatically (deposit on acceptance, stages when marked done, final on completion); raise one early here. */
+function InvoicesCard({ j, act, busy }: P) {
+  const issued = new Set(j.invoices.map(i => i.scheduleNo));
+  const notYet = j.money.rows.filter(r => !issued.has(r.n) && r.amount > 0);
+  return (
+    <Card title="Invoices" right={<span className="text-xs text-neutral-500">Raised automatically as stages are done – emailed to the client as a PDF, copy to the office</span>}>
+      <ul className="divide-y text-sm">{j.invoices.map(i => (
+        <li key={i.number} className="flex flex-wrap items-center justify-between gap-2 py-2">
+          <span><Receipt className="mr-1 inline h-4 w-4 text-neutral-400" /><strong>{i.number}</strong> · {i.label}<span className="block text-xs text-neutral-500">Issued {i.issuedOn} · due {i.dueOn}{i.emailed ? " · emailed" : " · not emailed (check the mail settings)"}</span></span>
+          <span className="flex items-center gap-2"><strong className="tabular-nums">{gbp(i.gross)}</strong>
+            <span className={`rounded px-1.5 text-xs font-semibold ${i.balance <= 0.005 ? "bg-emerald-100 text-emerald-800" : i.dueOn < today() ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"}`}>{i.balance <= 0.005 ? "paid" : i.dueOn < today() ? "overdue" : "unpaid"}</span>
+            <button disabled={busy} onClick={() => act(() => resendInvoiceAction(j.quoteId, i.number), "Invoice emailed to the client (PDF attached), copy to the office.")} className={`${btn} border`}><Mail className="h-3.5 w-3.5" />{i.emailed ? "Email again" : "Email it"}</button>
+            <Link href={`/dashboard/jobs/${j.quoteId}/invoices/${encodeURIComponent(i.number)}`} className={`${btn} border`}><Printer className="h-3.5 w-3.5" />View</Link></span>
+        </li>
+      ))}{!j.invoices.length && <li className="py-2 text-neutral-500">No invoices yet.</li>}</ul>
+      {notYet.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-xs"><span className="font-semibold text-neutral-600">Raise early:</span>
+        {notYet.map(r => <button key={r.n} disabled={busy} onClick={() => confirm(`Issue and email the invoice for “${r.label}” (${gbp(r.amount)}) now?`) && act(() => issueInvoiceAction(j.quoteId, r.n), "Invoice issued and emailed to the client.")} className={`${btn} border`}>{r.label}</button>)}</div>}
+    </Card>
   );
 }

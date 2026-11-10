@@ -30,6 +30,9 @@
     "test:takeoff-jobs": "node tests/takeoff-jobs.test.mjs",
     "test:portfolio": "node tests/portfolio-details.test.mjs",
     "test:job-documents": "node tests/job-documents.test.mjs",
+    "test:suppliers": "node tests/suppliers.test.mjs",
+    "test:auth": "node tests/auth.test.mjs",
+    "test:client-portal": "node tests/client-portal.test.mjs",
     "preview:takeoff": "node scripts/preview-takeoff.mjs"
   },
   "dependencies": {

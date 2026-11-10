@@ -115,5 +115,22 @@ await test('supplier links, observations and lowest current ex-VAT price', async
   assert.equal(latest.find(o => o.supplier === 'BUILDER_DEPOT').status, 'FAILED');
 });
 
+await test('more merchants migration keeps every row and adds suggestions', async () => {
+  const before = await db.query(`SELECT count(*)::int AS n FROM "TakeoffSupplierLink"`);
+  assert.equal(await store.suggestionsReady(db), false);
+  await rejects(store.upsertLink(db, { rateKey: 'osb_18', supplier: 'SCREWFIX', url: 'https://www.screwfix.com/p/x/123', packQuantity: 1, vatIncluded: true, active: true }, 'a'), /check/i);
+  await pg.exec(readFileSync(new URL('../prisma/migrations/20261110120000_more_suppliers/migration.sql', import.meta.url), 'utf8'));
+  assert.deepEqual(await db.query(`SELECT count(*)::int AS n FROM "TakeoffSupplierLink"`), before);
+  assert.deepEqual((await db.query(`SELECT * FROM "Existing"`)), [{ id: 1, name: 'live row' }]);
+  assert.equal(await store.suggestionsReady(db), true);
+  await store.upsertLink(db, { rateKey: 'osb_18', supplier: 'SCREWFIX', url: 'https://www.screwfix.com/p/x/123', packQuantity: 1, vatIncluded: true, active: true }, 'a');
+  await rejects(store.upsertLink(db, { rateKey: 'osb_18', supplier: 'AMAZON', url: 'https://amazon.co.uk/x', packQuantity: 1, vatIncluded: true, active: true }, 'a'), /check/i);
+  assert.deepEqual(await store.materialsToSearch(db, 'SCREWFIX', ['osb_18', 'pir_100']), ['pir_100']);
+  await store.addSuggestion(db, { rateKey: 'pir_100', supplier: 'SCREWFIX', url: 'https://www.screwfix.com/p/pir/9', productName: 'PIR board 100mm 2.4 x 1.2m', packPrice: 42.5, imageUrl: null, packGuess: 1, packSure: true, score: 0.8 });
+  assert.deepEqual(await store.materialsToSearch(db, 'SCREWFIX', ['osb_18', 'pir_100']), []);
+  const sug = await store.listSuggestions(db);
+  assert.equal(sug.length, 1); assert.equal(sug[0].packPrice, 42.5);
+});
+
 console.log(`\n${passed} takeoff storage tests passed`);
 void root;

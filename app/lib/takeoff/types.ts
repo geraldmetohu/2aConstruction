@@ -151,7 +151,7 @@ export const phaseLabels: Record<Phase, string> = { FIRST_FIX: "Structure & firs
 export interface PhaseSummary { phase: Phase; materials: number; labour: number; siteCosts: number; total: number }
 export interface ClientOrderItem { area: string; description: string; quantity: number; unit: string; estimate: number; imageUrl?: string; materialKey: string; stage: string; spec: string }
 /** A scope sentence with the programme stage it belongs to (for chronological order). */
-export interface ScopeItem { text: string; area: string; stage: string }
+export interface ScopeItem { text: string; area: string; stage: string; /** Describes several steps of the area (shown as its introduction). */ summary?: boolean }
 
 export interface StageSummary {
   stage: string;

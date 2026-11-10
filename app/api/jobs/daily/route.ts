@@ -6,11 +6,11 @@ import { mailConfigured, sendMail, siteUrl } from "@/app/lib/takeoff/mail.server
 
 export const dynamic = "force-dynamic";
 
+/** Vercel Cron sends Bearer <CRON_SECRET>; TAKEOFF_CRON_SECRET still works for other schedulers. */
 function authorised(req: Request) {
-  const secret = process.env.TAKEOFF_CRON_SECRET ?? "";
   const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  if (secret.length < 24 || given.length !== secret.length) return false;
-  return timingSafeEqual(Buffer.from(given), Buffer.from(secret));
+  return [process.env.CRON_SECRET, process.env.TAKEOFF_CRON_SECRET].some(secret =>
+    !!secret && secret.length >= 24 && given.length === secret.length && timingSafeEqual(Buffer.from(given), Buffer.from(secret)));
 }
 
 /**

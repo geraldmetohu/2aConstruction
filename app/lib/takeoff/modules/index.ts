@@ -6,11 +6,13 @@ import { externalPackage } from "./external";
 import { gardenPackage } from "./garden";
 import { cleaningPackage } from "./cleaning";
 import { demolitionPackage } from "./demolition";
+import { conversionPackage } from "./conversion";
+import { outbuildingPackage } from "./outbuilding";
 
 /**
  * Whole-house projects, in programme order. Room-by-room work (plastering,
  * painting, flooring, electrics, heating, doors, windows, kitchens, bathrooms)
  * is set on each room – see rooms.ts.
  */
-export const workPackages: WorkPackage[] = [demolitionPackage, loftPackage, extensionPackage, roofingPackage, externalPackage, gardenPackage, cleaningPackage];
+export const workPackages: WorkPackage[] = [demolitionPackage, loftPackage, extensionPackage, conversionPackage, roofingPackage, externalPackage, outbuildingPackage, gardenPackage, cleaningPackage];
 export const packageById = (id: string) => workPackages.find(p => p.id === id);

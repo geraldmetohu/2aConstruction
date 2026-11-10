@@ -20,7 +20,7 @@ export default async function JobGeneratedDocuments({ params }: { params: Promis
   return (
     <main className="mx-auto max-w-5xl p-6 print:p-0">
       <Link href={`/dashboard/jobs/${id}?tab=documents`} className="mb-4 inline-block text-sm text-neutral-600 hover:text-neutral-900 print:hidden">← Back to {job.quote.clientName}</Link>
-      <DocumentsViewer docs={job.docs} warnings={missingCompanyFields(job.company)} />
+      <DocumentsViewer docs={job.docs} warnings={missingCompanyFields(job.company)} note="Saved with this job from the accepted quote." />
     </main>
   );
 }

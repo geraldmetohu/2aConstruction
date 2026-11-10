@@ -1,4 +1,4 @@
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError, UTApi } from "uploadthing/server";
 
@@ -17,7 +17,7 @@ const allowedEmails = [
    ADMIN CHECK
 -------------------------------------------- */
 async function requireAdmin() {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
 
   if (!user || !user.email) {
@@ -29,6 +29,13 @@ async function requireAdmin() {
   }
 
   return { userId: user.id };
+}
+
+/** Snag photos: any signed-in account (clients photograph snags in their portal; the snag itself checks the project). */
+async function requireSignedIn() {
+  const user = await getAuthSession().getUser();
+  if (!user?.email) throw new UploadThingError("Please sign in first");
+  return { userId: user.email };
 }
 
 async function allowEstimatorUpload() {
@@ -111,6 +118,12 @@ export const ourFileRouter = {
     blob: { maxFileSize: "64MB", maxFileCount: 20 },
   })
     .middleware(requireAdmin)
+    .onUploadComplete(onComplete),
+
+  snagPhotoRoute: f({
+    image: { maxFileSize: "16MB", maxFileCount: 1 }, // shrunk in the browser before upload
+  })
+    .middleware(requireSignedIn)
     .onUploadComplete(onComplete),
 
   estimatorUploader: f({

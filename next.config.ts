@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
     "/dashboard/calculator": ["./app/lib/quotes/fonts/*"],
     "/dashboard/calculator/**": ["./app/lib/quotes/fonts/*"],
     "/my-quotes/**": ["./app/lib/quotes/fonts/*"],
+    // Invoice PDFs: raised from the job pages, the client portal and the daily job.
+    "/dashboard/jobs/**": ["./app/lib/quotes/fonts/*"],
+    "/api/jobs/**": ["./app/lib/quotes/fonts/*"],
   },
   images: {
     remotePatterns: [

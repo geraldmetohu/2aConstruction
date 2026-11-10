@@ -1,6 +1,7 @@
 import { bool, num, str, type Field, type WorkPackage } from "../package";
 import { beamForSpan, beamSizes } from "../ratebook";
 import { fmt, qty2 } from "../util";
+import { bearingFields, bearingOptions, bearings } from "./common";
 
 const ceil = (x: number) => Math.ceil(x - 1e-9);
 const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
@@ -38,10 +39,12 @@ export const demolitionPackage: WorkPackage = {
     m2("partitions", "Non-structural partitions (wall face area)", "Walls", { public: true }),
     cnt("loadBearing", "Load-bearing walls to open up / remove", "Walls", 6, { public: true, hint: "Each gets a steel beam on padstones, propped while it goes in" }),
     { key: "loadBearingWidth", label: "Average opening width", type: "number", unit: "m", default: 3, min: 0.8, max: 8, group: "Walls", when: [{ key: "loadBearing", gt: 0 }] },
+    ...bearingFields("wallSteel", "Steels in the walls", "Walls", [{ key: "loadBearing", gt: 0 }]),
 
     cnt("chimneyBreasts", "Chimney breasts to remove (per floor)", "Chimneys", 8, { public: true }),
     { key: "breastSupport", label: "What holds up the chimney above", type: "select", default: "STEEL", group: "Chimneys", when: [{ key: "chimneyBreasts", gt: 0 }], options: [
       ["STEEL", "Steel beam on padstones (engineer's design)"], ["GALLOWS", "Gallows brackets (only where Building Control accepts)"], ["NONE", "Nothing – whole breast and stack removed"]] },
+    { key: "breastBearing", label: "Chimney steels sit on", type: "select", default: "PADSTONE", options: bearingOptions, group: "Chimneys", when: [{ key: "chimneyBreasts", gt: 0 }, { key: "breastSupport", is: "STEEL" }] },
     cnt("stacks", "Chimney stacks to take down", "Chimneys", 4),
 
     m2("concrete", "Concrete / patio to break out", "Outside"),
@@ -94,14 +97,14 @@ export const demolitionPackage: WorkPackage = {
     if (lb) {
       const ow = num(v, "loadBearingWidth"), beam = beamSizes[beamForSpan(ow)];
       ctx.material(S2, beam.key, qty2(lb * (ow + 0.3)), `${lb} × (${fmt(ow)} m + 0.3 m bearings)`, `Steel beams – ${beam.label}`);
-      ctx.material(S2, "padstone", lb * 2, `${lb} × 2 bearings`);
+      const bText = bearings(ctx, S2, Array.from({ length: lb }, () => [str(v, "wallSteelEndA"), str(v, "wallSteelEndB")]).flat(), `${lb} steel${lb > 1 ? "s" : ""}`);
       ctx.material(S2, "beam_transport", 1, "1 delivery");
       ctx.material(S2, "intumescent", qty2(lb * (ow + 0.3)), `${fmt(lb * (ow + 0.3))} m`, "Fire protection to steel");
       ctx.material(S2, "props_hire", lb * 2, `${lb} opening${lb > 1 ? "s" : ""} × 2 weeks`);
       ctx.material(S2, "temp_works_design", 1, "propping design");
       ctx.labour(S2, "knock_through", qty2(lb * ow), `${lb} × ${fmt(ow)} m`);
       add(lb * ow * 2.5 * 0.25);
-      did.push(`open up ${n(lb, "load-bearing wall")} (${fmt(ow)} m each) on temporary props with ${beam.label} steel on padstones, fire protected`);
+      did.push(`open up ${n(lb, "load-bearing wall")} (${fmt(ow)} m each) on temporary props with ${beam.label} steel on ${bText}, fire protected`);
       ctx.assume("Steel sizes are indicative until the structural engineer's calculations; Building Control is notified for all structural alterations.");
     }
 
@@ -110,7 +113,7 @@ export const demolitionPackage: WorkPackage = {
     if (cb) {
       ctx.labour(S2, "chimney_breast_remove", cb, n(cb, "breast"));
       if (sup === "GALLOWS") ctx.material(S2, "gallows_brackets", cb, n(cb, "pair"));
-      if (sup === "STEEL") { const bm = beamSizes[beamForSpan(1.6)]; ctx.material(S2, bm.key, qty2(cb * 1.6), `${cb} × 1.6 m`, `Steel under the chimney – ${bm.label}`); ctx.material(S2, "padstone", cb * 2, `${cb} × 2`); ctx.material(S2, "props_hire", cb, `${cb} week${cb > 1 ? "s" : ""}`); }
+      if (sup === "STEEL") { const bm = beamSizes[beamForSpan(1.6)]; ctx.material(S2, bm.key, qty2(cb * 1.6), `${cb} × 1.6 m`, `Steel under the chimney – ${bm.label}`); bearings(ctx, S2, Array.from({ length: cb * 2 }, () => str(v, "breastBearing")), "chimney steels"); ctx.material(S2, "props_hire", cb, `${cb} week${cb > 1 ? "s" : ""}`); }
       add(cb * WASTE.breast);
       did.push(`remove ${n(cb, "chimney breast")}${sup === "STEEL" ? " with a steel beam supporting the chimney above" : sup === "GALLOWS" ? " on gallows brackets" : " (whole breast and stack)"}, making good floor, wall and ceiling`);
       ctx.assume("Chimney breast removal needs Building Control approval and, on a shared breast, a party wall notice; the flue of any neighbour must stay working.");

@@ -1,16 +1,19 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { db, jobsAvailable } from "@/app/lib/takeoff/jobs.server";
 import { addEvent, answerAction, recordPayment, saveClientInfo, setSupply } from "@/app/lib/takeoff/jobs-store";
 import { getQuote, StoreError } from "@/app/lib/takeoff/store";
+import { addSnag, listSnags, portalReady, setSnagStatus } from "@/app/lib/takeoff/portal-store";
+import { notifyOffice } from "@/app/lib/takeoff/notify.server";
+import { listActions } from "@/app/lib/takeoff/jobs-store";
 
 const fail = (e: unknown) => ({ ok: false as const, message: e instanceof StoreError ? e.message : e instanceof z.ZodError ? e.issues.map(i => i.message).join("; ") : "Something went wrong. Please try again or call us." });
 
 /** Only the client the quote was sent to, and only once it is live. */
 async function asClient(quoteId: string, acceptedOnly = true) {
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
   if (!user?.email) throw new StoreError("Please log in again.");
   if (!(await jobsAvailable())) throw new StoreError("This is not available yet.");
   const q = await getQuote(db(), z.string().uuid().parse(quoteId));
@@ -23,7 +26,9 @@ const done = (quoteId: string) => { revalidatePath(`/my-quotes/${quoteId}`); rev
 export async function clientMessage(quoteId: string, text: string, note: boolean) {
   try {
     const email = await asClient(quoteId, false);
-    await addEvent(db(), quoteId, note ? "CLIENT_NOTE" : "CLIENT_MESSAGE", z.string().trim().min(1, "Write something").max(4000).parse(text), "CLIENT", email, true);
+    const t = z.string().trim().min(1, "Write something").max(4000).parse(text);
+    await addEvent(db(), quoteId, note ? "CLIENT_NOTE" : "CLIENT_MESSAGE", t, "CLIENT", email, true);
+    await notifyOffice(db(), quoteId, { kind: "MESSAGE", text: t, note });
     return done(quoteId);
   } catch (e) { return fail(e); }
 }
@@ -31,7 +36,10 @@ export async function clientMessage(quoteId: string, text: string, note: boolean
 export async function clientAnswer(quoteId: string, actionId: string, response: string) {
   try {
     const email = await asClient(quoteId);
-    await answerAction(db(), quoteId, z.string().uuid().parse(actionId), z.string().trim().min(1, "Write your answer").max(2000).parse(response), email);
+    const id = z.string().uuid().parse(actionId), r = z.string().trim().min(1, "Write your answer").max(2000).parse(response);
+    await answerAction(db(), quoteId, id, r, email);
+    const a = (await listActions(db(), quoteId)).find(x => x.id === id);
+    if (a) await notifyOffice(db(), quoteId, { kind: "ANSWER", title: a.title, response: r, variation: a.kind === "VARIATION" });
     return done(quoteId);
   } catch (e) { return fail(e); }
 }
@@ -41,6 +49,7 @@ export async function clientSupply(quoteId: string, raw: unknown) {
     const email = await asClient(quoteId);
     const p = z.object({ itemKey: z.string().min(1).max(300), label: z.string().max(300), status: z.enum(["TO_ORDER", "ORDERED", "DELIVERED"]), note: z.string().trim().max(300) }).parse(raw);
     await setSupply(db(), quoteId, p.itemKey, p.status, p.note, email, "CLIENT", p.label);
+    if (p.status !== "TO_ORDER") await notifyOffice(db(), quoteId, { kind: "SUPPLY", label: p.label || p.itemKey, status: p.status });
     return done(quoteId);
   } catch (e) { return fail(e); }
 }
@@ -50,6 +59,7 @@ export async function clientReportPayment(quoteId: string, raw: unknown) {
     const email = await asClient(quoteId);
     const p = z.object({ scheduleNo: z.number().int().min(1).max(20).nullable(), amount: z.number().positive().max(10_000_000), paidOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), reference: z.string().trim().max(80) }).parse(raw);
     await recordPayment(db(), quoteId, { ...p, method: "BANK_TRANSFER", note: "" }, email, "CLIENT");
+    await notifyOffice(db(), quoteId, { kind: "PAYMENT_REPORTED", amount: p.amount, paidOn: p.paidOn, reference: p.reference });
     return done(quoteId);
   } catch (e) { return fail(e); }
 }
@@ -59,6 +69,30 @@ export async function clientSaveInfo(quoteId: string, raw: unknown) {
     const email = await asClient(quoteId, false);
     const p = z.object({ contacts: z.array(z.object({ name: z.string().trim().max(80), role: z.string().trim().max(60), phone: z.string().trim().max(40), email: z.string().trim().max(120) })).max(10), accessNotes: z.string().trim().max(2000) }).parse(raw);
     await saveClientInfo(db(), quoteId, p, email, "CLIENT");
+    return done(quoteId);
+  } catch (e) { return fail(e); }
+}
+
+const snagSchema = z.object({ title: z.string().trim().min(3, "Describe the snag").max(200), detail: z.string().trim().max(2000), location: z.string().trim().max(120), photoUrl: z.string().trim().max(500).refine(u => !u || /^https:\/\//.test(u), "Upload the photo again") });
+
+/** Clients add snags once the work has started (or any time after acceptance). */
+export async function clientAddSnag(quoteId: string, raw: unknown) {
+  try {
+    const email = await asClient(quoteId);
+    if (!(await portalReady(db()))) throw new StoreError("The snagging list is not available yet.");
+    const s = snagSchema.parse(raw);
+    await addSnag(db(), quoteId, s, email, "CLIENT");
+    await notifyOffice(db(), quoteId, { kind: "SNAG", title: s.title, location: s.location });
+    return done(quoteId);
+  } catch (e) { return fail(e); }
+}
+
+export async function clientSetSnag(quoteId: string, snagId: string, isDone: boolean) {
+  try {
+    const email = await asClient(quoteId);
+    const id = z.string().uuid().parse(snagId), was = (await listSnags(db(), quoteId)).find(s => s.id === id);
+    const s = await setSnagStatus(db(), quoteId, id, isDone ? "DONE" : "OPEN", email, "CLIENT");
+    if (!isDone && was?.status === "DONE") await notifyOffice(db(), quoteId, { kind: "SNAG_REOPENED", title: s.title });
     return done(quoteId);
   } catch (e) { return fail(e); }
 }

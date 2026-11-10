@@ -23,6 +23,7 @@ import { defaultCompany, missingCompanyFields, type CompanyProfile } from "@/app
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 import { saveTakeoffQuote, sendTakeoffQuote } from "./actions";
 import { CustomWork, fieldsForTrades, LoftRooms, TradeFilter, WordingEditor } from "./QuoteExtras";
+import { ClientCard, missingClientDetails, ModePicker, packageTrades, ProjectPicker, ReviewCard, ScaffoldCard, TradePicker, WholeHome } from "./Wizard";
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const gbp0 = (x: number) => `£${Math.round(x).toLocaleString("en-GB")}`;
@@ -36,7 +37,7 @@ const roomSpec = { fields: roomFields, defaults: Object.fromEntries(roomFields.m
 const label = (opts: readonly (readonly [string, string])[], v: string) => opts.find(([k]) => k === v)?.[1] ?? v;
 const STORAGE = "2a-takeoff-draft-v3";
 
-type Step = "house" | "rooms" | "projects" | "extras" | "site" | "wording";
+type Step = "start" | "house" | "floors" | "rooms" | "projects" | "extras" | "site" | "review" | "wording";
 type Tab = "breakdown" | "trades" | "programme" | "choices" | "documents" | "history";
 type Commercial = { markupPercent: number; wastePercent: number; contingencyPercent: number } | null;
 type Client = { name: string; email: string; address: string };
@@ -60,7 +61,8 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
   const [formatTouched, setFormatTouched] = useState(!!saved);
   const [input, setInput] = useState<TakeoffInput>(() => saved?.input ?? fresh());
   const [client, setClient] = useState<Client>(saved?.client ?? { name: "", email: "", address: "" });
-  const [step, setStep] = useState<Step>("house");
+  const [step, setStep] = useState<Step>(saved ? "review" : "start");
+  const [groupBy, setGroupBy] = useState<"area" | "process">("process");
   const [tab, setTab] = useState<Tab>("breakdown");
   const [last, setLast] = useState<TakeoffResult | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -123,7 +125,10 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
 
   const sent = saved?.status === "SENT";
   const accepted = saved?.status === "ACCEPTED";
+  // New quotes need the full set; older saved quotes only what the server needs (name & email).
+  const missing = missingClientDetails(client, input).filter(m => !saved || m === "client name" || m === "email");
   async function save() {
+    if (missing.length) { setFlash({ ok: false, text: `Add the ${missing.join(", ")} first (step 1).` }); setStep("start"); return; }
     setSaving("save"); setFlash(null);
     const r = await saveTakeoffQuote({ quoteId: saved?.id, expectedVersion: saved?.version, client: { clientName: client.name, clientEmail: client.email, siteAddress: client.address }, input, reason: reason || (saved ? "" : "First version") });
     setSaving("");
@@ -143,14 +148,28 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
     router.refresh();
   }
 
-  const steps: [Step, string, ReactNode, string][] = [
-    ["house", "1. House", <House key="h" className="h-4 w-4" />, "Client & general description"],
-    ["rooms", `2. Rooms (${input.rooms.length})`, <LayoutList key="r" className="h-4 w-4" />, "Sizes and work in each room"],
-    ["projects", "3. Projects", <HardHat key="p" className="h-4 w-4" />, "Loft, extension, roof, render, garden, cleaning"],
-    ["extras", `4. Custom work (${input.customItems.length})`, <Wrench key="e" className="h-4 w-4" />, "Jobs you price by hand"],
-    ["site", "5. Site & margins", <Settings2 key="s" className="h-4 w-4" />, "Site costs, H&S, terms, markup"],
-    ["wording", "6. Quote layout", <PenLine key="w" className="h-4 w-4" />, "Simple / normal / itemised, wording"],
-  ];
+  const mode = input.mode;
+  const allSteps: Record<Step, [string, ReactNode, string]> = {
+    start: ["Start", <ClipboardList key="s" className="h-4 w-4" />, "Quote type & client"],
+    house: ["House", <House key="h" className="h-4 w-4" />, "General description"],
+    floors: ["Floors", <LayoutList key="f" className="h-4 w-4" />, "What's included, rooms per floor"],
+    rooms: [`Rooms (${input.rooms.length})`, <LayoutList key="r" className="h-4 w-4" />, mode === "TRADE" ? "Rooms / areas for this trade" : "Sizes and work in each room"],
+    projects: [mode === "TRADE" ? "Services" : "Projects", <HardHat key="p" className="h-4 w-4" />, mode === "PROJECT" ? "The project's specification" : mode === "TRADE" ? "Projects this trade can do" : "Loft, extension, conversion, roof, render, garden…"],
+    extras: [`Custom work (${input.customItems.length})`, <Wrench key="e" className="h-4 w-4" />, "Jobs you price by hand"],
+    site: ["Site & scaffold", <Settings2 key="si" className="h-4 w-4" />, "Scaffold, site costs, terms, margins"],
+    review: ["Review", <Eye key="rv" className="h-4 w-4" />, "Check items, confirm, save draft"],
+    wording: ["Quote layout", <PenLine key="w" className="h-4 w-4" />, "Simple / normal / itemised"],
+  };
+  const order: Step[] = mode === "WHOLE_HOME" ? ["start", "house", "floors", "rooms", "projects", "extras", "site", "review", "wording"]
+    : mode === "PROJECT" ? ["start", "projects", "house", "extras", "site", "review", "wording"]
+    : mode === "TRADE" ? ["start", "rooms", "projects", "extras", "site", "review", "wording"]
+    : ["start", "house", "rooms", "projects", "extras", "site", "review", "wording"];
+  const steps: [Step, string, ReactNode, string][] = order.map((k, i) => [k, `${i + 1}. ${allSteps[k][0]}`, allSteps[k][1], allSteps[k][2]]);
+  const next = (from: Step) => { const k = order[order.indexOf(from) + 1]; return k ? <NextStep onClick={() => setStep(k)} label={`Next: ${allSteps[k][0].replace(/ \(\d+\)$/, "").toLowerCase()}`} /> : null; };
+  const shownPackages = workPackages.filter(p => mode === "PROJECT" ? input.packages[p.id]?.enabled
+    : mode === "TRADE" ? (input.packages[p.id]?.enabled || !input.trades.length || (packageTrades[p.id] ?? []).some(t => input.trades.includes(t))) : true);
+  const pickProject = (id: string, on: boolean, values?: Record<string, unknown>) =>
+    setPkg(id, { enabled: on, values: { ...(input.packages[id]?.values ?? {}), ...(on && values ? values as Record<string, string | boolean> : {}) } });
   const areaNames = [...input.rooms.map(r => r.name), ...workPackages.filter(p => input.packages[p.id]?.enabled).map(p => p.label)];
 
   return (
@@ -186,20 +205,29 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
             ))}
           </nav>
 
+          {step === "start" && <>
+            <ModePicker mode={mode} onChange={m => update(i => ({ ...i, mode: m, ...(m !== "TRADE" && i.mode === "TRADE" ? { trades: [] } : {}) }))} />
+            <ClientCard client={client} input={input} onClient={c => { setClient(c); setDirty(true); }}
+              onPostcode={postcode => setProp({ postcode })} onPhone={clientPhone => setTerms({ clientPhone })}
+              onEmail={v => { const prev = clientFormats[v.trim().toLowerCase()]; if (prev && !formatTouched) update(i => ({ ...i, terms: { ...i.terms, format: prev.format as TakeoffInput["terms"]["format"], groupBy: prev.groupBy as TakeoffInput["terms"]["groupBy"] } })); }}
+              quotedBefore={clientFormats[client.email.trim().toLowerCase()] && !saved ? `Quoted before – using their last layout (${clientFormats[client.email.trim().toLowerCase()].format.toLowerCase()}).` : undefined} />
+            {mode === "PROJECT" && <ProjectPicker input={input} onPick={pickProject} />}
+            {mode === "TRADE" && <TradePicker value={input.trades} rates={rates} onChange={trades => update(i => ({ ...i, trades }))} />}
+            {missing.length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Needed before saving: {missing.join(", ")}.</p>}
+            {next("start")}
+          </>}
+
+          {step === "floors" && <>
+            <WholeHome input={input} onPackage={(id, on) => setPkg(id, { enabled: on })} onRooms={rooms => update(i => ({ ...i, rooms }))} onEdit={() => setStep("rooms")}
+              costs={Object.fromEntries((result?.areas ?? []).map(a => [a.area, a.cost]))} />
+            {next("floors")}
+          </>}
+
+          {step === "review" && <ReviewCard result={result} missing={missing} onSave={save} canSave={storage && !accepted && (!saved || (dirty && reason.trim().length >= 3))} saving={saving === "save"} saved={!!saved} groupBy={groupBy} onGroupBy={g => { setGroupBy(g); setTab("breakdown"); }} />}
+          {step === "review" && saved && dirty && reason.trim().length < 3 && <p className="text-xs text-amber-800">Write what changed (top bar) to save a new version.</p>}
+          {step === "review" && next("review")}
+
           {step === "house" && <>
-            <Card title="Client">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Text label="Client name" value={client.name} onChange={v => { setClient({ ...client, name: v }); setDirty(true); }} />
-                <Text label="Client email (they log in with this)" value={client.email} onChange={v => {
-                  setClient({ ...client, email: v }); setDirty(true);
-                  // A client we've quoted before gets the same layout as last time (until you choose one yourself).
-                  const prev = clientFormats[v.trim().toLowerCase()];
-                  if (prev && !formatTouched) update(i => ({ ...i, terms: { ...i.terms, format: prev.format as TakeoffInput["terms"]["format"], groupBy: prev.groupBy as TakeoffInput["terms"]["groupBy"] } }));
-                }} />
-                {clientFormats[client.email.trim().toLowerCase()] && !saved && <p className="text-xs text-neutral-500 sm:col-span-2">Quoted before – using their last layout ({clientFormats[client.email.trim().toLowerCase()].format.toLowerCase()}).</p>}
-                <div className="sm:col-span-2"><Text label="Site address" value={client.address} onChange={v => { setClient({ ...client, address: v }); setDirty(true); }} /></div>
-              </div>
-            </Card>
             <Card title="The house">
               <div className="grid gap-3 sm:grid-cols-3">
                 <Select label="House type" value={input.property.houseType} options={houseTypeOptions} onChange={v => setProp({ houseType: v as TakeoffInput["property"]["houseType"] })} />
@@ -217,13 +245,13 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 <textarea className={`${field} min-h-24`} value={input.property.notes} onChange={e => setProp({ notes: e.target.value })} placeholder="e.g. Victorian mid-terrace, original lath & plaster ceilings, damp in rear reception, access via side return…" />
               </label>
             </Card>
-            <TradeFilter value={input.trades} rates={rates} onChange={trades => update(i => ({ ...i, trades }))} />
-            <NextStep onClick={() => setStep("rooms")} label="Next: rooms" />
+            {mode !== "TRADE" && <TradeFilter value={input.trades} rates={rates} onChange={trades => update(i => ({ ...i, trades }))} />}
+            {next("house")}
           </>}
 
           {step === "rooms" && <>
             {input.rooms.length === 0 && <p className="rounded-xl border border-dashed p-4 text-sm text-neutral-600">Add each room that needs work, with its size. Then tick what is needed in it: plastering, painting, flooring, electrics, heating, doors, windows, a new kitchen or bathroom.</p>}
-            {input.trades.length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Pricing {input.trades.map(t => rates.trades[t]?.name.toLowerCase() ?? t).join(", ")} only – room forms show just those sections. Change it in step 1.</p>}
+            {input.trades.length > 0 && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Pricing {input.trades.map(t => rates.trades[t]?.name.toLowerCase() ?? t).join(", ")} only – room forms show just those sections. Change it in the Start step.</p>}
             {input.rooms.map((room, idx) => <RoomCard key={room.id} room={room} index={idx} count={input.rooms.length} trades={input.trades}
               onChange={r => setRoom(room.id, r)}
               onRemove={() => update(i => ({ ...i, rooms: i.rooms.filter(x => x.id !== room.id) }))}
@@ -231,12 +259,14 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
               onMove={d => update(i => { const rooms = [...i.rooms]; const j = idx + d; if (j < 0 || j >= rooms.length) return i; [rooms[idx], rooms[j]] = [rooms[j], rooms[idx]]; return { ...i, rooms }; })}
               cost={result?.areas.find(a => a.area === room.name)?.cost} />)}
             <AddRoom onAdd={(type, name) => update(i => ({ ...i, rooms: [...i.rooms, newRoom(type, name)] }))} existing={input.rooms} />
-            <NextStep onClick={() => setStep("projects")} label="Next: projects" />
+            {next("rooms")}
           </>}
 
           {step === "projects" && <>
-            <p className="text-xs text-neutral-500">Whole-house projects. The loft uses the house width and depth from step 1.</p>
-            {workPackages.map(pkg => {
+            {mode === "PROJECT" && <ProjectPicker input={input} onPick={pickProject} />}
+            {mode === "PROJECT" && !shownPackages.length && <p className="rounded-xl border border-dashed p-4 text-sm text-neutral-600">Choose a project above.</p>}
+            {mode !== "PROJECT" && <p className="text-xs text-neutral-500">{mode === "TRADE" ? "Projects this trade can quote. Rooms-based services (painting a room, extra sockets, a new radiator…) go in the Rooms step." : "Whole-house projects. The loft uses the house width and depth from the House step."}</p>}
+            {shownPackages.map(pkg => {
               const on = input.packages[pkg.id]?.enabled ?? false;
               return (
                 <section key={pkg.id} className={`space-y-3 rounded-xl border bg-white p-4 ${on ? "border-amber-400" : ""}`}>
@@ -252,12 +282,12 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 </section>
               );
             })}
-            <NextStep onClick={() => setStep("extras")} label="Next: custom work" />
+            {next("projects")}
           </>}
 
           {step === "extras" && <>
             <CustomWork items={input.customItems} areas={areaNames} rates={rates} margins={input.commercial} library={savedJobs} canSave={storage} onChange={customItems => update(i => ({ ...i, customItems }))} />
-            <NextStep onClick={() => setStep("site")} label="Next: site & margins" />
+            {next("extras")}
           </>}
 
           {step === "wording" && (result
@@ -265,12 +295,12 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
             : <p className="rounded-xl border border-dashed p-4 text-sm text-neutral-600">Add some work first – the scope table is built from it.</p>)}
 
           {step === "site" && <>
+            <ScaffoldCard prelims={input.prelims} result={result} onChange={setPrelims} />
             <Card title="Site set-up & health and safety">
               <div className="grid gap-x-4 sm:grid-cols-2">
-                <Check label="Scaffolding (when needed)" value={input.prelims.scaffold} onChange={v => setPrelims({ scaffold: v })} />
                 <Check label="Welfare unit" value={input.prelims.welfare} onChange={v => setPrelims({ welfare: v })} />
                 <Check label="Protection of floors & stairs" value={input.prelims.siteProtection} onChange={v => setPrelims({ siteProtection: v })} />
-                <Check label="Building control (loft / extension)" value={input.prelims.buildingControl} onChange={v => setPrelims({ buildingControl: v })} />
+                <Check label="Building control (loft, extension, conversion, annexe)" value={input.prelims.buildingControl} onChange={v => setPrelims({ buildingControl: v })} />
                 <Check label="Structural engineer" value={input.prelims.structuralEngineer} onChange={v => setPrelims({ structuralEngineer: v })} />
                 <Check label="Final clean" value={input.prelims.finalClean} onChange={v => setPrelims({ finalClean: v })} />
                 <Check label="Health & safety pack" value={input.prelims.healthSafety} onChange={v => setPrelims({ healthSafety: v })} />
@@ -299,14 +329,16 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 <Num label="Stage payments" int value={input.terms.stagePayments} onChange={v => setTerms({ stagePayments: v })} />
                 <Num label="Final payment %" value={input.terms.finalPercent} onChange={v => setTerms({ finalPercent: v })} />
                 <Num label="Pay invoices within (days)" int value={input.terms.paymentDays} onChange={v => setTerms({ paymentDays: v })} />
-                <Num label="Quote valid for (days)" int value={input.terms.validityDays} onChange={v => setTerms({ validityDays: v })} />
+                <Num label="Quote valid for (days)" hint="Price held – 300 days as standard" int value={input.terms.validityDays} onChange={v => setTerms({ validityDays: Math.min(365, Math.max(7, v)) })} />
                 <Num label="Workmanship guarantee (years)" int value={input.terms.guaranteeYears} onChange={v => setTerms({ guaranteeYears: v })} />
-                <Text label="Client phone" value={input.terms.clientPhone} onChange={v => setTerms({ clientPhone: v })} />
+                <Text label="Site supervisor (this job)" value={input.terms.siteSupervisor} onChange={v => setTerms({ siteSupervisor: v })} />
+                <Text label="Supervisor phone" value={input.terms.siteSupervisorPhone} onChange={v => setTerms({ siteSupervisorPhone: v })} />
               </div>
               <Text label="Client address (if different from the site)" value={input.terms.clientAddress} onChange={v => setTerms({ clientAddress: v })} />
+              <Text label="Nearest A&E hospital (name & address – for the RAMS and emergency plan)" value={input.terms.nearestHospital} onChange={v => setTerms({ nearestHospital: v })} />
               <label className="block text-xs font-semibold text-neutral-700">Extra exclusions (one per line)
                 <textarea rows={3} className={field} value={input.terms.exclusions} onChange={e => setTerms({ exclusions: e.target.value })} /></label>
-              <p className="text-xs text-neutral-500">The Documents tab builds the quotation, payment schedule with dates, contract, {input.terms.guaranteeYears}-year guarantee, construction phase plan, risk assessment and method statements from these.</p>
+              <p className="text-xs text-neutral-500">The Documents tab builds the quotation, payment schedule, contract, {input.terms.guaranteeYears}-year guarantee, construction phase plan, a RAMS for every activity on this job, toolbox talks, induction, permits, registers, Building Regulations checklist, client letters and the completion set from these.</p>
             </Card>
             <Card title="Who buys the finishes">
               <Check label="Client supplies finishes: tiles, bathroom suite & shower, kitchen units & worktops, flooring, light fittings" value={input.finishesByClient} onChange={v => update(i => ({ ...i, finishesByClient: v }))} />
@@ -331,7 +363,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
               </div>
               {result && result.totals.discount > 0 && <p className="text-xs text-neutral-600">Discount {gbp(result.totals.discount)} off {gbp(result.totals.netBeforeDiscount)}; it comes off your profit ({gbp0(result.totals.markup - result.totals.discount)} left).</p>}
             </Card>
-            <NextStep onClick={() => setStep("wording")} label="Next: quote layout & wording" />
+            {next("site")}
           </>}
         </div>
 
@@ -371,11 +403,11 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 .map(([k, name, Icon]) => <button key={k} onClick={() => setTab(k)} className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 ${tab === k ? "bg-white shadow" : "text-neutral-600"}`}><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{name}</span></button>)}
             </nav>
 
-            {tab === "breakdown" && <><PriceSummary result={result} /><Breakdown result={result} input={input} rates={rates} editPrice={editPrice} chooseMaterial={chooseMaterial} setClientSupply={setClientSupply} setExcluded={setExcluded} /></>}
+            {tab === "breakdown" && <><PriceSummary result={result} /><Breakdown groupBy={groupBy} onGroupBy={setGroupBy} result={result} input={input} rates={rates} editPrice={editPrice} chooseMaterial={chooseMaterial} setClientSupply={setClientSupply} setExcluded={setExcluded} /></>}
             {tab === "trades" && <Trades result={result} />}
             {tab === "programme" && <Programme result={result} />}
             {tab === "choices" && <Choices result={result} />}
-            {tab === "documents" && <DocumentsViewer warnings={missingCompanyFields(company)} docs={buildDocuments({ customer: customerTakeoff(result, input), input, company,
+            {tab === "documents" && <DocumentsViewer note={saved?.status === "ACCEPTED" ? "Accepted – saved with the job." : "Preview – saved with the job when the client accepts."} warnings={missingCompanyFields(company)} docs={buildDocuments({ customer: customerTakeoff(result, input), input, company,
               client: { name: client.name, email: client.email, siteAddress: client.address }, reference: saved?.reference ?? "DRAFT", version: saved?.version ?? 1, issueDate: todayIso() })} />}
             {tab === "history" && saved && <HistoryTab saved={saved} />}
           </>}
@@ -486,21 +518,33 @@ function PriceSummary({ result }: { result: TakeoffResult }) {
   );
 }
 
-function Breakdown({ result, input, rates, editPrice, chooseMaterial, setClientSupply, setExcluded }: { result: TakeoffResult; input: TakeoffInput; rates: RateBook; editPrice: (k: string, v: number | null) => void; chooseMaterial: (mk: string, key: string | null) => void; setClientSupply: (mk: string, on: boolean, byDefault: boolean) => void; setExcluded: (id: string, off: boolean) => void }) {
+function Breakdown({ result, input, rates, editPrice, chooseMaterial, setClientSupply, setExcluded, groupBy = "area", onGroupBy }: { result: TakeoffResult; input: TakeoffInput; rates: RateBook; editPrice: (k: string, v: number | null) => void; chooseMaterial: (mk: string, key: string | null) => void; setClientSupply: (mk: string, on: boolean, byDefault: boolean) => void; setExcluded: (id: string, off: boolean) => void; groupBy?: "area" | "process"; onGroupBy?: (g: "area" | "process") => void }) {
   const t = result.totals, c = input.commercial;
+  // In order of work: site set-up, then first fix, then second fix; stages in programme order inside each.
+  const stageOrder = new Map(result.stages.map((s, i) => [s.stage, i]));
+  const byStage = (a: string, b: string) => (stageOrder.get(a) ?? 999) - (stageOrder.get(b) ?? 999);
+  const cost = (ls: TakeoffLine[]) => ls.filter(l => !l.excluded).reduce((s, l) => s + l.total, 0);
+  const groups = groupBy === "area"
+    ? result.areas.map(a => ({ key: a.area, title: a.area, lines: result.lines.filter(l => l.area === a.area), cost: a.cost, full: false }))
+    : (["SITE", "FIRST_FIX", "SECOND_FIX"] as const).map((ph, i) => {
+      const lines = result.lines.filter(l => l.phase === ph);
+      return { key: ph, title: `${i + 1}. ${ph === "SITE" ? "Site set-up, preliminaries & services" : phaseLabels[ph]}`, lines, cost: cost(lines), full: true };
+    }).filter(g => g.lines.length);
   return (
     <div className="space-y-4">
-      {result.areas.map(area => {
-        const lines = result.lines.filter(l => l.area === area.area);
-        const stages = [...new Set(lines.map(l => l.stage))];
+      {onGroupBy && <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold print:hidden"><span className="text-neutral-500">Group items</span>
+        {([["process", "In order of work"], ["area", "By room / project"]] as const).map(([k, v]) => <button key={k} onClick={() => onGroupBy(k)} className={`rounded-full border px-3 py-1 ${groupBy === k ? "border-amber-500 bg-amber-500 text-neutral-950" : "bg-white hover:border-amber-500"}`}>{v}</button>)}</div>}
+      {groups.map(group => {
+        const lines = group.lines;
+        const stages = [...new Set(lines.map(l => l.stage))].sort(groupBy === "process" ? byStage : () => 0);
         return (
-          <details key={area.area} open className="overflow-hidden rounded-xl border bg-white">
+          <details key={group.key} open className="overflow-hidden rounded-xl border bg-white">
             <summary className="flex cursor-pointer items-center justify-between gap-3 bg-neutral-50 px-4 py-3">
-              <span className="font-bold">{area.area}</span><span className="text-sm text-neutral-600"><strong className="text-neutral-900">{gbp(area.cost)}</strong> cost</span>
+              <span className="font-bold">{group.title}</span><span className="text-sm text-neutral-600"><strong className="text-neutral-900">{gbp(group.cost)}</strong> cost</span>
             </summary>
             {stages.map(stage => (
               <div key={stage}>
-                <p className="border-t bg-white px-4 pt-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{stage.replace(/^[^·]+· /, "")}</p>
+                <p className="border-t bg-white px-4 pt-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-500">{group.full ? stage : stage.replace(/^[^·]+· /, "")}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm"><tbody>
                     {lines.filter(l => l.stage === stage).map(l => (

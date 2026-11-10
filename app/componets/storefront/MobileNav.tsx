@@ -7,25 +7,21 @@ import { navbarLinks } from "./NavBarLinks";
 import { cn } from "@/lib/utils";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
-import { useKindeAuth } from "@kinde-oss/kinde-auth-nextjs";
-import {
-  LoginLink,
-  LogoutLink,
-  RegisterLink,
-} from "@kinde-oss/kinde-auth-nextjs/components";
-
-const ADMIN_EMAILS = new Set([
-  "geraldmetohu@gmail.com",
-  "hasanajaleksios@icloud.com",
-  "ensisako11@gmail.com",
-]);
+import { SignOutButton } from "../auth/AuthLinks";
 
 type MobileNavProps = {
+  user?: { name: string; email: string } | null;
+  /** "Your area" links shown first in the menu when signed in (client area, account, dashboard…). */
+  accountLinks?: { href: string; label: string; hint?: string }[];
+  isAdmin?: boolean;
   dashboardHref?: string | null;
   dashboardLabel?: string;
 };
 
 export default function MobileNav({
+  user,
+  accountLinks = [],
+  isAdmin = false,
   dashboardHref,
   dashboardLabel,
 }: MobileNavProps) {
@@ -34,16 +30,8 @@ export default function MobileNav({
 
   const pathname = usePathname();
 
-  const { user, isAuthenticated } = useKindeAuth();
-
-  const isAdmin =
-    !!user?.email && ADMIN_EMAILS.has(user.email);
-
-  const displayName =
-    user?.given_name ||
-    user?.family_name ||
-    user?.email ||
-    "User";
+  const isAuthenticated = !!user;
+  const displayName = user?.name || user?.email || "User";
 
   /*
    * Close the mobile menu whenever the route changes.
@@ -160,6 +148,34 @@ export default function MobileNav({
           className="flex-1 overflow-y-auto px-4 py-6"
           aria-label="Mobile main navigation"
         >
+          {accountLinks.length > 0 && (
+            <div className="mb-5 rounded-2xl bg-[#071a33] p-2 text-white">
+              <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.22em] text-[#f5b400]">Your area</p>
+              {accountLinks.map((l) => {
+                const active = pathname === l.href || (l.href !== "/dashboard" && pathname.startsWith(`${l.href}/`));
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    onClick={closeMenu}
+                    className={cn(
+                      "flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-white/10",
+                      active && "bg-white/10"
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-semibold">{l.label}</span>
+                      {l.hint && <span className="block truncate text-xs text-white/60">{l.hint}</span>}
+                    </span>
+                    <span aria-hidden className="text-[#f5b400]">→</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+          {accountLinks.length > 0 && (
+            <p className="px-4 pb-2 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-400">Website</p>
+          )}
           {navbarLinks.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -281,9 +297,9 @@ export default function MobileNav({
 <div className="border-t border-black/[0.06] bg-neutral-50/70 p-5">
   {!isAuthenticated ? (
     <div className="grid grid-cols-2 gap-2">
-      <LoginLink
-        authUrlParams={{ prompt: "login" }}
-        postLoginRedirectURL="/api/auth/creation"
+      <Link
+        href="/login"
+        onClick={closeMenu}
         className="group relative flex h-11 items-center justify-center overflow-hidden rounded-none border border-black/90 bg-transparent px-4 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
       >
         <span className="relative z-10 flex items-center gap-2">
@@ -294,9 +310,11 @@ export default function MobileNav({
         </span>
 
         <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-      </LoginLink>
+      </Link>
 
-      <RegisterLink
+      <Link
+        href="/signup"
+        onClick={closeMenu}
         className="group relative flex h-11 items-center justify-center overflow-hidden rounded-none border border-black/90 bg-transparent px-4 text-sm font-medium tracking-wide text-black transition-all duration-300 hover:text-white"
       >
         <span className="relative z-10 flex items-center gap-2">
@@ -307,17 +325,18 @@ export default function MobileNav({
         </span>
 
         <span className="absolute inset-y-0 left-0 z-0 w-full origin-left scale-x-0 bg-black transition-transform duration-500 ease-out group-hover:scale-x-100" />
-      </RegisterLink>
+      </Link>
     </div>
   
           ) : (
             <div className="space-y-3">
-              <div className="text-sm text-neutral-500">
+              <Link href="/account" onClick={closeMenu} className="block text-sm text-neutral-500">
                 Hi,{" "}
                 <span className="font-medium text-neutral-900">
                   {displayName}
                 </span>
-              </div>
+                <span className="ml-2 text-xs underline underline-offset-2">Account &amp; password</span>
+              </Link>
 
               <div className="flex gap-2">
                 {dashboardHref && (
@@ -333,9 +352,7 @@ export default function MobileNav({
                   </Link>
                 )}
 
-                <LogoutLink className="flex h-10 items-center justify-center rounded-full border border-black/[0.08] bg-white px-4 text-sm text-neutral-700 transition-all duration-300 ease-out hover:bg-black/[0.04] hover:text-black">
-                  Sign out
-                </LogoutLink>
+                <SignOutButton className="flex h-10 items-center justify-center rounded-full border border-black/[0.08] bg-white px-4 text-sm text-neutral-700 transition-all duration-300 ease-out hover:bg-black/[0.04] hover:text-black" />
               </div>
             </div>
           )}

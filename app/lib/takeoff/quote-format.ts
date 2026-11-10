@@ -33,7 +33,10 @@ export interface QuoteRow {
   text: string;
   net: number;
   days: number;
+  /** Main trade (most of the value) – for our own screens only, never printed for the client. */
   trade?: string;
+  /** Every trade working in this step, largest share first – for our own screens only. */
+  trades?: string[];
   items?: QuoteItem[];
   /** VAT rate for this step when it differs from the quote's (e.g. 0% energy-saving materials). */
   vatPercent?: number;
@@ -55,7 +58,15 @@ export interface QuoteLayout {
 const SITE_TITLE = "Site set-up & preliminaries";
 const stageTitle = (stage: string) => stage.includes(" · ") ? stage.split(" · ").slice(1).join(" · ") : stage;
 const sentence = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
-const unitText = (u: string) => u.replace(/^m2$/, "m²").replace(/^m3$/, "m³");
+const PLURAL: Record<string, string> = { delivery: "deliveries", box: "boxes", day: "days", pair: "pairs", each: "" };
+/** Unit for a quantity, as a person would write it: 1 bag / 6 bags, 2 m², 12 (no "each"). */
+export const unitText = (u: string, q = 2) => {
+  const m = u.replace(/^m2$/, "m²").replace(/^m3$/, "m³");
+  if (m === "each") return "";
+  if (/^(m|m²|m³|kg|t|l|m²·week)$/i.test(m) || q === 1 || /s$/.test(m) || m.includes(" ")) return m;
+  return PLURAL[m] ?? `${m}s`;
+};
+const qtyText = (q: number, u: string) => `${fmt(q)}${unitText(u, q) ? ` ${unitText(u, q)}` : ""}`;
 const kindOf = (k: CostKind): QuoteItem["kind"] => k === "LABOUR" ? "LABOUR" : k === "MATERIAL" || k === "SUPPORTING" ? "MATERIAL" : "OTHER";
 
 /** Selling price of each line: cost × (1 + waste for materials) × (1 + contingency) × (1 + markup). */
@@ -83,7 +94,7 @@ function describeLines(ls: TakeoffLine[]) {
     const cur = seen.get(d);
     seen.set(d, { q: (cur?.q ?? 0) + l.quantity, unit: l.unit });
   }
-  const bits = [...seen.entries()].map(([d, { q, unit }]) => ["item", "job"].includes(unit) && q === 1 ? d : `${d} (${fmt(q)} ${unitText(unit)})`);
+  const bits = [...seen.entries()].map(([d, { q, unit }]) => ["item", "job"].includes(unit) && q === 1 ? d : `${d} (${qtyText(q, unit)})`);
   return bits.length ? `${sentence(bits.join("; "))}.` : "";
 }
 
@@ -95,9 +106,9 @@ function itemsOf(ls: TakeoffLine[], sell: Map<TakeoffLine, number>, wording: Wor
     const k = `${l.rateKey}|${l.description}|${l.unit}|${l.clientSupplied ? 1 : 0}`;
     const cur = map.get(k);
     if (cur) { cur.quantity = Math.round((cur.quantity + l.quantity) * 100) / 100; cur.raw += sell.get(l) ?? 0; continue; }
-    map.set(k, { id: l.lineId, description: wording.lines[l.lineId] || l.description, quantity: l.quantity, unit: unitText(l.unit), byClient: l.clientSupplied || undefined, kind: kindOf(l.kind), raw: sell.get(l) ?? 0 });
+    map.set(k, { id: l.lineId, description: wording.lines[l.lineId] || l.description, quantity: l.quantity, unit: l.unit, byClient: l.clientSupplied || undefined, kind: kindOf(l.kind), raw: sell.get(l) ?? 0 });
   }
-  return [...map.values()].map(({ raw, ...it }) => ({ ...it, net: money(raw), rate: it.quantity > 0 ? money(raw / it.quantity) : 0 }));
+  return [...map.values()].map(({ raw, ...it }) => ({ ...it, unit: unitText(it.unit, it.quantity), net: money(raw), rate: it.quantity > 0 ? money(raw / it.quantity) : 0 }));
 }
 
 /**
@@ -112,7 +123,7 @@ export function buildQuoteLayout(result: TakeoffResult, input: TakeoffInput | un
   const sell = sellingPrices(result, input);
   const live = result.lines.filter(l => !l.excluded && (l.total > 0 || l.clientSupplied));
 
-  type Raw = { key: string; group: string; groupTitle: string; title: string; lines: TakeoffLine[]; scope: string[]; days: number; trade?: string };
+  type Raw = { key: string; group: string; groupTitle: string; title: string; lines: TakeoffLine[]; scope: string[]; days: number; trade?: string; trades?: string[] };
   const raws: Raw[] = [];
   const at = new Map<string, Raw>();
   const add = (key: string, group: string, groupTitle: string, title: string, l: TakeoffLine, trade?: string) => {
@@ -140,8 +151,9 @@ export function buildQuoteLayout(result: TakeoffResult, input: TakeoffInput | un
       const own = items.filter(s => !s.stage.startsWith("Extra · ")), work = rows.filter(r => !r.lines[0].stage.startsWith("Extra · "));
       let rest = items;
       if (!isSite && own.length === 1 && work.length > 1) { groupText.set(area, [own[0].text]); rest = items.filter(s => s !== own[0]); }
+      // Each sentence belongs to the step priced just before it was written; summaries of several steps introduce the group.
       for (const s of rest) {
-        const r = at.get(`${s.area}::${s.stage}`) ?? rows[rows.length - 1];
+        const r = s.summary && !isSite ? undefined : at.get(`${s.area}::${s.stage}`) ?? (isSite ? rows[rows.length - 1] : undefined);
         if (r) r.scope.push(s.text); else groupText.set(area, [...(groupText.get(area) ?? []), s.text]);
       }
     }
@@ -151,8 +163,9 @@ export function buildQuoteLayout(result: TakeoffResult, input: TakeoffInput | un
     if (groupBy === "AREA") {
       const val = new Map<string, number>();
       for (const l of r.lines) if (l.trade) val.set(l.trade, (val.get(l.trade) ?? 0) + (sell.get(l) ?? 0));
-      const top = [...val.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] as Trade | undefined;
-      r.trade = top ? trades[top]?.name : undefined;
+      const ranked = [...val.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t as Trade);
+      r.trade = ranked[0] ? trades[ranked[0]]?.name : undefined;
+      r.trades = ranked.map(t => trades[t]?.name ?? t);
     }
     const by = new Map<string, number>();
     for (const l of r.lines) if (l.days && l.gang?.length) by.set(l.gang[0].trade, (by.get(l.gang[0].trade) ?? 0) + l.days);
@@ -173,7 +186,7 @@ export function buildQuoteLayout(result: TakeoffResult, input: TakeoffInput | un
       const custom = r.lines[0].customId ? input?.customItems.find(c => c.id === r.lines[0].customId) : undefined;
       const option = r.lines[0].customId?.startsWith("option:") ? "Optional extra you chose – added to the price." : "";
       const text = w?.text || option || (custom ? custom.description || `${custom.title}.` : r.scope.length ? r.scope.join(" ") + includes : describeLines(r.lines));
-      const row: QuoteRow = { key: r.key, title: w?.title || r.title, text, net: money(items.reduce((s, i) => s + (i.net ?? 0), 0)), days: r.days, trade: r.trade, items };
+      const row: QuoteRow = { key: r.key, title: w?.title || r.title, text, net: money(items.reduce((s, i) => s + (i.net ?? 0), 0)), days: r.days, trade: r.trade, trades: r.trades, items };
       const std = input?.commercial.vatPercent ?? 20, rates = new Set(r.lines.map(l => l.vatPercent ?? std));
       if (rates.size === 1 && !rates.has(std)) row.vatPercent = [...rates][0];
       if (r.lines.every(l => l.provisional)) row.provisional = true;

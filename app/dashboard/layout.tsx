@@ -1,14 +1,14 @@
 import { ReactNode } from "react";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
+import { getAuthSession } from "@/app/lib/auth/session.server";
 import { redirect } from "next/navigation";
-import { LogoutLink } from "@kinde-oss/kinde-auth-nextjs/components";
+import Link from "next/link";
 import { CircleUser, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { CurrentPageTitle, DashboardSidebar, MobileDashboardNav } from "../componets/dashboard/DashboardNavigation";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  const { getUser } = getKindeServerSession();
+  const { getUser } = getAuthSession();
   const user = await getUser();
 
   const allowedAdmins = process.env.ADMIN_EMAILS?.split(",").map((e) => e.trim().toLowerCase()) || [];
@@ -35,8 +35,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel className="font-normal"><span className="block text-xs text-neutral-500">Signed in as</span>{email}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/account" className="flex w-full items-center gap-2"><CircleUser className="h-4 w-4" /> Your account &amp; password</Link></DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <LogoutLink className="flex w-full items-center gap-2"><LogOut className="h-4 w-4" /> Log out</LogoutLink>
+                  <Link href="/logout" className="flex w-full items-center gap-2"><LogOut className="h-4 w-4" /> Log out</Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

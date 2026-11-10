@@ -38,5 +38,9 @@ export default async function JobPage({ params, searchParams }: { params: Promis
       stage: r.stage, label: r.label, start: r.start ?? null,
       items: a.result.lines.filter(l => l.stage === r.stage && (l.kind === "MATERIAL" || l.kind === "SUPPORTING") && !l.excluded && !l.clientSupplied).map(l => ({ description: l.description, quantity: l.quantity, unit: l.unit })),
     })).filter(s => s.items.length),
+    portalOn: job.portalOn, requestedStart: job.portal.requestedStart,
+    manager: { name: job.portal.managerName, phone: job.portal.managerPhone, email: job.portal.managerEmail },
+    invoices: job.invoices.map(i => { const r = job.money.rows.find(x => x.n === i.scheduleNo); return { number: i.number, label: i.label, scheduleNo: i.scheduleNo, issuedOn: i.issuedOn, dueOn: i.dueOn, gross: i.gross, balance: r ? r.balance : i.gross, emailed: !!i.emailedAt }; }),
+    snags: job.snags.map(s => ({ id: s.id, title: s.title, detail: s.detail, location: s.location, photoUrl: s.photoUrl, status: s.status, raisedByKind: s.raisedByKind, doneByKind: s.doneByKind, doneAt: s.doneAt ? new Date(s.doneAt).toISOString() : null, createdAt: new Date(s.createdAt).toISOString() })),
   }} />;
 }

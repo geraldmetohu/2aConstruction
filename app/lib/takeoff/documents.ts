@@ -14,6 +14,7 @@ import { coveringOptions } from "./modules/roofing";
 import { phaseLabels } from "./types";
 import { renderSystemOptions } from "./modules/external";
 import type { QuoteLayout } from "./quote-format";
+import { buildSitePack, type SitePack } from "./site-pack";
 
 const label = (opts: readonly (readonly [string, string])[], k: unknown) => opts.find(([v]) => v === k)?.[1] ?? String(k ?? "");
 const r2 = (x: number) => Math.round(x * 100) / 100;
@@ -43,7 +44,8 @@ export const longDate = (date: string) => new Date(`${date}T00:00:00Z`).toLocale
 
 export interface DocParty { name: string; email: string; phone: string; address: string; siteAddress: string }
 export interface ProgrammeRow { stage: string; label: string; days: number; startDay: number; endDay: number; start?: string; end?: string }
-export interface PaymentRow { n: number; label: string; when: string; date?: string; percent: number; amount: number }
+/** kind/stages say when the stage invoice is raised: deposit on acceptance, a stage payment when its stages are done, final on completion. */
+export interface PaymentRow { n: number; label: string; when: string; date?: string; percent: number; amount: number; kind?: "DEPOSIT" | "STAGE" | "FINAL" | "VARIATION"; stages?: string[]; net?: number }
 export interface SupplyRow { area: string; item: string; quantity: number; unit: string; spec: string; neededBy: string }
 export interface DocSection { heading: string; paragraphs?: string[]; items?: string[] }
 
@@ -62,6 +64,8 @@ export interface QuoteDocs {
   cpp: DocSection[]; risks: { id: HazardId; title: string; who: string; harm: string; before: number; after: number; beforeBand: string; afterBand: string; controls: string[]; activities: string[] }[];
   methods: { id: ActivityId; title: string; steps: string[]; plant: string[]; ppe: string[]; competence: string; hazards: string[] }[];
   coshh: { activity: string; substances: string[] }[];
+  /** Full project pack: RAMS per activity, permits, registers, Building Regulations, client letters, completion. */
+  pack?: SitePack;
 }
 
 export interface DocArgs {
@@ -116,7 +120,7 @@ function programme(c: CustomerTakeoff, start: string) {
   let day = 0;
   for (const s of [...first, ...services, ...middle, ...last]) {
     const days = setup.test(s.stage) ? 0 : s.days;
-    const row: ProgrammeRow = { stage: s.stage, label: stageLabel(s.stage), days, startDay: day, endDay: day + Math.max(0, Math.ceil(days) - 1) };
+    const from = Math.floor(day), row: ProgrammeRow = { stage: s.stage, label: stageLabel(s.stage), days, startDay: from, endDay: Math.max(from, Math.ceil(day + days) - 1) };
     if (start) { row.start = workingDate(start, row.startDay); row.end = workingDate(start, row.endDay); }
     rows.push(row);
     day += days;
@@ -156,18 +160,18 @@ export function paymentSchedule(c: CustomerTakeoff, input: TakeoffInput, rows: P
   const filled = chunks.filter(ch => ch.length);
   const out: PaymentRow[] = [];
   const start = t.startDate;
-  if (deposit > 0) out.push({ n: 0, label: "Deposit", when: "On signing the contract, to book the start date and order long-lead materials", date: start ? (addDays(start, -7) > issueDate ? addDays(start, -7) : issueDate) : undefined, percent: t.depositPercent, amount: deposit });
+  if (deposit > 0) out.push({ n: 0, label: "Deposit", when: "On signing the contract, to book the start date and order long-lead materials", date: start ? (addDays(start, -7) > issueDate ? addDays(start, -7) : issueDate) : undefined, percent: t.depositPercent, amount: deposit, kind: "DEPOSIT" });
   let paid = 0;
   filled.forEach((ch, i) => {
     const share = ch.reduce((s, r) => s + netOf(r), 0) / totalNet;
     const amount = i === filled.length - 1 ? r2(middle - paid) : r2(middle * share);
     paid = r2(paid + amount);
     const lastRow = ch[ch.length - 1];
-    out.push({ n: 0, label: `Stage payment ${i + 1}`, when: `On completion of: ${ch.map(r => r.label).join(", ")}`, date: lastRow.end, percent: r2(amount / gross * 100), amount });
+    out.push({ n: 0, label: `Stage payment ${i + 1}`, when: `On completion of: ${ch.map(r => r.label).join(", ")}`, date: lastRow.end, percent: r2(amount / gross * 100), amount, kind: "STAGE", stages: ch.map(r => r.stage) });
   });
   if (final > 0) {
     const end = rows.length ? rows[rows.length - 1].end : undefined;
-    out.push({ n: 0, label: "Final payment", when: "On practical completion, after the handover walk-round and snagging list", date: end, percent: t.finalPercent, amount: final });
+    out.push({ n: 0, label: "Final payment", when: "On practical completion, after the handover walk-round and snagging list", date: end, percent: t.finalPercent, amount: final, kind: "FINAL" });
   }
   const drift = r2(gross - out.reduce((s, p) => s + p.amount, 0));
   if (drift && out.length) out[out.length - 1].amount = r2(out[out.length - 1].amount + drift);
@@ -290,9 +294,10 @@ function cpp(d: Pick<QuoteDocs, "company" | "client" | "reference" | "start" | "
     ] },
     { heading: "2. Management and contacts", items: [
       `Site manager: ${co.siteManager || "________________"}${co.siteManagerPhone ? ` – ${co.siteManagerPhone}` : ""}`,
+      ...(input.terms.siteSupervisor ? [`Site supervisor: ${input.terms.siteSupervisor}${input.terms.siteSupervisorPhone ? ` – ${input.terms.siteSupervisorPhone}` : ""}`] : []),
       `Health & safety lead: ${co.healthSafetyLead || co.siteManager || "________________"}`, `First aider: ${co.firstAider || "________________"}`,
       `Office: ${co.phone}${co.email ? ` · ${co.email}` : ""}`,
-      "Emergency services: 999 · Nearest A&E: ____________________ (site manager to complete and display)",
+      `Emergency services: 999 · Nearest A&E: ${input.terms.nearestHospital || "____________________ (site manager to complete and display)"}`,
       "Gas emergency: 0800 111 999 · Power cut: 105 · Water: your water company's emergency line",
     ] },
     { heading: "3. Site rules", items: [
@@ -346,7 +351,8 @@ export function buildDocuments(a: DocArgs): QuoteDocs {
   const client: DocParty = { name: a.client.name, email: a.client.email, phone: t.clientPhone, address: t.clientAddress || a.client.siteAddress, siteAddress: a.client.siteAddress };
   const pkgTitles = [input.packages.loft?.enabled && "Loft conversion", input.packages.extension?.enabled && "Extension", input.packages.roofing?.enabled && "Re-roof",
     input.packages.external?.enabled && (input.packages.external.values.insulation ? "External wall insulation" : "External render"), input.packages.garden?.enabled && "Garden & landscaping",
-    input.packages.cleaning?.enabled && "Exterior cleaning", input.rooms.length > 0 && "Internal refurbishment"].filter(Boolean) as string[];
+    input.packages.cleaning?.enabled && "Exterior cleaning", input.packages.conversion?.enabled && "Garage conversion", input.packages.outbuilding?.enabled && "Garden building",
+    input.packages.demolition?.enabled && "Demolition", input.rooms.length > 0 && "Internal refurbishment"].filter(Boolean) as string[];
   const title = t.title || (pkgTitles.length ? pkgTitles.join(", ").replace(/, ([^,]*)$/, " and $1") : "Building works");
   const stageStart = new Map(rows.map(r => [r.stage, r.start ?? `Day ${r.startDay + 1}`]));
   const layout = c.layout;
@@ -403,5 +409,7 @@ export function buildDocuments(a: DocArgs): QuoteDocs {
     }).sort((x, y) => y.before - x.before),
     methods: acts.map(id => ({ id, ...ACTIVITIES[id], hazards: ACTIVITIES[id].hazards.map(h => HAZARDS[h].title) })),
     coshh: acts.filter(id => COSHH[id]).map(id => ({ activity: ACTIVITIES[id].title, substances: COSHH[id]! })),
+    pack: buildSitePack({ c, input, company, acts, title, reference: a.reference, client: { name: a.client.name, siteAddress: a.client.siteAddress },
+      programme: rows, start, finish, net: c.net, gross: c.gross }),
   };
 }

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getKindeServerSession } from "@kinde-oss/kinde-auth-nextjs/server";
-import { LoginLink, RegisterLink } from "@kinde-oss/kinde-auth-nextjs/components";
+import { getAuthSession } from "@/app/lib/auth/session.server";
+import { SignInLink, SignUpLink } from "@/app/componets/auth/AuthLinks";
 import { ArrowRight, CalendarCheck, Camera, ClipboardCheck, FileText, HardHat, MessageSquare, Wallet } from "lucide-react";
 import { prisma } from "@/app/lib/db";
 import { listClientQuotes, prismaDb, storageReady } from "@/app/lib/takeoff/store";
@@ -26,15 +26,15 @@ const FEATURES = [
 ];
 
 export default async function MyQuotesPage() {
-  const user = await getKindeServerSession().getUser();
+  const user = await getAuthSession().getUser();
 
   if (!user?.email) return (
     <>
       <PortalHero eyebrow="Client area" title={<>Your project, <span className="text-[#f5b400]">all in one place.</span></>}
         lead="Sign in with the email address we sent your quote to. New here? Create an account with that same email – it takes a minute.">
         <div className="flex flex-wrap gap-3">
-          <LoginLink className="inline-flex items-center gap-2 rounded-xl bg-[#f5b400] px-6 py-3.5 text-sm font-bold text-[#071a33] transition-colors hover:bg-white">Sign in <ArrowRight className="h-4 w-4" /></LoginLink>
-          <RegisterLink className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-6 py-3.5 text-sm font-bold text-white transition-colors hover:border-white hover:bg-white hover:text-[#071a33]">Create account</RegisterLink>
+          <SignInLink next="/my-quotes" className="inline-flex items-center gap-2 rounded-xl bg-[#f5b400] px-6 py-3.5 text-sm font-bold text-[#071a33] transition-colors hover:bg-white">Sign in <ArrowRight className="h-4 w-4" /></SignInLink>
+          <SignUpLink className="inline-flex items-center gap-2 rounded-xl border border-white/30 px-6 py-3.5 text-sm font-bold text-white transition-colors hover:border-white hover:bg-white hover:text-[#071a33]">Create account</SignUpLink>
         </div>
       </PortalHero>
       <main className="mx-auto max-w-6xl px-5 py-12 sm:px-8 md:py-16">

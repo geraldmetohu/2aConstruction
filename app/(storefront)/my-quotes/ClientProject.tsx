@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Banknote, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, ClipboardList, Ellipsis, FileText, House, ListTodo, Mail, MessageSquare, Phone, Receipt, Send, ShoppingCart, TriangleAlert, Users, X } from "lucide-react";
 import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
+import { isLoftJob, LoftJourney3D } from "@/app/componets/client/LoftJourney3D";
 import type { DueRow, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
 import type { ClientContact } from "@/app/lib/takeoff/jobs-store";
 import { clientAddSnag, clientAnswer, clientMessage, clientReportPayment, clientSaveInfo, clientSetSnag, clientSupply } from "./project-actions";
@@ -194,6 +195,8 @@ function Overview({ v, todo, openActions, toOrder, due, current, go }: {
           return t.onClick ? <button key={t.k} onClick={t.onClick} className={`${cls} transition hover:-translate-y-0.5`}>{body}</button> : <div key={t.k} className={cls}>{body}</div>;
         })}
       </div>
+
+      {isLoftJob(v.progress.stages) && <LoftJourney3D stages={v.progress.stages} jobStatus={v.status} />}
 
       <div className="grid gap-5 lg:grid-cols-5">
         <section className="self-start rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6 lg:col-span-3">

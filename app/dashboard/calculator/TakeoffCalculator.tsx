@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle, Calculator, ChevronDown, ChevronUp, ClipboardList, Copy, FileText, HardHat, History, House, LayoutList,
@@ -7,7 +7,8 @@ import {
 } from "lucide-react";
 import { calculateTakeoff, customerTakeoff } from "@/app/lib/takeoff/engine";
 import { workPackages } from "@/app/lib/takeoff/modules/index";
-import { roomFields, roomGeometry, roomTypeDefaults } from "@/app/lib/takeoff/modules/rooms";
+import { ROOM_JOBS, roomFields, roomGeometry, roomJobs, roomTypeDefaults } from "@/app/lib/takeoff/modules/rooms";
+import { skippedStages } from "@/app/lib/takeoff/engine";
 import { toSpec } from "@/app/lib/takeoff/package";
 import {
   accessOptions, ageOptions, constructionOptions, defaultTakeoffInput, floorOptions, houseTypeOptions, newRoom, occupancyOptions,
@@ -23,7 +24,7 @@ import { defaultCompany, missingCompanyFields, type CompanyProfile } from "@/app
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 import { saveTakeoffQuote, sendTakeoffQuote } from "./actions";
 import { CustomWork, fieldsForTrades, LoftRooms, TradeFilter, WordingEditor } from "./QuoteExtras";
-import { ClientCard, missingClientDetails, ModePicker, packageTrades, ProjectPicker, ReviewCard, ScaffoldCard, TradePicker, WholeHome } from "./Wizard";
+import { ClientCard, missingClientDetails, ModePicker, packageTrades, ProjectPicker, QuickStart, ReviewCard, ScaffoldCard, TradePicker, WholeHome } from "./Wizard";
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const gbp0 = (x: number) => `£${Math.round(x).toLocaleString("en-GB")}`;
@@ -33,7 +34,7 @@ const sourceTone: Record<PriceSource, string> = {
   LIVE_SUPPLIER: "bg-emerald-100 text-emerald-800", CATALOGUE: "bg-sky-100 text-sky-800", COMPANY_RATE: "bg-neutral-200 text-neutral-800",
   DEFAULT: "bg-neutral-100 text-neutral-600", MANUAL: "bg-violet-100 text-violet-800",
 };
-const roomSpec = { fields: roomFields, defaults: Object.fromEntries(roomFields.map(f => [f.key, f.default])) };
+const roomSpec = { fields: roomFields.filter(f => f.key !== "jobs"), defaults: Object.fromEntries(roomFields.map(f => [f.key, f.default])) };
 const label = (opts: readonly (readonly [string, string])[], v: string) => opts.find(([k]) => k === v)?.[1] ?? v;
 const STORAGE = "2a-takeoff-draft-v3";
 
@@ -62,6 +63,9 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
   const [input, setInput] = useState<TakeoffInput>(() => saved?.input ?? fresh());
   const [client, setClient] = useState<Client>(saved?.client ?? { name: "", email: "", address: "" });
   const [step, setStep] = useState<Step>(saved ? "review" : "start");
+  // Phones: keep the current step visible in the swipeable step strip.
+  const stepStrip = useRef<HTMLElement>(null);
+  useEffect(() => { const el = stepStrip.current?.querySelector<HTMLElement>('[aria-current="step"]'); if (el && stepStrip.current && getComputedStyle(stepStrip.current).display !== "none") el.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" }); }, [step]);
   const [groupBy, setGroupBy] = useState<"area" | "process">("process");
   const [tab, setTab] = useState<Tab>("breakdown");
   const [last, setLast] = useState<TakeoffResult | null>(null);
@@ -197,7 +201,13 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
       <div className="grid gap-6 xl:grid-cols-12">
         {/* ---------- Steps ---------- */}
         <div className="min-w-0 space-y-4 xl:col-span-5 print:hidden">
-          <nav className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+          {/* Phones: a swipeable strip of steps. Tablets and up: the step cards. */}
+          <nav ref={stepStrip} aria-label="Steps" className="flex snap-x gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:hidden">
+            {steps.map(([k, name, icon]) => (
+              <button key={k} onClick={() => setStep(k)} aria-current={step === k ? "step" : undefined} className={`flex shrink-0 snap-start items-center gap-1.5 rounded-full border px-3.5 py-2 text-sm font-bold ${step === k ? "border-amber-500 bg-amber-500 text-neutral-950" : "bg-white"}`}>{icon}{name}</button>
+            ))}
+          </nav>
+          <nav className="hidden gap-2 sm:grid sm:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
             {steps.map(([k, name, icon, hint]) => (
               <button key={k} onClick={() => setStep(k)} className={`rounded-xl border p-3 text-left ${step === k ? "border-amber-500 bg-amber-50" : "bg-white hover:border-neutral-400"}`}>
                 <span className="flex items-center gap-2 text-sm font-bold">{icon}{name}</span><span className="mt-0.5 block text-[11px] text-neutral-500">{hint}</span>
@@ -206,6 +216,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
           </nav>
 
           {step === "start" && <>
+            {!saved && <QuickStart input={input} onApply={(nextInput, go) => { update(() => nextInput); setStep(go); }} />}
             <ModePicker mode={mode} onChange={m => update(i => ({ ...i, mode: m, ...(m !== "TRADE" && i.mode === "TRADE" ? { trades: [] } : {}) }))} />
             <ClientCard client={client} input={input} onClient={c => { setClient(c); setDirty(true); }}
               onPostcode={postcode => setProp({ postcode })} onPhone={clientPhone => setTerms({ clientPhone })}
@@ -274,7 +285,8 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                     <span><span className="block font-bold text-[#0d3b72]">{pkg.label}</span><span className="block text-xs text-neutral-500">{pkg.description}</span></span>
                     <input type="checkbox" className="mt-1 h-5 w-5 shrink-0 accent-amber-600" checked={on} onChange={e => setPkg(pkg.id, { enabled: e.target.checked })} />
                   </label>
-                  {on && <PackageFields pkg={(() => { const sp = toSpec(pkg); return input.trades.length ? { ...sp, fields: fieldsForTrades(sp.fields, input.trades) } : sp; })()} values={input.packages[pkg.id]?.values} onChange={values => setPkg(pkg.id, { values })} inputClass={field} showClientChoice />}
+                  {on && <ProjectParts label={pkg.label} values={input.packages[pkg.id]?.values ?? {}} lines={result?.lines ?? []} onChange={skip => setPkg(pkg.id, { values: { ...input.packages[pkg.id]?.values, _skip: skip } })} />}
+                  {on && <PackageFields pkg={(() => { const sp = toSpec(pkg); return input.trades.length ? { ...sp, fields: fieldsForTrades(sp.fields, input.trades) } : sp; })()} values={input.packages[pkg.id]?.values} onChange={values => setPkg(pkg.id, { values: { ...input.packages[pkg.id]?.values, ...values } })} inputClass={field} showClientChoice />}
                   {on && pkg.id === "loft" && input.packages.loft?.values.fitOutBy === "ROOMS" && input.packages.loft?.values.fitOut !== false && (
                     <LoftRooms rooms={input.rooms} onChange={rooms => update(i => ({ ...i, rooms }))} onEdit={() => setStep("rooms")}
                       costs={Object.fromEntries((result?.areas ?? []).map(a => [a.area, a.cost]))} shellCost={result?.areas.find(a => a.area === pkg.label)?.cost ?? 0} />
@@ -427,6 +439,46 @@ function renameArea(i: TakeoffInput, from: string, to: string): TakeoffInput {
     customItems: i.customItems.map(c => c.area === from ? { ...c, area: to } : c) };
 }
 
+/** "Jobs in this room": pick only what the client wants (floor only, floor + paint…); everything else is left out of the price. */
+function RoomJobs({ room, onChange }: { room: RoomInput; onChange: (works: RoomInput["works"]) => void }) {
+  const picked = roomJobs(room.works) ?? [];
+  const list = ROOM_JOBS.filter(j => !j.types || j.types.includes(room.type));
+  const set = (jobs: string[], extra: RoomInput["works"] = {}) => onChange({ ...room.works, ...extra, jobs: jobs.join(",") });
+  const toggle = (id: string) => {
+    if (picked.includes(id)) return set(picked.filter(x => x !== id));
+    const job = ROOM_JOBS.find(j => j.id === id)!;
+    // Switch the job on with a sensible start where its fields are still "off".
+    const start = Object.fromEntries(Object.entries(job.on ?? {}).filter(([k]) => { const now = room.works[k] ?? roomSpec.defaults[k]; return now === job.off[k] || now === undefined; })) as RoomInput["works"];
+    set([...picked, id], start);
+  };
+  return (
+    <div className="mb-3 rounded-xl border border-dashed border-amber-400 bg-amber-50/50 p-2.5">
+      <p className="mb-1.5 text-xs font-semibold text-neutral-700">Jobs the client wants here <span className="font-normal text-neutral-500">– {picked.length ? "only these are priced" : "all work types open"}</span></p>
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" onClick={() => set([])} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${!picked.length ? "border-neutral-900 bg-neutral-900 text-white" : "bg-white"}`}>Everything</button>
+        {list.map(j => <button type="button" key={j.id} onClick={() => toggle(j.id)} aria-pressed={picked.includes(j.id)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${picked.includes(j.id) ? "border-amber-500 bg-amber-500 text-neutral-950" : "bg-white hover:border-amber-400"}`}>{j.label}</button>)}
+      </div>
+    </div>
+  );
+}
+
+/** "Parts of this project": untick the stages the client isn't having (e.g. structure only, no finishes). */
+function ProjectParts({ label, values, lines, onChange }: { label: string; values: Record<string, unknown>; lines: { package: string; stage: string }[]; onChange: (skip: string) => void }) {
+  const skip = skippedStages(values);
+  const stages = [...new Set([...lines.filter(l => l.package === label).map(l => l.stage.slice(l.stage.indexOf(" · ") + 3)), ...skip])];
+  if (stages.length < 2) return null;
+  const toggle = (s: string) => { const n = new Set(skip); if (n.has(s)) n.delete(s); else n.add(s); onChange([...n].join(",")); };
+  return (
+    <div className="rounded-xl border border-dashed border-amber-400 bg-amber-50/50 p-2.5">
+      <p className="mb-1.5 text-xs font-semibold text-neutral-700">Parts of this project <span className="font-normal text-neutral-500">– untick what the client isn't having (e.g. structure only)</span></p>
+      <div className="flex flex-wrap gap-1.5">
+        {stages.map(s => { const on = !skip.has(s); return <button type="button" key={s} onClick={() => toggle(s)} aria-pressed={on} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${on ? "border-amber-500 bg-amber-500 text-neutral-950" : "bg-white text-neutral-500 line-through"}`}>{s}</button>; })}
+        {skip.size > 0 && <button type="button" onClick={() => onChange("")} className="rounded-full px-2 py-1.5 text-xs text-neutral-500 underline">All parts</button>}
+      </div>
+    </div>
+  );
+}
+
 function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove, cost, trades = [] }: {
   trades?: Trade[];
   room: RoomInput; index: number; count: number; onChange: (r: Partial<RoomInput>) => void; onRemove: () => void; onDuplicate: () => void; onMove: (d: number) => void; cost?: number;
@@ -435,20 +487,20 @@ function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove,
   const g = roomGeometry(room);
   return (
     <section className="rounded-xl border bg-white">
-      <header className="flex items-center gap-2 border-b px-4 py-3">
-        <button onClick={() => setOpen(!open)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-2.5 sm:flex-nowrap sm:gap-x-2 sm:px-4 sm:py-3">
+        <button onClick={() => setOpen(!open)} className="flex min-w-0 basis-full items-center gap-2 text-left sm:flex-1 sm:basis-auto">
           {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
-          <span className="truncate font-bold">{room.name}</span>
-          <span className="truncate text-xs text-neutral-500">{label(roomTypeOptions, room.type)} · {fmt(room.length)} × {fmt(room.width)} m · {fmt(g.floor)} m²</span>
+          <span className="min-w-0 sm:flex sm:items-center sm:gap-2"><span className="block truncate font-bold">{room.name}</span>
+            <span className="block truncate text-xs text-neutral-500">{label(roomTypeOptions, room.type)} · {fmt(room.length)} × {fmt(room.width)} m · {fmt(g.floor)} m²</span></span>
         </button>
-        {cost !== undefined && <span className="shrink-0 text-xs font-semibold text-neutral-700">{gbp0(cost)} cost</span>}
+        {cost !== undefined && <span className="mr-auto shrink-0 pl-6 text-xs font-semibold text-neutral-700 sm:mr-0 sm:pl-0">{gbp0(cost)} cost</span>}
         <button title="Move up" disabled={index === 0} onClick={() => onMove(-1)} className="text-neutral-400 hover:text-neutral-800 disabled:opacity-30"><ChevronUp className="h-4 w-4" /></button>
         <button title="Move down" disabled={index === count - 1} onClick={() => onMove(1)} className="text-neutral-400 hover:text-neutral-800 disabled:opacity-30"><ChevronDown className="h-4 w-4" /></button>
         <button title="Duplicate room" onClick={onDuplicate} className="text-neutral-400 hover:text-neutral-800"><Copy className="h-4 w-4" /></button>
         <button title="Remove room" onClick={() => { if (confirm(`Remove ${room.name}?`)) onRemove(); }} className="text-neutral-400 hover:text-red-700"><Trash2 className="h-4 w-4" /></button>
       </header>
       {open && <div className="space-y-4 p-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Text label="Room name" value={room.name} onChange={v => onChange({ name: v || "Room" })} />
           <Select label="Type" value={room.type} options={roomTypeOptions} onChange={v => {
             // New type: electrical items restart from that type's typical numbers.
@@ -466,7 +518,13 @@ function RoomCard({ room, index, count, onChange, onRemove, onDuplicate, onMove,
         <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-600">Floor & ceiling {fmt(g.floor)} m² · walls {fmt(g.walls)} m² (less doors & windows) · skirting {fmt(g.skirting)} m</p>
         <Text label="Notes about this room" value={room.notes} onChange={v => onChange({ notes: v })} />
         <div className="border-t pt-3"><p className="mb-2 text-sm font-bold">Work needed</p>
-          <PackageFields pkg={trades.length ? { ...roomSpec, fields: fieldsForTrades(roomSpec.fields, trades) } : roomSpec} values={{ ...roomTypeDefaults(room.type), ...room.works }} context={{ roomType: room.type }} onChange={works => onChange({ works })} inputClass={field} showClientChoice />
+          <RoomJobs room={room} onChange={works => onChange({ works })} />
+          <PackageFields pkg={(() => {
+            const jobs = roomJobs(room.works);
+            const groups = jobs && new Set(ROOM_JOBS.filter(j => jobs.includes(j.id)).flatMap(j => j.groups));
+            const fields = (trades.length ? fieldsForTrades(roomSpec.fields, trades) : roomSpec.fields).filter(f => !groups || groups.has(f.group ?? ""));
+            return { ...roomSpec, fields };
+          })()} values={{ ...roomTypeDefaults(room.type), ...room.works }} context={{ roomType: room.type }} onChange={works => onChange({ works: { ...room.works, ...works } })} inputClass={field} showClientChoice />
         </div>
       </div>}
     </section>
@@ -646,9 +704,9 @@ function Programme({ result }: { result: TakeoffResult }) {
       {staged.map(s => {
         const left = start / total * 100, width = s.days / total * 100; start += s.days;
         return (
-          <div key={s.stage} className="grid grid-cols-[11rem_1fr] items-center gap-3 text-sm">
+          <div key={s.stage} className="grid grid-cols-[7.5rem_1fr] items-center gap-2 text-sm sm:grid-cols-[11rem_1fr] sm:gap-3">
             <span className="truncate font-medium" title={s.stage}>{s.stage}</span>
-            <div className="relative h-7 rounded bg-neutral-100"><div className="absolute inset-y-0 flex items-center overflow-hidden whitespace-nowrap rounded bg-amber-500 px-2 text-xs font-bold text-neutral-950" style={{ left: `${left}%`, width: `${Math.max(width, 7)}%` }}>{s.days}d · {s.crew}p</div></div>
+            <div className="relative h-7 rounded bg-neutral-100"><div className="absolute inset-y-0 flex items-center overflow-hidden whitespace-nowrap rounded bg-amber-500 px-2 text-xs font-bold text-neutral-950" style={{ left: `${Math.min(left, 93)}%`, width: `${Math.min(Math.max(width, 7), 100 - Math.min(left, 93))}%` }}>{s.days}d · {s.crew}p</div></div>
           </div>
         );
       })}

@@ -11,6 +11,8 @@ export const companySchema = z.object({
   bankName: t(80), accountName: t(120), sortCode: t(10), accountNumber: t(12),
   siteManager: t(80), siteManagerPhone: t(40), healthSafetyLead: t(80), firstAider: t(80),
   disputeScheme: t(200), workingHours: t(120),
+  /** Management system (ISO 9001 / 14001 / 45001) and tender details. */
+  director: t(80), employees: t(20), imsScope: t(400), imsStart: t(20), wasteCarrier: t(40), accreditations: t(300),
   /** How new quotes set out the price unless the client had another layout before. */
   quoteFormat: z.enum(["SIMPLE", "NORMAL", "ITEMISED"]).default("SIMPLE"),
   quoteGroupBy: z.enum(["AREA", "TRADE"]).default("AREA"),

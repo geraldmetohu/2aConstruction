@@ -47,7 +47,7 @@ export const loftPackage: WorkPackage = {
     { key: "outriggerLength", label: "Outrigger dormer length", type: "number", unit: "m", default: 3.5, min: 1.5, max: 10, public: true, group: "Type", when: [{ key: "loftType", is: "L_SHAPE" }] },
     { key: "outriggerWindows", label: "Outrigger dormer windows", type: "int", default: 1, min: 0, max: 4, group: "Type", when: [{ key: "loftType", is: "L_SHAPE" }] },
     { key: "gables", label: "Hips to convert to gables", type: "int", default: 1, min: 1, max: 2, public: true, group: "Type", when: [{ key: "loftType", is: "HIP_TO_GABLE" }], hint: "Semi-detached 1, detached 2" },
-    { key: "gableFinish", label: "Gable wall finish", type: "select", default: "BRICK", group: "Type", options: [["BRICK", "Facing brick + block"], ["RENDER", "Block, rendered"]], when: [{ key: "loftType", is: "HIP_TO_GABLE" }] },
+    { key: "gableFinish", label: "Gable wall finish", type: "select", default: "BRICK", group: "Type", options: [["BRICK", "Facing brick + block"], ["RENDER", "Block, rendered"], ["TIMBER_RENDER", "Timber frame, rendered (K-Rend on render board)"]], when: [{ key: "loftType", is: "HIP_TO_GABLE" }] },
     { key: "partyWallRaise", label: "Raise party walls (parapets)", type: "boolean", default: true, group: "Type", when: [{ key: "loftType", is: "MANSARD" }] },
     { key: "parapetHeight", label: "Party wall raise height", type: "number", unit: "m", default: 0.6, min: 0.2, max: 2, group: "Type", when: [{ key: "loftType", is: "MANSARD" }, { key: "partyWallRaise", is: true }] },
     { key: "rearRoofWindows", label: "Rear roof windows (Velux)", type: "int", default: 2, min: 0, max: 10, public: true, group: "Type", when: [{ key: "loftType", is: "VELUX" }] },
@@ -57,11 +57,26 @@ export const loftPackage: WorkPackage = {
     { key: "doorHeads", label: "Door heads / architraves to adjust", type: "int", default: 0, min: 0, max: 12, group: "First floor ceilings", when: [{ key: "lowerCeiling", is: true }] },
 
     { key: "loftHeight", label: "Loft height", type: "number", unit: "m", default: 2.4, min: 1.8, max: 3.5, group: "Structure" },
+    { key: "loftWidth", label: "Loft / dormer width (0 = house width)", type: "number", unit: "m", default: 0, min: 0, max: 20, group: "Structure", hint: "Narrower where the hips are kept" },
+    { key: "loftLength", label: "Loft floor depth (0 = house depth)", type: "number", unit: "m", default: 0, min: 0, max: 30, group: "Structure", hint: "Front to back of the usable loft floor" },
     { key: "demolition", label: "Demolition of pitched roof", type: "boolean", default: true, group: "Structure", when: [{ key: "loftType", not: "VELUX" }] },
     { key: "beams", label: "Steel beams", type: "boolean", default: true, group: "Structure" },
     { key: "beamCount", label: "Number of beams", type: "int", default: 3, min: 0, max: 8, group: "Structure", when: [{ key: "beams", is: true }] },
     ...beamFields(),
     { key: "beamDeliveries", label: "Beam deliveries to site", type: "int", default: 1, min: 1, max: 10, group: "Steel beams", when: [{ key: "beams", is: true }] },
+    { key: "beamPosts", label: "Posts under beams (150 × 100 C16)", type: "int", default: 0, min: 0, max: 12, group: "Steel beams", hint: "e.g. a steel ridge beam carried on timber posts", when: [{ key: "beams", is: true }] },
+    // Extra structure and roof work that comes from the engineer's and architect's drawings.
+    { key: "trimmers", label: "Doubled timber trimmers (2 no. 47 × 170)", type: "int", default: 0, min: 0, max: 20, group: "Extra structure", hint: "T1, T2… on the engineer's floor plan" },
+    { key: "trimmerLength", label: "Average trimmer length", type: "number", unit: "m", default: 2.6, min: 0.5, max: 6, group: "Extra structure", when: [{ key: "trimmers", gt: 0 }] },
+    { key: "flitchBeams", label: "…of which flitch beams (steel plate bolted between)", type: "int", default: 0, min: 0, max: 10, group: "Extra structure", when: [{ key: "trimmers", gt: 0 }] },
+    { key: "crownRoof", label: "Rear roof turned into a flat crown roof", type: "number", unit: "m²", default: 0, min: 0, max: 60, group: "Roof alterations", hint: "e.g. the rear projection's hipped roof" },
+    { key: "cutRetile", label: "Existing roof cut back, adjusted & re-tiled", type: "number", unit: "m²", default: 0, min: 0, max: 80, group: "Roof alterations" },
+    { key: "leadValleys", label: "Code 5 lead valleys & flashings", type: "number", unit: "m", default: 0, min: 0, max: 60, group: "Roof alterations" },
+    { key: "supalux", label: "Fire board to dormer cheek within 1 m of boundary (Supalux)", type: "number", unit: "m²", default: 0, min: 0, max: 40, group: "Roof alterations" },
+    { key: "chimneyBreasts", label: "Chimney breasts to remove in the loft", type: "int", default: 0, min: 0, max: 6, public: true, group: "Chimneys" },
+    { key: "breastSupport", label: "What holds up the chimney above", type: "select", default: "NONE", group: "Chimneys", when: [{ key: "chimneyBreasts", gt: 0 }], options: [
+      ["NONE", "Nothing – whole breast and stack removed"], ["GALLOWS", "Gallows brackets (where Building Control accepts)"], ["STEEL", "Steel on padstones (engineer's design)"]] },
+    { key: "chimneyStacks", label: "Chimney stacks to take down", type: "int", default: 0, min: 0, max: 4, group: "Chimneys", hint: "Below the roof line, capped and tiled over" },
     { key: "floor", label: "Floor joists & boarding", type: "boolean", default: true, group: "Structure" },
     { key: "joistSize", label: "Floor joists", type: "select", default: "47x175", options: timberOptions, group: "Structure", when: [{ key: "floor", is: true }] },
     { key: "boarding", label: "Boarding", type: "select", default: "FLOORBOARD", options: [["FLOORBOARD", "Flooring board 1.2 × 0.6"], ["PLYWOOD", "Plywood 2.4 × 1.2"]], group: "Structure", when: [{ key: "floor", is: true }] },
@@ -74,6 +89,8 @@ export const loftPackage: WorkPackage = {
     { key: "studCentres", label: "Stud centres", type: "number", unit: "m", default: 0.4, min: 0.3, max: 0.6, group: "Structure", when: [{ key: "loftType", not: "VELUX" }, { key: "roofStructure", is: true }] },
 
     { key: "frontWindows", label: "Front roof windows (Velux)", type: "int", default: 2, min: 0, max: 10, public: true, group: "Dormer & windows" },
+    { key: "roofWindowSize", label: "Roof window size", type: "select", default: "MK08", group: "Dormer & windows", options: [["MK08", "MK08 – 78 × 140"], ["PK08", "PK08 – 94 × 140"]] },
+    { key: "largeRoofWindows", label: "…of which large UK08 (134 × 140)", type: "int", default: 0, min: 0, max: 10, group: "Dormer & windows" },
     { key: "flatWindows", label: "Flat roof windows", type: "int", default: 0, min: 0, max: 10, public: true, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
     { key: "rearWindows", label: "Dormer windows", type: "int", default: 2, min: 0, max: 6, public: true, group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
     { key: "windowType", label: "Dormer window type", type: "select", default: "UPVC", options: [["UPVC", "uPVC"], ["ALU", "Aluminium"]], group: "Dormer & windows", when: [{ key: "loftType", not: "VELUX" }] },
@@ -113,7 +130,8 @@ export const loftPackage: WorkPackage = {
 
 export function buildLoft(ctx: Ctx, v: Values) {
   const p = ctx.input.property;
-  const W = p.width, L = p.length, H = num(v, "loftHeight");
+  // The loft can be smaller than the house (e.g. a dormer between kept hips): its own size wins when given.
+  const W = num(v, "loftWidth") || p.width, L = num(v, "loftLength") || p.length, H = num(v, "loftHeight");
   const g = loftGeometry(W, L, H);
   const house = houseTypeLabels[p.houseType].toLowerCase();
   const type = str(v, "loftType");
@@ -146,6 +164,28 @@ export function buildLoft(ctx: Ctx, v: Values) {
   });
   const beams = beamList.length;
   const beamMetres = qty2(beamList.reduce((s, b) => s + b.length, 0));
+  const posts = beams > 0 ? num(v, "beamPosts") : 0;
+  if (posts) {
+    ctx.material("Steel beams", "timber_post_150x100", posts, `${posts} posts`);
+    ctx.material("Steel beams", "padstone", posts, `${posts} posts × 1 padstone`);
+    ctx.labour("Steel beams", "beam_post_fit", posts, `${posts} posts`);
+    ctx.scope(`Fit ${posts} 150 × 100 C16 timber post${posts > 1 ? "s" : ""} on padstones to carry the beams, to the engineer's design.`, "Steel beams");
+  }
+  const cb = num(v, "chimneyBreasts"), stacks = num(v, "chimneyStacks");
+  if (cb || stacks) {
+    const S = "Chimneys", sup = str(v, "breastSupport"), p: string[] = [];
+    if (cb) {
+      ctx.labour(S, "chimney_breast_remove", cb, `${cb} breast${cb > 1 ? "s" : ""} in the loft`);
+      if (sup === "GALLOWS") ctx.material(S, "gallows_brackets", cb, `${cb} pair${cb > 1 ? "s" : ""}`);
+      if (sup === "STEEL") { const bm = beamSizes["203x133"]; ctx.material(S, bm.key, qty2(cb * 1.6), `${cb} × 1.6 m`, `Steel under the chimney – ${bm.label}`); ctx.material(S, "padstone", cb * 2, `${cb} × 2 ends`); }
+      p.push(`remove ${cb} chimney breast${cb > 1 ? "s" : ""} in the loft${sup === "STEEL" ? " with a steel beam carrying the chimney above" : sup === "GALLOWS" ? " on gallows brackets" : " (whole breast and stack)"}`);
+      ctx.assume("Chimney breast removal needs Building Control approval and, on a shared breast, a party wall notice; any neighbour's flue must stay working.");
+    }
+    if (stacks) { ctx.labour(S, "chimney_stack_remove", stacks, `${stacks} stack${stacks > 1 ? "s" : ""}`); ctx.material(S, "batten_25x50", stacks * 6, "patch battens"); p.push(`take down ${stacks} chimney stack${stacks > 1 ? "s" : ""} below the roof line, cap and tile over`); }
+    ctx.scope(`Chimneys: ${p.join("; ")}; make good walls, floor and roof.`, S);
+  }
+  extraStructure(ctx, v);
+  roofAlterations(ctx, v);
   if (beams > 0) {
     const S1 = "Beam preparation";
     const bearingText = bearings(ctx, S1, beamList.flatMap(b => [str(v, `beam${b.n}EndA`), str(v, `beam${b.n}EndB`)]), `${beams} beam${beams > 1 ? "s" : ""}`);
@@ -303,16 +343,25 @@ export function buildLoft(ctx: Ctx, v: Values) {
     if (h2g) {
       const n = num(v, "gables");
       const gable = qty2(L * H / 2);
-      const brick = str(v, "gableFinish") === "BRICK";
+      const brick = str(v, "gableFinish") === "BRICK", timberGable = str(v, "gableFinish") === "TIMBER_RENDER";
       const total = qty2(n * gable);
       ctx.labour(S, "hip_to_gable", n, `${n} gable${n > 1 ? "s" : ""}`);
-      if (brick) { ctx.material(S, str(v, "dormerBrick") || "facing_brick", Math.ceil(total * 60 * 1.05), `${n} × (${fmt(L)} × ${fmt(H)} ÷ 2 = ${fmt(gable)} m²) × 60 + 5%`, "Facing bricks – gable (to match)"); ctx.labour(S, "facing_brickwork", total, "gable outer leaf"); }
+      if (timberGable) {
+        ctx.material(S, "timber_gable_kit", total, `${n} × (${fmt(L)} × ${fmt(H)} ÷ 2 = ${fmt(gable)} m²)`);
+        ctx.labour(S, "timber_gable_build", total, `${fmt(total)} m² timber gable`);
+        ctx.material(S, "render_krend", total, `${fmt(total)} m²`); ctx.labour(S, "render_apply", total, `${fmt(total)} m²`);
+        ctx.material(S, "restraint_strap", Math.ceil(n * L / 1.2) + 2, `straps @ 1.2 m along ${n} gable${n > 1 ? "s" : ""}`);
+      }
+      if (timberGable) { /* timber frame above */ }
+      else if (brick) { ctx.material(S, str(v, "dormerBrick") || "facing_brick", Math.ceil(total * 60 * 1.05), `${n} × (${fmt(L)} × ${fmt(H)} ÷ 2 = ${fmt(gable)} m²) × 60 + 5%`, "Facing bricks – gable (to match)"); ctx.labour(S, "facing_brickwork", total, "gable outer leaf"); }
       else { ctx.material(S, "dense_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Blocks – gable outer leaf"); ctx.labour(S, "blockwork", total, "gable outer leaf"); renderNewWall(ctx, S, total, str(v, "renderSystem"), "gable"); }
-      ctx.material(S, "thermal_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Thermal blocks – gable inner leaf");
-      ctx.labour(S, "blockwork", total, "gable inner leaf");
-      ctx.material(S, "wall_ties", Math.ceil(total * 2.5), `${fmt(total)} m² × 2.5`);
-      ctx.material(S, "mortar_cement", Math.ceil(total * 0.04 * 12), `${fmt(total)} m² cavity wall`);
-      ctx.material(S, "mortar_sand", Math.ceil(total * 0.04 * 1.6 * 10) / 10, `${fmt(total)} m² cavity wall`);
+      if (!timberGable) {
+        ctx.material(S, "thermal_block", Math.ceil(total * 10 * 1.05), `${fmt(total)} m² × 10 + 5%`, "Thermal blocks – gable inner leaf");
+        ctx.labour(S, "blockwork", total, "gable inner leaf");
+        ctx.material(S, "wall_ties", Math.ceil(total * 2.5), `${fmt(total)} m² × 2.5`);
+        ctx.material(S, "mortar_cement", Math.ceil(total * 0.04 * 12), `${fmt(total)} m² cavity wall`);
+        ctx.material(S, "mortar_sand", Math.ceil(total * 0.04 * 1.6 * 10) / 10, `${fmt(total)} m² cavity wall`);
+      }
       const newRafters = n * 2 * Math.ceil((L / 2) / 0.4);
       ctx.material(S, rt.key, qty2(newRafters * g.rafterLength), `${n} × 2 slopes × ⌈${fmt(L / 2)} m ÷ 0.4⌉ = ${newRafters} rafters × ${fmt(g.rafterLength)} m`, `Rafters – extended slopes`);
       ctx.material(S, "timber_47x225", qty2(n * L / 2), `ridge extension ${n} × ${fmt(L / 2)} m`, "Ridge board extension");
@@ -323,7 +372,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
       ctx.material(S, "ridge_tile", Math.ceil(n * (L / 2) / 0.45), `${fmt(n * L / 2)} m ridge`);
       ctx.material(S, "dry_ridge", qty2(n * 2 * g.rafterLength), `${n} gable × 2 verges`, "Dry verge – gable");
       ctx.labour(S, "roof_tiling_concrete", infill, `extended slopes ${fmt(infill)} m²`);
-      ctx.scope(`Hip to gable: remove ${n} hip${n > 1 ? "s" : ""}, build ${n} cavity gable wall${n > 1 ? "s" : ""} (${fmt(total)} m², ${brick ? "facing brick" : "rendered"}), extend the ridge and re-tile the new slopes (${fmt(infill)} m²).`);
+      ctx.scope(`Hip to gable: remove ${n} hip${n > 1 ? "s" : ""}, build ${n} ${timberGable ? "timber-framed, insulated" : "cavity"} gable wall${n > 1 ? "s" : ""} (${fmt(total)} m², ${brick ? "facing brick" : "rendered"}), extend the ridge and re-tile the new slopes (${fmt(infill)} m²).`);
     }
     ctx.assume(`Partitions framed with studs at ${Math.round(c * 1000)} mm centres, top and bottom plates and one noggin row. Partition labour is included in the roof structure days.`);
     ctx.scope(`Frame dormer side walls (×2, ${sideSize}) and back wall (${backSize}) ready for windows, insulation and boarding.`, "Roof structure");
@@ -335,7 +384,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
     const all = frontWindows + rearRoofWindows;
     if (all) {
       const rt = timberSizes[str(v, "rafterSize") as TimberSize] ?? timberSizes["47x150"];
-      ctx.material(S, "roof_window", all, `${frontWindows} front + ${rearRoofWindows} rear roof windows`);
+      roofWindows(ctx, S, v, all, `${frontWindows} front + ${rearRoofWindows} rear roof windows`);
       ctx.material(S, rt.key, qty2(all * 2 * 2.4), `${all} windows × 2 trimmers × 2.4 m`, `Trimmers for roof windows – ${rt.label}`);
       ctx.labour(S, "roof_window_trim", all, `${all} windows`);
       ctx.labour(S, "roof_window_fit", all, `${all} roof windows`);
@@ -347,7 +396,7 @@ export function buildLoft(ctx: Ctx, v: Values) {
   if (!velux) {
     const S = "Dormer & windows";
     if (frontWindows + flatWindows > 0) {
-      ctx.material(S, "roof_window", frontWindows + flatWindows, `${frontWindows} front + ${flatWindows} flat roof windows`);
+      roofWindows(ctx, S, v, frontWindows + flatWindows, `${frontWindows} front + ${flatWindows} flat roof windows`);
       ctx.labour(S, "roof_window_fit", frontWindows + flatWindows, `${frontWindows + flatWindows} roof windows`);
     }
     const windowKey = str(v, "windowType") === "ALU" ? "window_alu" : "window_upvc";
@@ -471,6 +520,60 @@ export function buildLoft(ctx: Ctx, v: Values) {
   ctx.scope(`Plasterboard and skim the ceilings, slopes, dormer and stud walls; dot & dab and skim the party walls (${fmt(ceiling + slope + dormerWalls + partyWalls)} m² in all).`, S2);
   ctx.scope(`Hang ${fireDoors} FD30 fire door${fireDoors === 1 ? "" : "s"} with closers to the protected stair; fit skirting and ${flooringOptions.find(([k]) => k === str(v, "flooring"))?.[1].toLowerCase() ?? "flooring"} (${fmt(floorArea)} m²).`, S3);
   if (bool(v, "decorate")) ctx.scope("Mist coat and two coats to new plaster; prepare, prime and paint all new woodwork, windows and radiators.", "Decoration");
+}
+
+/** Roof windows: the large UK08s first, the rest in the chosen size. */
+function roofWindows(ctx: Ctx, S: string, v: Values, count: number, formula: string) {
+  if (count <= 0) return;
+  const large = Math.min(num(v, "largeRoofWindows"), count), rest = count - large;
+  if (large) ctx.material(S, "roof_window_uk08", large, `${large} of ${formula}`);
+  if (rest) ctx.material(S, str(v, "roofWindowSize") === "PK08" ? "roof_window_pk08" : "roof_window", rest, large ? `${rest} of ${formula}` : formula);
+}
+
+/** Doubled trimmers and flitch beams from the engineer's floor plan (T1, T2…). */
+function extraStructure(ctx: Ctx, v: Values) {
+  const n = num(v, "trimmers");
+  if (!n) return;
+  const S = "Extra structure", len = num(v, "trimmerLength") || 2.6, flitch = Math.min(num(v, "flitchBeams"), n);
+  ctx.material(S, "timber_trimmer_2x47x170", qty2(n * len), `${n} × ${fmt(len)} m`);
+  if (flitch) ctx.material(S, "flitch_plate", qty2(flitch * len), `${flitch} × ${fmt(len)} m`);
+  ctx.material(S, "joist_hanger", n * 4, `${n} trimmers × 4 hangers`);
+  ctx.labour(S, "trimmer_fit", n, `${n} trimmer${n > 1 ? "s" : ""}`);
+  ctx.scope(`Form ${n} doubled 47 × 170 C24 trimmer${n > 1 ? "s" : ""}${flitch ? `, ${flitch} of them flitch beams with a bolted 8 mm steel plate` : ""}, on hangers, to the engineer's design.`, S);
+}
+
+/** Changes to the existing roof: crown roof, cut back and re-tile, lead work, fire board near the boundary. */
+function roofAlterations(ctx: Ctx, v: Values) {
+  const crown = num(v, "crownRoof"), retile = num(v, "cutRetile"), lead = num(v, "leadValleys"), fire = num(v, "supalux");
+  if (!crown && !retile && !lead && !fire) return;
+  const S = "Roof alterations", p: string[] = [];
+  if (crown) {
+    ctx.labour(S, "crown_roof_build", crown, `${fmt(crown)} m²`);
+    ctx.material(S, "timber_47x150", qty2(Math.ceil(Math.sqrt(crown) / 0.4) * Math.sqrt(crown) * 1.1), `joists at 400 c/c over ${fmt(crown)} m² + 10%`, "New flat roof joists – C24 47 × 150");
+    ctx.material(S, "firring", qty2(Math.ceil(Math.sqrt(crown) / 0.4) * Math.sqrt(crown)), `${fmt(crown)} m²`);
+    ctx.material(S, "osb_18", Math.ceil(crown / 2.88 * 1.1), `${fmt(crown)} m² ÷ 2.88 + 10%`);
+    ctx.material(S, "pir_150", Math.ceil(crown / 2.88 * 1.05), `${fmt(crown)} m² ÷ 2.88 + 5%`);
+    ctx.material(S, "felt_system", qty2(crown * 1.15), `${fmt(crown)} m² + 15% upstands`);
+    p.push(`take the top off the existing hipped roof and form a ${fmt(crown)} m² insulated flat crown roof (150 mm PIR, torch-on felt)`);
+  }
+  if (retile) {
+    ctx.labour(S, "roof_cut_retile", retile, `${fmt(retile)} m²`);
+    ctx.material(S, "tile_concrete", Math.ceil(retile * 10 * 0.3), `${fmt(retile)} m² × 10 × 30% new`, "Replacement tiles (rest re-used)");
+    ctx.material(S, "batten_25x50", qty2(retile * 3.3), `${fmt(retile)} m² × 3.3 m`);
+    ctx.material(S, "breather_membrane", qty2(retile * 1.1), `${fmt(retile)} m² + 10%`);
+    p.push(`cut back, adjust and re-tile ${fmt(retile)} m² of the existing roof where it meets the new work, re-using sound tiles`);
+  }
+  if (lead) {
+    ctx.material(S, "lead_valley", lead, `${fmt(lead)} m`);
+    ctx.labour(S, "lead_valley", lead, `${fmt(lead)} m`);
+    p.push(`form ${fmt(lead)} m of Code 5 lead valleys, flashings and soakers`);
+  }
+  if (fire) {
+    ctx.material(S, "supalux_9", qty2(fire * 1.1), `${fmt(fire)} m² + 10%`);
+    ctx.labour(S, "insulation_fit", fire, `${fmt(fire)} m² fire board`);
+    p.push(`line ${fmt(fire)} m² of the dormer cheek within 1 m of the boundary with 9 mm Supalux fire board`);
+  }
+  ctx.scope(`Roof alterations: ${p.join("; ")}.`, S);
 }
 
 /**

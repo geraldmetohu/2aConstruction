@@ -1,14 +1,14 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarClock, CircleCheck, CircleX, ExternalLink, FileUp, RefreshCw, Search, Sparkles } from "lucide-react";
-import { importPriceList, findNow, monthlyRunNow, refreshNow, saveSupplierLink, acceptSuggestion } from "./actions";
-import { SUPPLIER_IDS, searchTerms, searchUrl, supplierHome, supplierName, type SupplierId } from "@/app/lib/takeoff/supplier-parse";
+import { CalendarClock, ChevronDown, CircleCheck, CircleX, ExternalLink, FileUp, Pencil, RefreshCw, Search, Sparkles } from "lucide-react";
+import { importPriceList, findNow, monthlyRunNow, refreshNow, saveSupplierLink, acceptSuggestion, saveMaterialPrice } from "./actions";
+import { SUPPLIER_IDS, searchTerms, searchUrl, supplierName, type SupplierId } from "@/app/lib/takeoff/supplier-parse";
 
 type Link = { id: string; rateKey: string; supplier: SupplierId; url: string; packQuantity: number; vatIncluded: boolean; active: boolean };
 type Obs = { linkId: string; rateKey: string; supplier: string; status: string; packPrice: number | null; unitPriceExVat: number | null; error: string | null; observedAt: string };
 type Sug = { id: string; rateKey: string; supplier: SupplierId; url: string; productName: string; packPrice: number | null; imageUrl: string | null; packGuess: number; packSure: boolean; score: number; createdAt: string };
-type Material = { key: string; name: string; unit: string; price: number };
+type Material = { key: string; name: string; unit: string; price: number; defaultPrice: number; edited: number | null; use: "EDITED" | "WEBSITE" };
 const OLD: SupplierId[] = ["SELCO", "BUILDER_DEPOT"];
 const when = (d: string) => new Date(d).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -18,14 +18,17 @@ export function SupplierLinks({ storage, allMerchants, materials, links, observa
   const router = useRouter();
   const merchants = allMerchants ? SUPPLIER_IDS : OLD;
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<"all" | "linked" | "unlinked" | "found">("all");
+  const [filter, setFilter] = useState<"all" | "edited" | "linked" | "unlinked" | "found">("all");
   const [busy, setBusy] = useState<"" | "check" | "month" | "import">("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [csv, setCsv] = useState("");
   const linkedKeys = new Set(links.filter(l => l.active).map(l => l.rateKey));
   const foundKeys = new Set(suggestions.filter(s => !links.some(l => l.active && l.rateKey === s.rateKey && l.supplier === s.supplier && l.url === s.url)).map(s => s.rateKey));
+  // Edited prices first (easy to find), then everything else A–Z.
   const shown = useMemo(() => materials.filter(m => (!q || m.name.toLowerCase().includes(q.toLowerCase()))
-    && (filter === "all" || (filter === "linked" ? linkedKeys.has(m.key) : filter === "unlinked" ? !linkedKeys.has(m.key) : foundKeys.has(m.key)))).slice(0, 150), [materials, q, filter, linkedKeys, foundKeys]);
+    && (filter === "all" || (filter === "edited" ? m.edited !== null : filter === "linked" ? linkedKeys.has(m.key) : filter === "unlinked" ? !linkedKeys.has(m.key) : foundKeys.has(m.key))))
+    .sort((a, b) => (a.edited !== null ? 0 : 1) - (b.edited !== null ? 0 : 1) || a.name.localeCompare(b.name)).slice(0, 150), [materials, q, filter, linkedKeys, foundKeys]);
+  const editedCount = materials.filter(m => m.edited !== null).length;
   const linked = links.filter(l => l.active).length;
 
   async function check() {
@@ -55,7 +58,7 @@ export function SupplierLinks({ storage, allMerchants, materials, links, observa
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-xl font-black">Supplier prices</h1>
-            <p className="mt-1 max-w-3xl text-sm text-neutral-600">Prices update automatically on the <strong>1st of every month</strong>: every linked product page is read again, and materials with no link are searched for on Screwfix, Toolstation, Selco and Builder Depot. You confirm each product found (and its pack size) once; after that it updates itself. Quotes use the cheapest current price, ex VAT. {linked} product{linked === 1 ? "" : "s"} linked.</p>
+            <p className="mt-1 max-w-3xl text-sm text-neutral-600">Prices update automatically on the <strong>1st of every month</strong>: every linked product page is read again, and materials with no link are searched for on Screwfix, Toolstation, Selco and Builder Depot. You confirm each product found (and its pack size) once; after that it updates itself. Quotes use the cheapest website price, ex VAT – unless you type your own price, which then goes to the top of the list and is used instead (tap the website price to switch back). {linked} product{linked === 1 ? "" : "s"} linked.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button disabled={!storage || !!busy || !linked} onClick={check} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold disabled:opacity-40"><RefreshCw className={`h-4 w-4 ${busy === "check" ? "animate-spin" : ""}`} />{busy === "check" ? "Checking…" : "Check linked prices"}</button>
@@ -81,14 +84,97 @@ export function SupplierLinks({ storage, allMerchants, materials, links, observa
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-sm"><Search className="h-4 w-4 text-neutral-400" /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search materials" className="w-48 outline-none" /></label>
-        {([["all", "All"], ["linked", "Linked"], ["unlinked", "Not linked"], ["found", `Found – to confirm (${foundKeys.size})`]] as const).map(([k, l]) =>
+        {([["all", "All"], ["edited", `Edited (${editedCount})`], ["linked", "Linked"], ["unlinked", "Not linked"], ["found", `Found – to confirm (${foundKeys.size})`]] as const).map(([k, l]) =>
           <button key={k} onClick={() => setFilter(k)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${filter === k ? "border-amber-500 bg-amber-500 text-neutral-950" : "bg-white"}`}>{l}</button>)}
         {shown.length === 150 && <span className="text-xs text-neutral-500">Showing the first 150 – search to narrow down</span>}
       </div>
 
-      <div className="space-y-3">
-        {shown.map(m => <MaterialCard key={m.key} m={m} merchants={merchants} links={links.filter(l => l.rateKey === m.key)} observations={observations} suggestions={suggestions.filter(s => s.rateKey === m.key)} disabled={!storage} canFind={allMerchants} onSaved={() => router.refresh()} />)}
+      <div className="overflow-hidden rounded-2xl border bg-white">
+        <div className="hidden grid-cols-[minmax(0,1fr)_13rem_13rem_6rem] gap-4 border-b bg-neutral-50 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-neutral-500 md:grid">
+          <span>Material</span><span>Website price</span><span>Your price</span><span className="text-right">Links</span>
+        </div>
+        {shown.map((m, i) => {
+          const edited = m.edited !== null, prev = shown[i - 1];
+          return <div key={m.key}>
+            {i === 0 && edited && <p className="bg-amber-50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-amber-800">Edited prices</p>}
+            {!edited && prev && prev.edited !== null && <p className="border-t bg-neutral-50 px-4 py-1.5 text-[11px] font-bold uppercase tracking-wide text-neutral-500">All materials</p>}
+            <PriceRow m={m} links={links.filter(l => l.rateKey === m.key && l.active)} observations={observations} disabled={!storage} onSaved={() => router.refresh()}>
+              <MaterialCard m={m} merchants={merchants} links={links.filter(l => l.rateKey === m.key)} observations={observations} suggestions={suggestions.filter(s => s.rateKey === m.key)} disabled={!storage} canFind={allMerchants} onSaved={() => router.refresh()} />
+            </PriceRow>
+          </div>;
+        })}
+        {!shown.length && <p className="p-8 text-center text-sm text-neutral-500">No materials match.</p>}
       </div>
+    </div>
+  );
+}
+
+const gbp = (n: number) => `£${n.toFixed(2)}`;
+
+/** One material: full name, website price with Reference buttons, your edited price, and which one quotes use – side by side. */
+function PriceRow({ m, links, observations, disabled, onSaved, children }: { m: Material; links: Link[]; observations: Obs[]; disabled: boolean; onSaved: () => void; children: ReactNode }) {
+  const web = links.map(l => ({ l, o: observations.find(o => o.linkId === l.id && o.status === "OK" && o.unitPriceExVat != null) }))
+    .filter((x): x is { l: Link; o: Obs } => !!x.o).sort((a, b) => a.o.unitPriceExVat! - b.o.unitPriceExVat!);
+  const best = web[0];
+  const webPrice = best ? Math.round(best.o.unitPriceExVat! * 100) / 100 : null;
+  const [val, setVal] = useState(m.edited !== null ? m.edited.toFixed(2) : "");
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const typed = val.trim() === "" ? null : Number(val.replace(/[£,\s]/g, ""));
+  const dirty = typed !== m.edited && !(typed === null && m.edited === null);
+  const using: "EDITED" | "WEBSITE" | "DEFAULT" = m.edited !== null ? (m.use === "WEBSITE" && webPrice !== null ? "WEBSITE" : "EDITED") : webPrice !== null ? "WEBSITE" : "DEFAULT";
+  const usedPrice = using === "EDITED" ? m.edited! : using === "WEBSITE" ? webPrice! : m.defaultPrice;
+  async function save(price: number | null, use: "EDITED" | "WEBSITE") {
+    if (price !== null && !(Number.isFinite(price) && price >= 0)) { setErr("Enter a price in pounds."); return; }
+    setBusy(true); setErr("");
+    const r = await saveMaterialPrice(m.key, price, use); setBusy(false);
+    if (!r.ok) setErr(r.message); else onSaved();
+  }
+  const diff = m.edited !== null && webPrice !== null ? m.edited - webPrice : null;
+  const pick = (side: "EDITED" | "WEBSITE") => `rounded-xl border p-2.5 text-left transition ${using === side ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500" : "bg-white hover:border-neutral-400"}`;
+  return (
+    <div className={`border-t px-4 py-3 first:border-t-0 ${m.edited !== null ? "bg-amber-50/40" : ""}`}>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_13rem_13rem_6rem] md:items-center md:gap-4">
+        <div className="min-w-0">
+          <p className="font-semibold leading-snug text-neutral-900">{m.name}</p>
+          <p className="mt-0.5 text-xs text-neutral-500">per {m.unit} · quotes use <strong className="text-neutral-900">{gbp(usedPrice)}</strong>{using === "DEFAULT" ? " (standard price)" : using === "EDITED" ? " (your price)" : " (website)"}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:contents">
+          {/* Website price */}
+          <div className={webPrice !== null && m.edited !== null ? pick("WEBSITE") + " cursor-pointer" : "rounded-xl border border-dashed p-2.5"} onClick={() => webPrice !== null && m.edited !== null && using !== "WEBSITE" && !busy && save(m.edited, "WEBSITE")}>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 md:hidden">Website</p>
+            {best ? <>
+              <p className="text-lg font-black tabular-nums text-neutral-900">{gbp(webPrice!)}</p>
+              <p className="text-[11px] text-neutral-500">{supplierName(best.l.supplier)} · ex VAT · {when(best.o.observedAt)}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1">{web.slice(0, 3).map(({ l, o }) =>
+                <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} title={`${supplierName(l.supplier)} – ${gbp(o.unitPriceExVat!)}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-amber-600"><ExternalLink className="h-3 w-3" />Reference{web.length > 1 ? ` · ${supplierName(l.supplier)}` : ""}</a>)}</div>
+            </> : <p className="text-xs text-neutral-400">No website price yet</p>}
+            {m.edited !== null && webPrice !== null && <p className={`mt-1 text-[11px] font-bold ${using === "WEBSITE" ? "text-emerald-700" : "text-neutral-400"}`}>{using === "WEBSITE" ? "✓ In use" : "Tap to use"}</p>}
+          </div>
+          {/* Your price */}
+          <div className={m.edited !== null && webPrice !== null ? pick("EDITED") + " cursor-pointer" : "rounded-xl border p-2.5"} onClick={() => m.edited !== null && webPrice !== null && using !== "EDITED" && !busy && !dirty && save(m.edited, "EDITED")}>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 md:hidden">Your price</p>
+            <label className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+              <span className="text-lg font-black text-neutral-400">£</span>
+              <input value={val} disabled={disabled || busy} onChange={e => setVal(e.target.value)} inputMode="decimal" placeholder={m.defaultPrice.toFixed(2)}
+                onKeyDown={e => { if (e.key === "Enter" && dirty) save(typed, "EDITED"); }}
+                className="w-full min-w-0 rounded-md border bg-white px-2 py-1 text-base font-bold tabular-nums outline-none focus:border-amber-500" />
+            </label>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5" onClick={e => e.stopPropagation()}>
+              {dirty && <button disabled={disabled || busy} onClick={() => save(typed, "EDITED")} className="rounded-full bg-amber-500 px-3 py-1 text-[11px] font-bold text-neutral-950">{busy ? "Saving…" : "Save price"}</button>}
+              {m.edited !== null && !dirty && <button disabled={disabled || busy} onClick={() => { setVal(""); save(null, "EDITED"); }} className="text-[11px] text-neutral-500 underline">Clear edit</button>}
+              {m.edited === null && !dirty && <span className="inline-flex items-center gap-1 text-[11px] text-neutral-400"><Pencil className="h-3 w-3" />Type to edit</span>}
+            </div>
+            {m.edited !== null && webPrice !== null && <p className={`mt-1 text-[11px] font-bold ${using === "EDITED" ? "text-emerald-700" : "text-neutral-400"}`}>{using === "EDITED" ? "✓ In use" : "Tap to use"}{diff !== null && Math.abs(diff) >= 0.01 ? <span className="ml-1 font-normal text-neutral-500">· {gbp(Math.abs(diff))} {diff > 0 ? "more" : "less"} than website</span> : null}</p>}
+          </div>
+        </div>
+        <button onClick={() => setOpen(o => !o)} className="inline-flex items-center justify-center gap-1 justify-self-start rounded-full border px-3 py-1.5 text-xs font-semibold md:justify-self-end">
+          {links.length} link{links.length === 1 ? "" : "s"}<ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`} /></button>
+      </div>
+      {err && <p className="mt-1 text-xs text-red-700">{err}</p>}
+      {open && <div className="mt-3">{children}</div>}
     </div>
   );
 }
@@ -100,8 +186,8 @@ function MaterialCard({ m, merchants, links, observations, suggestions, disabled
   const rows = show.length ? show : (["SELCO", "BUILDER_DEPOT"] as SupplierId[]).filter(s => merchants.includes(s));
   const add = merchants.filter(s => !rows.includes(s));
   return (
-    <section className="rounded-xl border bg-white p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2"><p className="font-semibold">{m.name}</p><p className="text-xs text-neutral-500">Your fallback price £{m.price.toFixed(2)} / {m.unit}</p></div>
+    <section className="rounded-xl border bg-neutral-50 p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">Merchant links for this material</p>
       <div className="mt-2 grid gap-3 lg:grid-cols-2">
         {rows.map(s => {
           const link = links.find(l => l.supplier === s);
@@ -125,11 +211,12 @@ function LinkRow({ supplier, m, link, obs, sug, disabled, canFind, onSaved }: { 
   const [sugPack, setSugPack] = useState(String(sug?.packGuess ?? 1));
   const [err, setErr] = useState("");
   const [finding, setFinding] = useState(false);
+  const [editUrl, setEditUrl] = useState(false);
   const changed = url !== (link?.url ?? "") || Number(pack) !== (link?.packQuantity ?? 1) || vat !== (link?.vatIncluded ?? true);
   async function save() {
     setErr("");
     const r = await saveSupplierLink({ rateKey: m.key, supplier, url: url.trim(), packQuantity: Number(pack) || 1, vatIncluded: vat, active: !!url.trim() });
-    if (!r.ok) setErr(r.message); else onSaved();
+    if (!r.ok) setErr(r.message); else { setEditUrl(false); onSaved(); }
   }
   async function find() {
     setErr(""); setFinding(true);
@@ -142,7 +229,7 @@ function LinkRow({ supplier, m, link, obs, sug, disabled, canFind, onSaved }: { 
     if (!r.ok) setErr(r.message); else onSaved();
   }
   return (
-    <div className="rounded-lg border p-3 text-sm">
+    <div className="rounded-lg border bg-white p-3 text-sm">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-bold uppercase tracking-wide text-neutral-500">{supplierName(supplier)}</p>
         <div className="flex items-center gap-2 text-xs">
@@ -150,7 +237,12 @@ function LinkRow({ supplier, m, link, obs, sug, disabled, canFind, onSaved }: { 
           {canFind && <button disabled={disabled || finding} onClick={find} className="inline-flex items-center gap-1 font-semibold text-amber-700 disabled:opacity-40"><Sparkles className="h-3 w-3" />{finding ? "Finding…" : "Find automatically"}</button>}
         </div>
       </div>
-      <input disabled={disabled} value={url} onChange={e => setUrl(e.target.value)} placeholder={`${supplierHome(supplier)}… product page`} className="mt-1 w-full rounded border px-2 py-1.5 text-xs" />
+      {link?.active && link.url && !editUrl
+        ? <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded-full bg-neutral-900 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-600"><ExternalLink className="h-3 w-3" />Reference</a>
+            <button disabled={disabled} onClick={() => setEditUrl(true)} className="text-xs text-neutral-500 underline">Change link</button>
+          </div>
+        : <input disabled={disabled} value={url} onChange={e => setUrl(e.target.value)} placeholder={`Paste the ${supplierName(supplier)} product page link`} className="mt-1 w-full rounded border bg-white px-2 py-1.5 text-xs" />}
       <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
         <label className="flex items-center gap-1">Pack contains <input disabled={disabled} value={pack} onChange={e => setPack(e.target.value)} className="w-14 rounded border px-1.5 py-0.5 text-right" inputMode="decimal" /> {m.unit}</label>
         <label className="flex items-center gap-1"><input disabled={disabled} type="checkbox" checked={vat} onChange={e => setVat(e.target.checked)} /> Page price includes VAT</label>
@@ -158,7 +250,8 @@ function LinkRow({ supplier, m, link, obs, sug, disabled, canFind, onSaved }: { 
       </div>
       {sug && <div className="mt-2 rounded-lg bg-amber-50 p-2 text-xs">
         <p className="flex items-start gap-2">{sug.imageUrl && <img src={sug.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded border bg-white object-contain" loading="lazy" />}
-          <span><strong>Found:</strong> <a href={sug.url} target="_blank" rel="noopener noreferrer" className="underline">{sug.productName}</a>{sug.packPrice ? ` – £${sug.packPrice.toFixed(2)}` : ""} <span className="text-neutral-500">({Math.round(sug.score * 100)}% match, {when(sug.createdAt)})</span></span></p>
+          <span><strong>Found:</strong> {sug.productName}{sug.packPrice ? <strong> – £{sug.packPrice.toFixed(2)}</strong> : ""} <span className="text-neutral-500">({Math.round(sug.score * 100)}% match, {when(sug.createdAt)})</span>
+            <a href={sug.url} target="_blank" rel="noopener noreferrer" className="ml-1 inline-flex items-center gap-1 rounded-full bg-neutral-900 px-2 py-0.5 text-[11px] font-semibold text-white"><ExternalLink className="h-3 w-3" />Reference</a></span></p>
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">Pack contains <input value={sugPack} onChange={e => setSugPack(e.target.value)} className="w-14 rounded border px-1.5 py-0.5 text-right" inputMode="decimal" /> {m.unit}</label>
           {!sug.packSure && <span className="text-amber-800">check the pack size</span>}

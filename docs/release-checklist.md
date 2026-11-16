@@ -6,6 +6,7 @@
    - `20261110120000_more_suppliers`
    - `20261111120000_add_accounts`
    - `20261112120000_client_portal`
+   - `20261113120000_finance` (Finance: company costs, bank statements, cash, CIS, VAT, year end)
    Never run `prisma db push`, `migrate dev` or `migrate reset` against the live database (it is shared).
 3. `.env` is git-ignored – never commit it.
 
@@ -63,3 +64,4 @@ Client emails about a job are only sent once the quote is accepted.
 4. In Jobs: confirm the start date, post a message, add a snag, mark a stage done → client emails.
 5. Money tab: the deposit invoice appears and is emailed with the PDF; client presses "I've paid this" → office email → Confirm received → client email.
 6. On a phone: the portal tab bar, the "More" sheet and the menu's "Your area" links.
+7. Finance → Settings: enter the incorporation date, year end, VAT registration date and the end of the first VAT return once. Then upload a bank statement (PDF or CSV) and sort the lines.

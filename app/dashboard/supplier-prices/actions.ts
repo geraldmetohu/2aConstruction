@@ -5,7 +5,7 @@ import { prisma } from "@/app/lib/db";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import { defaultRateBook } from "@/app/lib/takeoff/ratebook";
 import { companyRates } from "@/app/lib/takeoff/prices.server";
-import { listSuggestions, prismaDb, recordObservation, storageReady, suggestionsReady, upsertLink, listLinks, StoreError, type SupplierCode } from "@/app/lib/takeoff/store";
+import { latestRateSet, saveRateSet, listSuggestions, prismaDb, recordObservation, storageReady, suggestionsReady, upsertLink, listLinks, StoreError, type SupplierCode } from "@/app/lib/takeoff/store";
 import { findProduct, monthlyPriceRun, refreshSupplierPrices } from "@/app/lib/takeoff/supplier.server";
 import { SUPPLIER_IDS, supplierHome, supplierName, validSupplierUrl, type SupplierId } from "@/app/lib/takeoff/supplier-parse";
 
@@ -142,5 +142,30 @@ export async function importPriceList(csv: string) {
     }
     done();
     return { ok: true as const, imported, problems: problems.slice(0, 20) };
+  } catch (e) { return { ok: false as const, message: msg(e) }; }
+}
+
+/**
+ * Edit a material's price (or clear the edit with null) and choose which price quotes use:
+ * the edited price or the website price. Saved as a new version of the company rates – nothing is deleted.
+ */
+export async function saveMaterialPrice(rateKey: string, price: number | null, use: "EDITED" | "WEBSITE") {
+  try {
+    const actor = await requireCatalogueAdmin();
+    const db = await ready();
+    const base = defaultRateBook.materials[rateKey];
+    if (!base) throw new StoreError("Unknown material");
+    if (price !== null && !(Number.isFinite(price) && price >= 0 && price <= 1_000_000)) throw new StoreError("Enter a price in pounds.");
+    if (use !== "EDITED" && use !== "WEBSITE") throw new StoreError("Choose the edited or the website price.");
+    const set = await latestRateSet(db);
+    const current = (set?.overrides ?? {}) as Record<string, unknown>;
+    const materials = { ...((current.materials ?? {}) as Record<string, unknown>) };
+    const choice = { ...((current.materialChoice ?? {}) as Record<string, unknown>) };
+    if (price === null) { delete materials[rateKey]; delete choice[rateKey]; }
+    else { materials[rateKey] = { price: Math.round(price * 100) / 100 }; choice[rateKey] = use; }
+    const what = price === null ? "edit cleared" : `£${price.toFixed(2)}, using the ${use === "EDITED" ? "edited" : "website"} price`;
+    await saveRateSet(db, set?.version ?? 0, { ...current, materials, materialChoice: choice }, `Material price – ${base.name}: ${what}`.slice(0, 500), actor);
+    done(); revalidatePath("/dashboard/rates");
+    return { ok: true as const };
   } catch (e) { return { ok: false as const, message: msg(e) }; }
 }

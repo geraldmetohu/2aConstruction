@@ -1,7 +1,7 @@
 import { bool, num, str, type Field, type WorkPackage } from "../package";
 import { fmt, qty2 } from "../util";
 import { renderNewWall } from "./external";
-import { boardAndSkim, electricsItems, elecSummary, fitWindows, flooring, flooringOptions, newDoors, paint, paintSystemOptions, radiators, skim, skirting } from "./common";
+import { boardAndSkim, electricUfh, electricsItems, elecSummary, fitWindows, flooring, flooringOptions, newDoors, paint, paintSystemOptions, radiators, skim, skirting } from "./common";
 
 const ceil = (x: number) => Math.ceil(x - 1e-9);
 const SHEET = 2.88;
@@ -165,7 +165,7 @@ export const conversionPackage: WorkPackage = {
     if (str(v, "garageType") === "DETACHED") { ctx.material(E, "sub_board", 1, "garage board"); ctx.labour(E, "swa_connect", 1, "armoured supply from the house"); }
     const heat = str(v, "heating");
     if (heat === "RADIATOR") radiators(ctx, "Plumbing & heating", num(v, "radiators"), 6);
-    if (heat === "UFH_ELECTRIC") { ctx.material(F, "ufh_mat", ceil(A * 0.8), `${fmt(A)} m² × 80% heated`); ctx.labour(F, "ufh_fit", ceil(A * 0.8), "electric UFH mat & thermostat"); }
+    if (heat === "UFH_ELECTRIC") electricUfh(ctx, F, A, 0.8);
     if (heat === "PANEL") { ctx.material(E, "panel_heater", 1, "1 heater"); ctx.labour(E, "heater_fit", 1, "spur & heater"); }
 
     // Plumbing

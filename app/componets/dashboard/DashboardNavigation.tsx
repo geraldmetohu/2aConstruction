@@ -96,5 +96,5 @@ export function MobileDashboardNav() {
 
 /** Title of the current page for the top bar. */
 export function CurrentPageTitle() {
-  return <h1 className="truncate text-lg font-bold text-neutral-900">{currentPageName(usePathname())}</h1>;
+  return <h1 className="min-w-0 truncate text-base font-bold text-neutral-900 sm:text-lg">{currentPageName(usePathname())}</h1>;
 }

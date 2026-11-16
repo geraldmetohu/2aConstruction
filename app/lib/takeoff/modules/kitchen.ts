@@ -21,7 +21,16 @@ export interface KitchenSpec {
   boilerMove?: boolean; boilerRun?: number;
   /** Extra kitchen sockets and appliance spurs. */
   sockets?: number; spurs?: number;
+  /** FULL = services + units; INSTALL = units & worktops onto the existing services; READY = services & making good only, ready for the fitter. */
+  scope?: KitchenScope;
 }
+
+export type KitchenScope = "FULL" | "INSTALL" | "READY";
+export const kitchenScopeOptions: [KitchenScope, string][] = [
+  ["FULL", "Full kitchen – plumbing, electrics, units, worktops, tiling"],
+  ["INSTALL", "Install only – units & worktops onto the existing plumbing & electrics"],
+  ["READY", "Make ready only – strip, plumbing, electrics, plaster, ready for the fitter"],
+];
 
 export const fitByOptions: [string, string][] = [["US", "We supply & fit the kitchen"], ["WE_FIT", "Client supplies, we fit it"], ["CLIENT", "Client's kitchen company supplies & fits"]];
 
@@ -61,7 +70,9 @@ export function buildKitchen(ctx: Ctx, S: (s: string) => string, k: KitchenSpec,
   const wallUnits = Math.ceil(k.wallRun / 0.6 - 1e-9);
 
   if (k.strip) stripOut(ctx, S("Strip out"), A * 2, `${label}: remove old kitchen (${fmt(A)} m² × 2)`);
-  const fit = k.fitBy ?? "US";
+  const scope = k.scope ?? "FULL";
+  const fit = scope === "READY" ? "CLIENT" : k.fitBy ?? "US";
+  if (scope === "INSTALL") return installOnly(ctx, S, k, label, A, baseUnits, wallUnits);
   // Electrics for the kitchen: hob circuit, sockets and appliance spurs.
   electricsItems(ctx, S("First fix"), { cooker: k.hob ? 1 : 0, sockets: k.sockets ?? 0, spurs: k.spurs ?? 0 }, { label: `${label} kitchen` });
   if (k.boilerMove) {
@@ -81,8 +92,8 @@ export function buildKitchen(ctx: Ctx, S: (s: string) => string, k: KitchenSpec,
 
   const U = S("Kitchen fit-out");
   if (fit === "CLIENT") {
-    ctx.scope(`${label}: kitchen supplied and fitted by your kitchen company. We do the first fix plumbing, ${k.hob ? "hob circuit, " : ""}${k.sockets ? `${k.sockets} sockets, ` : ""}${k.spurs ? `${k.spurs} appliance spurs, ` : ""}${k.hood !== false ? "extract duct, " : ""}${k.boilerMove ? "boiler move, " : ""}making good${k.decorate ? " and decoration" : ""}.`);
-    ctx.assume("Kitchen units, worktops, sink and appliances are supplied and fitted by the client's kitchen company; we coordinate the first fix positions with their drawings.");
+    ctx.scope(scope === "READY" ? `${label}: make the kitchen ready for fitting – ${k.strip ? "strip out the old kitchen, " : ""}first fix plumbing, ${k.hob ? "hob circuit, " : ""}${k.sockets ? `${k.sockets} sockets, ` : ""}${k.spurs ? `${k.spurs} appliance spurs, ` : ""}${k.hood !== false ? "extract duct, " : ""}${k.boilerMove ? "boiler move, " : ""}making good${k.decorate ? ", plastering and decoration" : ""}. Units, worktops and appliances are fitted by others.` : `${label}: kitchen supplied and fitted by your kitchen company. We do the first fix plumbing, ${k.hob ? "hob circuit, " : ""}${k.sockets ? `${k.sockets} sockets, ` : ""}${k.spurs ? `${k.spurs} appliance spurs, ` : ""}${k.hood !== false ? "extract duct, " : ""}${k.boilerMove ? "boiler move, " : ""}making good${k.decorate ? " and decoration" : ""}.`);
+    ctx.assume(scope === "READY" ? "We make the kitchen ready for fitting: services are first fixed to the kitchen company's drawings; units, worktops, sink, appliances and their final connections are by others." : "Kitchen units, worktops, sink and appliances are supplied and fitted by the client's kitchen company; we coordinate the first fix positions with their drawings.");
     flooring(ctx, S("Second fix"), qty2(Math.max(A * 0.5, A - (k.baseRun + k.island) * 0.6)), k.flooring);
     if (k.decorate) { const walls = qty2(2 * (k.length + k.width) * k.height * 0.5); skim(ctx, S("Plastering"), walls + A, `${label} exposed walls & ceiling`); paint(ctx, S("Decoration"), { label, ceilings: A, walls, newPlaster: walls + A, system: "KITCHEN_BATH" }); }
     return;
@@ -115,4 +126,25 @@ export function buildKitchen(ctx: Ctx, S: (s: string) => string, k: KitchenSpec,
   }
   ctx.scope(`${label}: ${k.strip ? "strip out existing, " : ""}plumbing, ${baseUnits + k.tallUnits * 2} base and ${wallUnits} wall ${g} units${k.island ? ` with ${fmt(k.island)} m island` : ""}, ${fmt(top)} m ${wt === "QUARTZ" ? "quartz" : wt === "WOOD" ? "solid wood" : "laminate"} worktop, sink, ${k.appliances} appliances installed${k.splashback ? ", tiled splashback" : ""}, ${flooringOptions.find(([x]) => x === k.flooring)?.[1].toLowerCase()} floor (${fmt(floorArea)} m²).`);
   ctx.assume("Kitchen appliances supplied by the client unless listed; gas work by a Gas Safe engineer priced separately.");
+}
+
+/** Install only: units, worktops, sink and appliances fitted and connected to the services already in place. */
+function installOnly(ctx: Ctx, S: (s: string) => string, k: KitchenSpec, label: string, A: number, baseUnits: number, wallUnits: number) {
+  const U = S("Kitchen fit-out"), g = k.grade.toLowerCase(), supply = (k.fitBy ?? "US") === "US";
+  if (!supply) ctx.assume("Kitchen units, worktops, sink and tap are supplied by the client, delivered before the fit date; we fit them.");
+  if (supply) ctx.material(U, `base_unit_${g}`, baseUnits + k.tallUnits * 2, `⌈${fmt(k.baseRun)} m ÷ 0.6⌉${k.island ? ` + island` : ""} + ${k.tallUnits} tall × 2`);
+  if (supply && wallUnits) ctx.material(U, `wall_unit_${g}`, wallUnits, `⌈${fmt(k.wallRun)} m ÷ 0.6⌉`);
+  ctx.material(U, "kitchen_sundries", baseUnits + wallUnits + k.tallUnits, `${baseUnits + wallUnits + k.tallUnits} units`);
+  const top = Math.ceil((k.baseRun + k.island) * 1.05 * 10) / 10, wt = k.worktop;
+  if (supply) { ctx.material(U, wt === "QUARTZ" ? "worktop_quartz" : wt === "WOOD" ? "worktop_wood" : "worktop_laminate", top, `(${fmt(k.baseRun)} + ${fmt(k.island)} m) + 5%`); ctx.material(U, "sink_tap", 1, "1 sink & tap"); }
+  ctx.material(U, "worktop_joint_kit", (k.baseRun > 3 ? 1 : 0) + (k.island ? 1 : 0) + 1, "joints / end caps");
+  ctx.material(U, "silicone", 2, "worktop & upstand edges");
+  ctx.labour(U, "kitchen_units", baseUnits + wallUnits + k.tallUnits * 2 + k.appliances * 0.5, `${baseUnits} base + ${wallUnits} wall + ${k.tallUnits} tall (×2) + ${k.appliances} appliances (×0.5)`);
+  if (wt !== "QUARTZ") ctx.labour(U, "worktop_fit", top); else ctx.assume("Quartz worktops are templated and fitted by the supplier after the units are installed.");
+  ctx.labour(U, "kitchen_plumbing", 1, "connect sink, tap and appliances to the existing supply & waste points");
+  if (k.splashback) tiles(ctx, U, { area: qty2((k.wallRun || k.baseRun) * 0.6), size: k.splashbackTile ?? "METRO_75x150", surface: "wall", label: `${label} splashback`, trims: Math.ceil((k.wallRun || k.baseRun) / 2.5) });
+  flooring(ctx, S("Second fix"), qty2(Math.max(A * 0.5, A - (k.baseRun + k.island) * 0.6)), k.flooring);
+  if (k.decorate) { const walls = qty2(2 * (k.length + k.width) * k.height * 0.5); paint(ctx, S("Decoration"), { label, ceilings: A, walls, newPlaster: 0, system: "KITCHEN_BATH" }); }
+  ctx.scope(`${label}: install the kitchen onto the existing plumbing and electrics – ${baseUnits + k.tallUnits * 2} base and ${wallUnits} wall units${k.island ? ` with ${fmt(k.island)} m island` : ""}, ${fmt(top)} m worktop, sink and ${k.appliances} appliances connected${k.splashback ? ", tiled splashback" : ""}.`);
+  ctx.assume("Install only: water, waste, sockets, spurs and the cooker circuit are already in the right positions and in good order; any changes to them are priced extra.");
 }

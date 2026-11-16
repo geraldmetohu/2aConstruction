@@ -1167,6 +1167,11 @@ model TakeoffWorker {
   tokenHash   String?                @unique
   createdAt   DateTime               @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime               @default(now()) @db.Timestamptz(6)
+  // CIS and tax details (migration 20261113120000_finance)
+  cisStatus          String          @default("NONE")
+  utr                String          @default("")
+  vatNumber          String          @default("")
+  verificationNumber String          @default("")
   ratings     TakeoffWorkerRating[]
   assignments TakeoffJobAssignment[]
   checkIns    TakeoffCheckIn[]
@@ -1230,6 +1235,10 @@ model TakeoffExpense {
   void        Boolean        @default(false)
   recordedBy  String
   createdAt   DateTime       @default(now()) @db.Timestamptz(6)
+  // Finance (migration 20261113120000_finance)
+  vat          Decimal       @default(0) @db.Decimal(12, 2)
+  vatTreatment String        @default("OUTSIDE")
+  method       String        @default("BANK")
   @@index([quoteId])
   @@index([workerId])
   @@index([spentOn])
@@ -1324,4 +1333,125 @@ model TakeoffJobSnag {
   createdAt    DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime     @default(now()) @db.Timestamptz(6)
   @@index([quoteId, createdAt])
+}
+
+// Finance (migration 20261113120000_finance). Queried with plain SQL in app/lib/finance/store.ts.
+model FinanceSettings {
+  id        Int      @id @default(1)
+  data      Json     @default("{}")
+  updatedBy String   @default("")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model FinanceEntry {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  date         DateTime @db.Date
+  direction    String
+  method       String   @default("BANK")
+  category     String
+  description  String   @default("")
+  counterparty String   @default("")
+  reference    String   @default("")
+  quoteId      String?  @db.Uuid
+  workerId     String?  @db.Uuid
+  jobCostId    String?  @db.Uuid
+  recurringId  String?  @db.Uuid
+  amount       Decimal  @db.Decimal(12, 2)
+  vat          Decimal  @default(0) @db.Decimal(12, 2)
+  vatTreatment String   @default("STANDARD")
+  cisLabour    Decimal  @default(0) @db.Decimal(12, 2)
+  cisMaterials Decimal  @default(0) @db.Decimal(12, 2)
+  cisDeducted  Decimal  @default(0) @db.Decimal(12, 2)
+  days         Decimal? @db.Decimal(6, 2)
+  receiptUrl   String   @default("")
+  void         Boolean  @default(false)
+  recordedBy   String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @db.Timestamptz(6)
+  @@index([date])
+  @@index([quoteId])
+  @@index([workerId])
+  @@index([jobCostId])
+}
+model FinanceRecurring {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  category     String
+  supplier     String    @default("")
+  amount       Decimal   @db.Decimal(12, 2)
+  vat          Decimal   @default(0) @db.Decimal(12, 2)
+  vatTreatment String    @default("STANDARD")
+  frequency    String
+  startDate    DateTime  @db.Date
+  endDate      DateTime? @db.Date
+  method       String    @default("BANK")
+  notes        String    @default("")
+  active       Boolean   @default(true)
+  createdBy    String
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
+}
+model FinanceJobCost {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId      String    @db.Uuid
+  workerId     String?   @db.Uuid
+  supplier     String    @default("")
+  title        String
+  category     String    @default("SUBCONTRACTOR")
+  amount       Decimal   @db.Decimal(12, 2)
+  labour       Decimal   @default(0) @db.Decimal(12, 2)
+  vatTreatment String    @default("OUTSIDE")
+  dueDate      DateTime? @db.Date
+  notes        String    @default("")
+  status       String    @default("OPEN")
+  createdBy    String
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  @@index([quoteId])
+}
+model FinanceBankStatement {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fileName       String            @default("")
+  bank           String            @default("")
+  periodFrom     DateTime?         @db.Date
+  periodTo       DateTime?         @db.Date
+  openingBalance Decimal?          @db.Decimal(12, 2)
+  closingBalance Decimal?          @db.Decimal(12, 2)
+  lineCount      Int               @default(0)
+  uploadedBy     String
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  lines          FinanceBankLine[]
+}
+model FinanceBankLine {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  statementId String               @db.Uuid
+  statement   FinanceBankStatement @relation(fields: [statementId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  date        DateTime             @db.Date
+  description String               @default("")
+  amount      Decimal              @db.Decimal(12, 2)
+  balance     Decimal?             @db.Decimal(12, 2)
+  fingerprint String               @unique
+  status      String               @default("NEW")
+  entryId     String?              @db.Uuid
+  paymentId   String?              @db.Uuid
+  expenseId   String?              @db.Uuid
+  note        String               @default("")
+  doneBy      String               @default("")
+  createdAt   DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime             @default(now()) @db.Timestamptz(6)
+  @@index([status, date])
+  @@index([entryId])
+}
+model FinanceRule {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pattern      String
+  direction    String
+  category     String
+  quoteId      String?  @db.Uuid
+  workerId     String?  @db.Uuid
+  counterparty String   @default("")
+  vatTreatment String   @default("STANDARD")
+  active       Boolean  @default(true)
+  createdBy    String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  @@unique([pattern, direction])
 }

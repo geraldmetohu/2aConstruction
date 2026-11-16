@@ -93,29 +93,13 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
       {msg && <div role="status" className={`fixed inset-x-3 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-50 flex items-start justify-between gap-3 rounded-xl px-4 py-3 text-sm shadow-lg md:static md:shadow-none ${msg.ok ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200" : "bg-red-50 text-red-800 ring-1 ring-red-200"}`}>
         <span>{msg.text}</span><button aria-label="Dismiss" onClick={() => setMsg(null)} className="shrink-0 opacity-60"><X className="h-4 w-4" /></button></div>}
 
-      {tab === "overview" && <div className="grid gap-5 lg:grid-cols-5">
-        <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6 lg:col-span-3"><h2 className="text-lg font-semibold text-[#071a33]">Progress by stage</h2>
-          <ol className="mt-3 space-y-3">{v.progress.stages.map(s => (
-            <li key={s.stage}>
-              <div className="flex items-baseline justify-between gap-2 text-sm"><span className="font-semibold">{s.status === "DONE" ? <CircleCheck className="mr-1 inline h-4 w-4 text-emerald-600" /> : null}{s.label}</span><span className="text-xs text-neutral-500">{s.start ? (s.start === s.end ? day(s.start) : `${day(s.start)} – ${day(s.end!)}`) : ""}</span></div>
-              <div className="mt-1 h-2 rounded-full bg-neutral-100"><div className={`h-2 rounded-full ${s.status === "DONE" ? "bg-emerald-500" : "bg-[#f5b400]"}`} style={{ width: `${s.percent}%` }} /></div>
-              {s.note && <p className="mt-0.5 text-xs text-neutral-600">{s.note}</p>}
-            </li>))}</ol>
-        </section>
-        <div className="space-y-5 lg:col-span-2">
-          {todo > 0 && <button onClick={() => setTab("todo")} className="w-full rounded-2xl border-2 border-[#f5b400] bg-[#f5b400]/10 p-5 text-left"><p className="flex items-center gap-2 font-bold"><TriangleAlert className="h-5 w-5 text-amber-600" />{todo} thing{todo > 1 ? "s" : ""} need you</p>
-            <p className="mt-1 text-sm text-neutral-700">{[openActions.length && `${openActions.length} question${openActions.length > 1 ? "s" : ""}`, toOrder.length && `${toOrder.length} item${toOrder.length > 1 ? "s" : ""} to order`, due.length && `${due.length} payment${due.length > 1 ? "s" : ""} due`].filter(Boolean).join(" · ")}</p></button>}
-          <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Latest</h2>
-            <ul className="mt-2 space-y-2 text-sm">{v.events.slice(0, 8).map(e => <li key={e.id} className="border-b pb-2">{e.message}<span className="block text-xs text-neutral-400">{when(e.createdAt)}</span></li>)}</ul></section>
-          <Contacts v={v} />
-        </div>
-      </div>}
+      {tab === "overview" && <Overview v={v} todo={todo} openActions={openActions.length} toOrder={toOrder.length} due={due} current={current} go={setTab} />}
 
       {tab === "todo" && <div className="space-y-5">
-        <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Questions & decisions for you</h2>
+        <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Questions & decisions for you</h2>
           {!v.actions.length && <p className="mt-2 text-sm text-neutral-500">Nothing at the moment.</p>}
           <ul className="mt-3 space-y-4">{v.actions.filter(a => a.status !== "CANCELLED").map(a => <ActionItem key={a.id} a={a} busy={busy} answer={r => act(() => clientAnswer(v.quoteId, a.id, r), "Thank you – your answer has been sent.")} />)}</ul></section>
-        <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="flex items-center gap-2 text-lg font-semibold text-[#071a33]"><ShoppingCart className="h-5 w-5" />Items you order</h2>
+        <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="flex items-center gap-2 text-lg font-semibold text-[#071a33]"><ShoppingCart className="h-5 w-5" />Items you order</h2>
           <p className="mt-1 text-sm text-neutral-600">Please order these to the specification shown and tell us when they are ordered and delivered. Not sure? Send us a message before you buy.</p>
           <ul className="mt-3 divide-y">{v.supplies.map(s => (
             <li key={s.key} className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -124,7 +108,7 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
               <span className="grid w-full grid-cols-3 gap-1 sm:flex sm:w-auto">{(["TO_ORDER", "ORDERED", "DELIVERED"] as const).map(st => <button key={st} disabled={busy} onClick={() => act(() => clientSupply(v.quoteId, { itemKey: s.key, label: s.item, status: st, note: "" }), "Thanks – updated.")}
                 className={`rounded-full border px-3 py-2 text-xs font-semibold sm:py-1 ${s.status === st ? (st === "DELIVERED" ? "bg-emerald-600 text-white" : "bg-[#071a33] text-white") : "bg-white"}`}>{st === "TO_ORDER" ? "To order" : st === "ORDERED" ? "Ordered" : "Delivered"}</button>)}</span>
             </li>))}{!v.supplies.length && <li className="py-2 text-sm text-neutral-500">Nothing for you to order – we supply everything.</li>}</ul></section>
-        {due.length > 0 && <button onClick={() => setTab("payments")} className="w-full rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6 text-left"><h2 className="text-lg font-semibold text-[#071a33]">Payments due</h2><ul className="mt-2 text-sm">{due.map(r => <li key={r.n}>{r.label}: {gbp(r.balance)} {r.date ? `by ${day(r.date)}` : ""}</li>)}</ul></button>}
+        {due.length > 0 && <button onClick={() => setTab("payments")} className="w-full rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6 text-left"><h2 className="text-lg font-semibold text-[#071a33]">Payments due</h2><ul className="mt-2 text-sm">{due.map(r => <li key={r.n}>{r.label}: {gbp(r.balance)} {r.date ? `by ${day(r.date)}` : ""}</li>)}</ul></button>}
       </div>}
 
       {tab === "messages" && <Messages v={v} busy={busy} send={(t, note) => act(() => clientMessage(v.quoteId, t, note), note ? "Note saved." : "Message sent – we will reply soon.")} />}
@@ -139,7 +123,7 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
       {tab === "details" && <Details v={v} busy={busy} save={p => act(() => clientSaveInfo(v.quoteId, p), "Saved – thank you.")} />}
 
       {tab === "quote" && <div className="space-y-5">
-        {v.documents.length > 0 && <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Project documents</h2><p className="text-xs text-neutral-500">Plans, certificates and other files we've shared with you.</p>
+        {v.documents.length > 0 && <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Project documents</h2><p className="text-xs text-neutral-500">Plans, certificates and other files we've shared with you.</p>
           <ul className="mt-3 divide-y">{v.documents.map(d => <li key={d.id}><a href={d.url} target="_blank" rel="noreferrer" className="flex items-center gap-3 py-3 hover:bg-neutral-50">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-neutral-900 text-[10px] font-bold uppercase text-amber-400">{(d.fileName.split(".").pop() || "file").slice(0, 4)}</span>
             <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold">{d.title}</span><span className="block text-xs text-neutral-500">{d.categoryLabel} · {when(d.createdAt)}{d.sizeBytes ? ` · ${d.sizeBytes > 1048576 ? `${(d.sizeBytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(d.sizeBytes / 1024))} KB`}` : ""}</span></span>
@@ -177,6 +161,87 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
   );
 }
 
+/** Modern project dashboard: headline tiles, stage journey, latest photo, activity and the team. */
+function Overview({ v, todo, openActions, toOrder, due, current, go }: {
+  v: ClientProjectView; todo: number; openActions: number; toOrder: number; due: DueRow[]; current?: StageProgress; go: (k: "todo" | "photos" | "payments" | "messages") => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const daysTo = (d: string) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  const next = v.money.rows.find(r => r.balance > 0.005);
+  const done = v.progress.stages.filter(s => s.status === "DONE").length;
+  const photo = v.photos[0];
+  const finishIn = v.finish ? daysTo(v.finish) : null, startIn = v.startDate ? daysTo(v.startDate) : null;
+  const tiles: { k: string; label: string; value: string; sub: string; tone: string; onClick?: () => void }[] = [
+    { k: "progress", label: "Progress", value: `${v.progress.percent}%`, sub: `${done} of ${v.progress.stages.length} stages done`, tone: "from-[#071a33] to-[#173b6c] text-white" },
+    { k: "now", label: startIn !== null && startIn > 0 ? "We start in" : "On site now", value: startIn !== null && startIn > 0 ? `${startIn} day${startIn === 1 ? "" : "s"}` : current?.label ?? (v.status === "COMPLETED" ? "Completed" : "—"), sub: startIn !== null && startIn > 0 ? day(v.startDate!) : current?.end ? `until ${day(current.end)}` : "", tone: "from-white to-white text-[#071a33]" },
+    { k: "finish", label: "Completion", value: finishIn === null ? "To be confirmed" : finishIn > 0 ? `${finishIn} days` : v.status === "COMPLETED" ? "Done" : "Any day now", sub: v.finish ? `around ${day(v.finish)}` : "", tone: "from-white to-white text-[#071a33]" },
+    { k: "pay", label: "Next payment", value: next ? gbp(next.balance) : "All paid", sub: next ? `${next.label}${next.date ? ` · ${day(next.date)}` : ""}` : "Thank you!", tone: next && (next.state === "DUE" || next.state === "OVERDUE") ? "from-amber-300 to-[#f5b400] text-[#071a33]" : "from-white to-white text-[#071a33]", onClick: () => go("payments") },
+  ];
+  return (
+    <div className="space-y-5">
+      {todo > 0 && <button onClick={() => go("todo")} className="group flex w-full items-center gap-4 rounded-3xl bg-gradient-to-r from-[#f5b400] to-amber-300 p-4 text-left text-[#071a33] shadow-[0_18px_40px_-24px_rgba(245,180,0,.9)] sm:p-5">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#071a33] text-[#f5b400]"><TriangleAlert className="h-6 w-6" /></span>
+        <span className="min-w-0 flex-1"><span className="block text-lg font-black leading-tight">{todo} thing{todo > 1 ? "s" : ""} need you</span>
+          <span className="block text-sm opacity-80">{[openActions && `${openActions} question${openActions > 1 ? "s" : ""}`, toOrder && `${toOrder} item${toOrder > 1 ? "s" : ""} to order`, due.length && `${due.length} payment${due.length > 1 ? "s" : ""} due`].filter(Boolean).join(" · ")}</span></span>
+        <ChevronRight className="h-6 w-6 transition-transform group-hover:translate-x-1" /></button>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map(t => {
+          const body = <><span className={`text-[10px] font-bold uppercase tracking-[0.2em] ${t.tone.includes("text-white") ? "text-[#f5b400]" : "text-neutral-500"}`}>{t.label}</span>
+            <span className="mt-2 block text-lg font-black leading-tight tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{t.value}</span><span className={`mt-0.5 block truncate text-xs ${t.tone.includes("text-white") ? "text-white/70" : "text-neutral-500"}`}>{t.sub}</span>
+            {t.k === "progress" && <span className="mt-3 block h-1.5 overflow-hidden rounded-full bg-white/15"><span className="block h-full rounded-full bg-[#f5b400] transition-all duration-700" style={{ width: `${v.progress.percent}%` }} /></span>}</>;
+          const cls = `block min-w-0 rounded-3xl border border-[#071a33]/10 bg-gradient-to-br p-4 text-left shadow-[0_18px_40px_-30px_rgba(7,26,51,.5)] sm:p-5 ${t.tone}`;
+          return t.onClick ? <button key={t.k} onClick={t.onClick} className={`${cls} transition hover:-translate-y-0.5`}>{body}</button> : <div key={t.k} className={cls}>{body}</div>;
+        })}
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-5">
+        <section className="self-start rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6 lg:col-span-3">
+          <div className="flex items-baseline justify-between gap-2"><h2 className="text-lg font-semibold text-[#071a33]">Your project journey</h2><span className="text-xs text-neutral-500">{done}/{v.progress.stages.length} stages</span></div>
+          <ol className="relative mt-4 space-y-0">
+            {v.progress.stages.map((s, i) => {
+              const on = s.status === "IN_PROGRESS", ok = s.status === "DONE", last = i === v.progress.stages.length - 1;
+              return (
+                <li key={s.stage} className="relative flex gap-3 pb-4">
+                  {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-0.5 ${ok ? "bg-emerald-400" : "bg-neutral-200"}`} />}
+                  <span className={`relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black ${ok ? "bg-emerald-500 text-white" : on ? "bg-[#f5b400] text-[#071a33]" : "border-2 border-neutral-200 bg-white text-neutral-400"}`}>
+                    {on && <span aria-hidden className="absolute inset-0 animate-ping rounded-full bg-[#f5b400]/50" />}<span className="relative">{ok ? <CircleCheck className="h-4 w-4" /> : i + 1}</span></span>
+                  <div className="min-w-0 flex-1 pt-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-2"><span className={`text-sm font-semibold ${ok ? "text-neutral-500" : "text-[#071a33]"}`}>{s.label}{on && <span className="ml-2 rounded-full bg-[#f5b400]/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#8a6500]">Now</span>}{s.late && !ok && <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase text-red-700">Behind</span>}</span>
+                      <span className="text-xs text-neutral-500">{s.start ? (s.start === s.end ? day(s.start) : `${day(s.start)} – ${day(s.end!)}`) : ""}</span></div>
+                    {on && <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full bg-[#f5b400]" style={{ width: `${s.percent}%` }} /></div>}
+                    {s.note && <p className="mt-0.5 text-xs text-neutral-600">{s.note}</p>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <div className="space-y-5 lg:col-span-2">
+          {photo ? (
+            <button onClick={() => go("photos")} className="group relative block w-full overflow-hidden rounded-3xl bg-[#071a33] text-left">
+              <img src={photo.url} alt={photo.caption || "Latest site photo"} className="aspect-[4/3] w-full object-cover opacity-90 transition duration-500 group-hover:scale-105" />
+              <span className="absolute inset-0 bg-gradient-to-t from-[#071a33] via-[#071a33]/20 to-transparent" />
+              <span className="absolute inset-x-0 bottom-0 p-4 text-white"><span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#f5b400]">Latest from site · {when(photo.createdAt)}</span>
+                <span className="mt-1 block font-semibold">{photo.caption || photo.stage || "Site photo"}</span><span className="mt-1 inline-flex items-center gap-1 text-xs text-white/80">See all {v.photos.length} photo{v.photos.length === 1 ? "" : "s"}<ChevronRight className="h-3.5 w-3.5" /></span></span>
+            </button>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-[#071a33]/20 bg-white p-6 text-center"><Camera className="mx-auto h-8 w-8 text-[#f5b400]" /><p className="mt-2 text-sm font-semibold text-[#071a33]">Site photos appear here</p><p className="text-xs text-neutral-500">The team posts photos as the work goes up.</p></div>
+          )}
+          <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 sm:p-6">
+            <div className="flex items-baseline justify-between"><h2 className="text-lg font-semibold text-[#071a33]">Latest activity</h2><button onClick={() => go("messages")} className="text-xs font-bold text-[#8a6500]">Message us</button></div>
+            <ol className="mt-3 space-y-3 border-l-2 border-neutral-100 pl-4">{v.events.slice(0, 6).map(e => (
+              <li key={e.id} className="relative text-sm"><span aria-hidden className={`absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white ${e.actorKind === "CLIENT" ? "bg-sky-500" : "bg-[#f5b400]"}`} />{e.message}<span className="block text-xs text-neutral-400">{when(e.createdAt)}</span></li>
+            ))}{!v.events.length && <li className="text-sm text-neutral-500">Nothing yet – updates appear here.</li>}</ol>
+          </section>
+          <Contacts v={v} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Ring({ percent }: { percent: number }) {
   const r = 42, c = 2 * Math.PI * r;
   return <svg viewBox="0 0 100 100" className="h-20 w-20 sm:h-28 sm:w-28"><circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,.12)" strokeWidth="10" /><circle cx="50" cy="50" r={r} fill="none" stroke="#f5b400" strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(percent / 100) * c} ${c}`} transform="rotate(-90 50 50)" /><text x="50" y="56" textAnchor="middle" className="fill-white text-[20px] font-semibold">{percent}%</text></svg>;
@@ -204,7 +269,7 @@ function Messages({ v, busy, send }: { v: ClientProjectView; busy: boolean; send
   const [t, setT] = useState(""), [note, setNote] = useState(false);
   const thread = v.events.filter(e => ["MESSAGE", "CLIENT_MESSAGE", "CLIENT_NOTE", "ANSWER", "ACTION", "PAYMENT"].includes(e.kind));
   return (
-    <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Messages & notes</h2>
+    <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Messages & notes</h2>
       <textarea className={`${input} mt-3`} rows={3} placeholder={note ? "A note for the team (e.g. please keep the side gate closed)" : "Write to us…"} value={t} onChange={e => setT(e.target.value)} />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2"><label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" checked={note} onChange={e => setNote(e.target.checked)} />Save as a note for the team</label>
         <button disabled={busy || !t.trim()} onClick={async () => (await send(t, note)) && setT("")} className={`${btn} bg-[#071a33] text-white`}><Send className="h-4 w-4" />Send</button></div>
@@ -221,8 +286,8 @@ function Payments({ v, busy, report }: { v: ClientProjectView; busy: boolean; re
   const [f, setF] = useState({ scheduleNo: next ? String(next.n) : "", amount: next ? String(next.balance) : "", paidOn: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date()), reference: v.reference });
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3">{([["Paid", v.money.received], ["Still to pay", v.money.outstanding], ["Waiting to confirm", v.money.reported]] as const).map(([l, x]) => <div key={l} className="rounded-2xl border bg-white p-4"><p className="text-xs text-neutral-500">{l}</p><p className="text-2xl font-black">{gbp(x)}</p></div>)}</div>
-      {v.invoices.length > 0 && <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="flex items-center gap-2 text-lg font-semibold text-[#071a33]"><Receipt className="h-5 w-5" />Your invoices</h2>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">{([["Paid", v.money.received], ["Still to pay", v.money.outstanding], ["Waiting to confirm", v.money.reported]] as const).map(([l, x]) => <div key={l} className="min-w-0 rounded-2xl border bg-white p-3 sm:p-4"><p className="truncate text-[11px] text-neutral-500 sm:text-xs">{l}</p><p className="text-sm font-black tabular-nums [overflow-wrap:anywhere] sm:text-2xl">{gbp(x)}</p></div>)}</div>
+      {v.invoices.length > 0 && <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="flex items-center gap-2 text-lg font-semibold text-[#071a33]"><Receipt className="h-5 w-5" />Your invoices</h2>
         <ul className="mt-3 divide-y">{v.invoices.map(i => (
           <li key={i.number} className="flex flex-wrap items-center justify-between gap-3 py-3">
             <span className="min-w-0"><span className="block font-semibold">{i.label}</span><span className="text-xs text-neutral-500">{i.number} · issued {day(i.issuedOn)} · due {day(i.dueOn)}</span></span>
@@ -232,7 +297,7 @@ function Payments({ v, busy, report }: { v: ClientProjectView; busy: boolean; re
               <a href={`/my-quotes/${v.quoteId}/invoices/${encodeURIComponent(i.number)}`} className="rounded-full border px-3 py-1 text-xs font-semibold">View / download</a></span>
           </li>))}</ul>
         <p className="mt-2 text-xs text-neutral-500">Invoices are raised automatically as each stage is completed. Press “I&apos;ve paid this” and confirm below once you&apos;ve made the transfer.</p></section>}
-      <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Payment schedule</h2>
+      <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Payment schedule</h2>
         <ul className="mt-3 divide-y">{v.money.rows.map(r => <li key={r.n} className="flex flex-wrap items-center justify-between gap-2 py-3"><span><span className="font-semibold">{r.label}</span><span className="block text-xs text-neutral-500">{r.when}{r.date ? ` · due ${day(r.date)}` : ""}</span></span>
           <span className="text-right"><span className="font-bold">{gbp(r.amount)}</span><span className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${stateLabel[r.state][1]}`}>{stateLabel[r.state][0]}</span>{r.paid > 0 && r.balance > 0 && <span className="block text-xs text-neutral-500">{gbp(r.balance)} left</span>}</span></li>)}</ul></section>
       <section className="rounded-2xl border-2 border-neutral-900 bg-white p-5"><h2 className="text-lg font-semibold text-[#071a33]">How to pay</h2>
@@ -261,12 +326,14 @@ function Contacts({ v }: { v: ClientProjectView }) {
     { role: "Office", name: "2A Construction", phone: v.office.phone, email: v.office.email },
   ].filter(Boolean) as { role: string; name: string; phone: string; email: string }[];
   return (
-    <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Contact us</h2>
-      <ul className="mt-2 divide-y">{people.map(p => (
-        <li key={p.role} className="py-2.5 text-sm">
-          <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{p.role}</p><p className="font-semibold">{p.name}</p>
-          <p className="mt-0.5 flex flex-wrap gap-x-4 gap-y-1">{p.phone && <a className="inline-flex items-center gap-1 font-semibold text-[#8a6500]" href={tel(p.phone)}><Phone className="h-4 w-4" />{p.phone}</a>}
-            {p.email && <a className="inline-flex items-center gap-1 text-[#8a6500]" href={`mailto:${p.email}?subject=${encodeURIComponent(v.reference)}`}><Mail className="h-4 w-4" />{p.email}</a>}</p>
+    <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Your team</h2>
+      <ul className="mt-3 space-y-3">{people.map(p => (
+        <li key={p.role} className="flex items-center gap-3 text-sm">
+          <span aria-hidden className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl text-sm font-black ${p.role === "Office" ? "bg-neutral-100 text-[#071a33]" : "bg-gradient-to-br from-[#071a33] to-[#173b6c] text-[#f5b400]"}`}>{p.name.split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()}</span>
+          <span className="min-w-0 flex-1"><span className="block text-[10px] font-bold uppercase tracking-wide text-neutral-500">{p.role}</span><span className="block truncate font-semibold text-[#071a33]">{p.name}</span>
+            {p.email && <a className="block truncate text-xs text-[#8a6500]" href={`mailto:${p.email}?subject=${encodeURIComponent(v.reference)}`}>{p.email}</a>}</span>
+          {p.phone && <a href={tel(p.phone)} aria-label={`Call ${p.name}`} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f5b400] text-[#071a33] transition hover:scale-105"><Phone className="h-4 w-4" /></a>}
+          {!p.phone && p.email && <a href={`mailto:${p.email}`} aria-label={`Email ${p.name}`} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border"><Mail className="h-4 w-4" /></a>}
         </li>))}</ul>
     </section>
   );
@@ -276,7 +343,7 @@ function Details({ v, busy, save }: { v: ClientProjectView; busy: boolean; save:
   const [contacts, setContacts] = useState<ClientContact[]>(v.contacts.length ? v.contacts : [{ name: "", role: "", phone: "", email: "" }]);
   const [notes, setNotes] = useState(v.accessNotes);
   return (
-    <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Contacts & access</h2>
+    <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Contacts & access</h2>
       <p className="mt-1 text-sm text-neutral-600">Who can we call about the work, and anything we should know about access, parking, keys, alarms or pets.</p>
       <div className="mt-3 space-y-2">{contacts.map((c, i) => (
         <div key={i} className="grid gap-2 sm:grid-cols-4">{(["name", "role", "phone", "email"] as const).map(k => <input key={k} className={input} placeholder={{ name: "Name", role: "e.g. Partner, tenant", phone: "Phone", email: "Email" }[k]} value={c[k]} onChange={e => setContacts(contacts.map((x, n) => (n === i ? { ...x, [k]: e.target.value } : x)))} />)}</div>
@@ -301,7 +368,7 @@ function Photos({ photos }: { photos: ClientProjectView["photos"] }) {
   });
   const p = i === null ? null : photos[i];
   return (
-    <section className="rounded-2xl border border-[#071a33]/10 bg-white p-4 sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Site photos</h2>
+    <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6"><h2 className="text-lg font-semibold text-[#071a33]">Site photos</h2>
       {!photos.length && <p className="mt-2 text-sm text-neutral-500">Photos of your project will appear here as the work progresses.</p>}
       <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">{photos.map((ph, n) => (
         <li key={ph.id}><button onClick={() => setI(n)} className="group block w-full overflow-hidden rounded-xl bg-neutral-100 text-left">

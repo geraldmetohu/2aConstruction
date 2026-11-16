@@ -1,7 +1,7 @@
 import type { Ctx } from "../engine";
 import { fmt, qty2 } from "../util";
 import { plumbFixtures, type PipeSystem } from "./plumbing";
-import { boardAndSkim, flooring, paint, skim, stripOut, tiles } from "./common";
+import { boardAndSkim, electricUfh, flooring, paint, skim, stripOut, tiles } from "./common";
 
 export interface BathroomSpec {
   length: number; width: number; height: number;
@@ -51,7 +51,7 @@ export function buildBathroom(ctx: Ctx, S: (s: string) => string, b: BathroomSpe
   // Tiling
   const T = S("Tiling");
   tiles(ctx, T, { area: tiled, size: b.wallTileSize ?? "PORCELAIN_300x600", surface: "wall", label, trims: Math.ceil((P + 4) / 2.5) });
-  if (b.ufh) { ctx.material(T, "ufh_mat", Math.ceil(A * 0.7), `${fmt(A)} m² × 70% heated area`); ctx.labour(T, "ufh_fit", A * 0.7); }
+  if (b.ufh) electricUfh(ctx, T, A, 0.7, label);
   if (b.floorTiling) {
     ctx.material(T, "tile_backer_board", Math.ceil(A * 1.05 / 0.72 - 1e-9), `floor ${fmt(A)} m² + 5% ÷ 0.72 m² (rigid base over timber floor)`, "Tile backer board – floor");
     ctx.material(T, "board_screws", 1, "1 box of backer board screws & washers");

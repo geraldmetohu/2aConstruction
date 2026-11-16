@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { QuoteDocs } from "@/app/lib/takeoff/documents";
 import type { Register, SitePack } from "@/app/lib/takeoff/site-pack";
-import { band, H, Page, Sections } from "./DocParts";
+import { band, H, Page, ScrollX, Sections } from "./DocParts";
 
 export type PackKind = "welcome" | "neighbour" | "variation" | "privacy" | "f10" | "activityRams" | "toolbox" | "induction" | "permits" | "tempworks" | "fire" | "registers" | "waste"
   | "buildingRegs" | "snagging" | "handover" | "report";
@@ -17,14 +17,14 @@ export const packKinds: [PackKind, string, "Client" | "Health & safety" | "Compl
 ];
 
 const Blank = ({ rows, cols }: { rows: number; cols: string[] }) => (
-  <table className="w-full table-fixed border-collapse text-[11px]">
+  <ScrollX min={Math.max(360, cols.length * 95)}><table className="w-full table-fixed border-collapse text-[11px]">
     <thead><tr>{cols.map(c => <th key={c} className="border border-neutral-300 bg-neutral-50 px-1.5 py-1 text-left font-semibold">{c}</th>)}</tr></thead>
     <tbody>{Array.from({ length: rows }, (_, i) => <tr key={i}>{cols.map(c => <td key={c} className="h-7 border border-neutral-300" />)}</tr>)}</tbody>
-  </table>
+  </table></ScrollX>
 );
 const List = ({ items }: { items: string[] }) => <ul className="mt-1 list-disc space-y-0.5 pl-5">{items.map((x, i) => <li key={i}>{x}</li>)}</ul>;
 const Box = ({ title, children }: { title: string; children: ReactNode }) => <div className="break-inside-avoid rounded-lg border p-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-700">{title}</p>{children}</div>;
-const Sign = ({ labels }: { labels: string[] }) => <div className="mt-6 grid grid-cols-2 gap-8">{labels.map(l => <div key={l} className="border-t pt-1 text-xs">{l}</div>)}</div>;
+const Sign = ({ labels }: { labels: string[] }) => <div className="mt-6 grid grid-cols-2 gap-4 sm:gap-8">{labels.map(l => <div key={l} className="border-t pt-1 text-xs">{l}</div>)}</div>;
 
 function People({ p }: { p: SitePack }) {
   const x = p.people;
@@ -48,14 +48,14 @@ function ActivityRams({ d, p }: { d: QuoteDocs; p: SitePack }) {
       <Box title="Sequence of work"><ol className="mt-1 list-decimal space-y-0.5 pl-5">{r.sequence.map((s, i) => <li key={i}>{s}</li>)}</ol></Box>
       <div><H>Risk assessment</H>
         <p className="mt-1 text-xs text-neutral-600">Risk = likelihood × severity (1–5 each): 1–7 low, 8–14 medium, 15–25 high. Residual risk after the controls.</p>
-        <table className="mt-2 w-full table-fixed text-xs"><colgroup><col className="w-[24%]" /><col className="w-[18%]" /><col className="w-[7%]" /><col className="w-[44%]" /><col className="w-[7%]" /></colgroup>
+        <div className="mt-2"><ScrollX min={640}><table className="w-full table-fixed text-xs"><colgroup><col className="w-[24%]" /><col className="w-[18%]" /><col className="w-[7%]" /><col className="w-[44%]" /><col className="w-[7%]" /></colgroup>
           <thead><tr className="border-b text-left text-neutral-500"><th className="py-1 pr-2">Hazard</th><th className="pr-2">Who / harm</th><th>Risk</th><th className="px-2">Controls</th><th>After</th></tr></thead>
           <tbody>{r.risks.map(k => (
             <tr key={k.hazard} className="break-inside-avoid border-b align-top">
               <td className="py-1.5 pr-2 font-semibold">{k.hazard}</td><td className="pr-2">{k.who}<span className="block text-neutral-500">{k.harm}</span></td>
               <td><span className={`rounded px-1.5 font-semibold ${band(k.beforeBand)}`}>{k.before}</span></td>
               <td className="px-2"><List items={k.controls} /></td><td><span className={`rounded px-1.5 font-semibold ${band(k.afterBand)}`}>{k.after}</span></td>
-            </tr>))}</tbody></table>
+            </tr>))}</tbody></table></ScrollX></div>
       </div>
       <Box title="Controls specific to this activity"><List items={r.specific} /></Box>
       <div className="grid gap-3 sm:grid-cols-2 print:grid-cols-2">
@@ -110,8 +110,8 @@ export const PACK_RENDER: Record<PackKind, (d: QuoteDocs, p: SitePack) => ReactN
     <Box title="Approvals & notices"><List items={p.buildingRegs.notices} /></Box>
     <div><H>Building Control inspections</H><table className="mt-1 w-full text-xs"><tbody>{p.buildingRegs.stages.map(s => <tr key={s.title} className="border-b"><td className="py-1 pr-3">{s.title}</td><td className="w-40">Date: __________</td><td className="w-24">☐ Passed</td></tr>)}</tbody></table></div>
     {p.buildingRegs.checks.map(c => <Box key={c.activity} title={c.activity}><table className="mt-1 w-full text-xs"><tbody>{c.items.map((x, i) => <tr key={i} className="border-b align-top"><td className="py-1 pr-3">{x}</td><td className="w-20 whitespace-nowrap">☐ Checked</td></tr>)}</tbody></table></Box>)}
-    {p.itp.length > 0 && <div><H>Inspection & test plan – hold points</H><table className="mt-1 w-full text-xs"><thead><tr className="border-b text-left text-neutral-500"><th className="py-1">Stage</th><th>Check / hold point</th><th>By</th><th>Date</th></tr></thead>
-      <tbody>{p.itp.flatMap(s => s.checks.map((c, i) => <tr key={s.stage + i} className="border-b align-top"><td className="py-1 pr-2 font-semibold">{i === 0 ? s.stage : ""}</td><td className="pr-2">{c}</td><td className="w-24">________</td><td className="w-20">______</td></tr>))}</tbody></table></div>}
+    {p.itp.length > 0 && <div><H>Inspection & test plan – hold points</H><div className="mt-1"><ScrollX min={520}><table className="w-full text-xs"><thead><tr className="border-b text-left text-neutral-500"><th className="py-1">Stage</th><th>Check / hold point</th><th>By</th><th>Date</th></tr></thead>
+      <tbody>{p.itp.flatMap(s => s.checks.map((c, i) => <tr key={s.stage + i} className="border-b align-top"><td className="py-1 pr-2 font-semibold">{i === 0 ? s.stage : ""}</td><td className="pr-2">{c}</td><td className="w-24">________</td><td className="w-20">______</td></tr>))}</tbody></table></ScrollX></div></div>}
   </Page>,
   snagging: d => <Page d={d} title="Snagging list" subtitle="Agreed on the walk-round – both sides mark items done"><Blank rows={18} cols={["No.", "Room / area", "Item", "Raised by (us / client)", "Agreed fix", "Done – us", "Checked – client"]} /><Sign labels={["For the company", "Client"]} /></Page>,
   handover: (d, p) => <>

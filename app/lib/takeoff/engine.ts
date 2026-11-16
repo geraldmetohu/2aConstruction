@@ -29,7 +29,7 @@ export interface Ctx {
   input: TakeoffInput;
   rates: RateBook;
   /** Add a material / supporting / prelim line priced from the rate book. */
-  material(stage: string, rateKey: string, quantity: number, formula: string, description?: string): void;
+  material(stage: string, rateKey: string, quantity: number, formula: string, description?: string, opts?: { byClient?: boolean }): void;
   /**
    * Add labour from the labour price list: cost = quantity × price per unit
    * (minimum ½ day for small jobs); days from output per day. Returns the days.
@@ -81,7 +81,7 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     const touch = (stage: string, weight: number) => { current = stage; block.set(stage, (block.get(stage) ?? 0) + weight); };
     return {
       input, rates,
-      material(stage, rateKey, quantity, formula, description) {
+      material(stage, rateKey, quantity, formula, description, opts) {
         if (!rates.materials[rateKey]) { warnings.push(`Missing material rate "${rateKey}".`); return; }
         if (!(quantity > 0)) return;
         touch(st(stage), 1);
@@ -93,7 +93,7 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
         const rate = rates.materials[useKey];
         const r = resolve(useKey, rate.price, rate.confirmed);
         const buyable = rate.kind === "MATERIAL" || rate.kind === "SUPPORTING";
-        const clientSupplied = buyable && (input.labourOnly || (input.clientSupply[materialKey] ?? (input.finishesByClient && isClientFinish(useKey))));
+        const clientSupplied = buyable && (input.labourOnly || (input.clientSupply[materialKey] ?? (opts?.byClient ?? (input.finishesByClient && isClientFinish(useKey)))));
         const lineId = lineIdFor(area, stage, rateKey);
         const excluded = input.excluded[lineId] === true;
         const desc = useKey !== rateKey ? rate.name + (description && description !== rates.materials[rateKey].name ? ` – ${description.split(" – ").slice(1).join(" – ") || description}` : "") : description ?? rate.name;
@@ -157,7 +157,16 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     if (!p?.enabled) continue;
     const values = readValues(pkg, p.values);
     active.push({ pkg, values });
+    const from = lines.length, scopeFrom = scopeItems.length;
     pkg.build(makeCtx(pkg.label, pkg.short), values);
+    // Parts of the project the client is not having (e.g. structure only): those stages are left out.
+    const skip = skippedStages(p.values);
+    if (skip.size) {
+      const out = (stage: string) => skip.has(stage.slice(stage.indexOf(" · ") + 3));
+      for (let i = lines.length - 1; i >= from; i--) if (out(lines[i].stage)) lines.splice(i, 1);
+      for (let i = scopeItems.length - 1; i >= scopeFrom; i--) if (out(scopeItems[i].stage)) { const at = scope.indexOf(scopeItems[i].text); if (at >= 0) scope.splice(at, 1); scopeItems.splice(i, 1); }
+      assumptions.push(`${pkg.label}: priced for part of the project only – not included: ${[...skip].join(", ").toLowerCase()}.`);
+    }
     collectChoices(pkg.fields, values, values, "package", pkg.id, pkg.label);
   }
   // Each room is its own area; two rooms with the same name are kept apart ("Bedroom (2)").
@@ -246,6 +255,15 @@ export function calculateTakeoff(rawInput: unknown, prices: PriceTable = {}, rat
     for (const l of lines) if (l.area === ewi.pkg.label && l.vatPercent === undefined) l.vatPercent = 0;
     assumptions.push("The external wall insulation installation is zero-rated for VAT (energy-saving materials relief, available to 31 March 2027); other work is at the standard rate.");
     if (input.terms.startDate && input.terms.startDate > "2027-03-31") warnings.push("The 0% VAT relief for energy-saving materials is due to end on 31 March 2027 – check the VAT rate for work after that date.");
+  }
+  // Same relief for solar panels, batteries, insulation and heat pumps (not EV chargers, boilers or radiators on their own).
+  const energyLabel = workPackages.find(p => p.id === "energy")?.label, heatingLabel = workPackages.find(p => p.id === "heating")?.label;
+  const esm = (l: TakeoffLine) => (l.package === energyLabel && !/ · EV charging$/.test(l.stage)) || (l.package === heatingLabel && / · Heat pump$/.test(l.stage));
+  const esmLines = input.commercial.esmZeroRate && input.commercial.vatPercent > 0 ? lines.filter(l => esm(l) && l.vatPercent === undefined) : [];
+  if (esmLines.length) {
+    for (const l of esmLines) l.vatPercent = 0;
+    assumptions.push("Solar panels, batteries, insulation and heat pumps are zero-rated for VAT when installed in a home (energy-saving materials relief, available to 31 March 2027); other work is at the standard rate.");
+    if (input.terms.startDate && input.terms.startDate > "2027-03-31" && !ewi) warnings.push("The 0% VAT relief for energy-saving materials is due to end on 31 March 2027 – check the VAT rate for work after that date.");
   }
 
   const stages = summariseStages(lines);
@@ -441,3 +459,8 @@ export function customerTakeoff(result: TakeoffResult, input?: TakeoffInput) {
   };
 }
 export type CustomerTakeoff = ReturnType<typeof customerTakeoff>;
+
+/** Stages of a project left out of the price, stored in the project's values as `_skip` ("Plastering,Decoration"). */
+export function skippedStages(values: Record<string, unknown> | undefined): Set<string> {
+  return new Set(String(values?._skip ?? "").split(",").map(x => x.trim()).filter(Boolean));
+}

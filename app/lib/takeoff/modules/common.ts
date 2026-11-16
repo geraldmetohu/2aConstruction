@@ -228,15 +228,24 @@ export function skirting(ctx: Ctx, S: string, perimeter: number) {
 export interface ElecSpec {
   downlights?: number; pendants?: number; switches?: number; sockets?: number; spurs?: number; fanIsolators?: number;
   data?: number; tv?: number; cooker?: number; shaver?: number; outside?: number;
+  wallLights?: number; ledStrips?: number; dimmers?: number; usbSockets?: number; outdoorSockets?: number; extractFans?: number; smokeAlarms?: number;
 }
 type Cable = "cable_15" | "cable_25" | "cable_6" | "cable_data" | "cable_coax";
-export const elecItems: { key: keyof ElecSpec; label: string; one: string; mat: string; labour: string; cable: Cable; metres: number; box: boolean; fitting?: string }[] = [
+/** `decorative`: the light fitting itself, which clients often choose and buy themselves. */
+export const elecItems: { key: keyof ElecSpec; label: string; one: string; mat: string; labour: string; cable: Cable; metres: number; box: boolean; fitting?: string; decorative?: boolean }[] = [
   { key: "downlights", label: "recessed spotlights", one: "recessed spotlight", mat: "downlight", labour: "elec_downlight", cable: "cable_15", metres: 2, box: false },
-  { key: "pendants", label: "pendant light points", one: "pendant light point", mat: "ceiling_rose", labour: "elec_light_point", cable: "cable_15", metres: 5, box: false, fitting: "pendant_fitting" },
+  { key: "pendants", label: "pendant light points", one: "pendant light point", mat: "ceiling_rose", labour: "elec_light_point", cable: "cable_15", metres: 5, box: false, fitting: "pendant_fitting", decorative: true },
+  { key: "wallLights", label: "wall lights", one: "wall light", mat: "wall_light_point", labour: "elec_wall_light", cable: "cable_15", metres: 5, box: true, fitting: "wall_light_fitting", decorative: true },
+  { key: "ledStrips", label: "LED strip / under-cabinet lights", one: "LED strip / under-cabinet light", mat: "led_driver", labour: "elec_led_strip", cable: "cable_15", metres: 4, box: false, fitting: "led_strip", decorative: true },
   { key: "switches", label: "light switches", one: "light switch", mat: "light_switch", labour: "elec_switch", cable: "cable_15", metres: 4, box: true },
+  { key: "dimmers", label: "dimmer / smart switches", one: "dimmer / smart switch", mat: "dimmer_switch", labour: "elec_dimmer", cable: "cable_15", metres: 0, box: false },
   { key: "sockets", label: "double sockets", one: "double socket", mat: "socket_double", labour: "elec_socket", cable: "cable_25", metres: 6, box: true },
+  { key: "usbSockets", label: "USB double sockets", one: "USB double socket", mat: "socket_usb", labour: "elec_socket", cable: "cable_25", metres: 6, box: true },
+  { key: "outdoorSockets", label: "outdoor sockets", one: "outdoor socket", mat: "outdoor_socket", labour: "elec_outdoor_socket", cable: "cable_25", metres: 10, box: true },
   { key: "spurs", label: "fused spurs", one: "fused spur", mat: "fused_spur", labour: "elec_spur", cable: "cable_25", metres: 4, box: true },
   { key: "fanIsolators", label: "fan isolators", one: "fan isolator", mat: "fan_isolator", labour: "elec_isolator", cable: "cable_15", metres: 4, box: true },
+  { key: "extractFans", label: "extractor fans (new, through the wall)", one: "extractor fan (new, through the wall)", mat: "extractor_fan", labour: "elec_fan_fit", cable: "cable_15", metres: 5, box: true, fitting: "extract_duct_short" },
+  { key: "smokeAlarms", label: "mains smoke / heat alarms", one: "mains smoke / heat alarm", mat: "smoke_alarm", labour: "elec_smoke_alarm", cable: "cable_15", metres: 6, box: false },
   { key: "data", label: "data points", one: "data point", mat: "data_point", labour: "elec_data", cable: "cable_data", metres: 12, box: true },
   { key: "tv", label: "TV points", one: "TV point", mat: "tv_point", labour: "elec_data", cable: "cable_coax", metres: 12, box: true },
   { key: "cooker", label: "cooker circuits (45 A switch)", one: "cooker circuit (45 A switch)", mat: "cooker_switch", labour: "elec_cooker", cable: "cable_6", metres: 12, box: true },
@@ -251,7 +260,7 @@ export const elecSummary = (e: ElecSpec) => elecItems.filter(i => (e[i.key] ?? 0
  * Electrics item by item: accessory + back box + cable run + first & second fix labour.
  * A rewire also strips out the old wiring and fills the chases. New circuits (cooker) get an RCBO unless a new board is fitted.
  */
-export function electricsItems(ctx: Ctx, S: string, e: ElecSpec, opts: { label: string; rewire?: boolean }) {
+export function electricsItems(ctx: Ctx, S: string, e: ElecSpec, opts: { label: string; rewire?: boolean; fittingsByClient?: boolean }) {
   const total = elecTotal(e);
   if (total <= 0) return 0;
   const cables: Partial<Record<Cable, number>> = {};
@@ -260,7 +269,7 @@ export function electricsItems(ctx: Ctx, S: string, e: ElecSpec, opts: { label: 
     const n = Math.max(0, Math.round(e[it.key] ?? 0));
     if (!n) continue;
     ctx.material(S, it.mat, n, `${opts.label}: ${elecName(it, n)}`);
-    if (it.fitting) ctx.material(S, it.fitting, n, elecName(it, n));
+    if (it.fitting) ctx.material(S, it.fitting, n, elecName(it, n), undefined, it.decorative && opts.fittingsByClient !== undefined ? { byClient: opts.fittingsByClient } : undefined);
     ctx.labour(S, it.labour, n, `${opts.label}: ${elecName(it, n)}`);
     cables[it.cable] = (cables[it.cable] ?? 0) + n * it.metres;
     if (it.box) boxes += n;
@@ -275,6 +284,20 @@ export function electricsItems(ctx: Ctx, S: string, e: ElecSpec, opts: { label: 
   }
   if ((e.cooker ?? 0) > 0 && !newConsumerUnit(ctx.input)) ctx.material(S, "rcbo", e.cooker!, `${e.cooker} new circuit${e.cooker! > 1 ? "s" : ""} in the existing board`);
   return total;
+}
+
+/**
+ * Electric underfloor heating, complete: insulation boards, heating mat, programmable thermostat with its
+ * floor sensor probe, and the electrician's connection and commissioning. `share` is the heated part of the floor.
+ */
+export function electricUfh(ctx: Ctx, S: string, area: number, share = 0.8, label = "") {
+  if (area <= 0) return;
+  const heated = Math.ceil(area * share);
+  ctx.material(S, "ufh_insulation", Math.ceil(area), `${fmt(area)} m² floor`);
+  ctx.material(S, "ufh_mat", heated, `${fmt(area)} m² × ${Math.round(share * 100)}% heated (clear of units, WC & bath)`);
+  ctx.material(S, "ufh_thermostat", 1, `${label ? `${label}: ` : ""}1 thermostat with floor sensor`);
+  ctx.labour(S, "ufh_fit", heated, `${heated} m² mat`);
+  ctx.labour(S, "elec_ufh_connect", 1, "thermostat & floor sensor");
 }
 
 /** Radiators: radiator, valve pair, 15 mm flow & return (run × 2), 4 elbows, 2 tees, clips, drain-off, inhibitor top-up. */

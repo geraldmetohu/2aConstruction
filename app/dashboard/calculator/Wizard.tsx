@@ -96,7 +96,7 @@ export function ModePicker({ mode, onChange }: { mode: QuoteMode; onChange: (m: 
 
 /* ---------------------------------------------------------------- Whole home: what is included + rooms per floor */
 
-const HOME_PROJECTS = ["loft", "extension", "conversion", "roofing", "external", "demolition", "outbuilding", "garden", "cleaning"];
+const HOME_PROJECTS = ["loft", "extension", "conversion", "basement", "roofing", "external", "windows", "internal", "heating", "aircon", "energy", "damp", "demolition", "outbuilding", "garden", "cleaning"];
 const REFURB_AREAS: { id: string; label: string; floor: RoomInput["floor"]; types?: RoomInput["type"][] }[] = [
   { id: "GROUND", label: "Ground floor", floor: "GROUND" },
   { id: "FIRST", label: "First floor", floor: "FIRST" },
@@ -181,7 +181,14 @@ type Pick = { pkg: string; label: string; match?: [string, string, string]; valu
 const PROJECT_GROUPS: { title: string; items: Pick[] }[] = [
   { title: "Garage conversion", items: conversionUseOptions.map(([k, v]) => ({ pkg: "conversion", label: `Garage → ${v.toLowerCase()}`, match: ["use", k, "OFFICE"], values: { use: k } })) },
   { title: "Garden buildings", items: outbuildingTypeOptions.map(([k, v]) => ({ pkg: "outbuilding", label: v, match: ["type", k, "GARDEN_ROOM"], values: { type: k, ...(k === "SUMMER_HOUSE" || k === "SHED" ? { build: "KIT", insulated: k !== "SHED" } : { build: "BESPOKE", insulated: true }) } })) },
-  { title: "House", items: [{ pkg: "loft", label: "Loft conversion" }, { pkg: "extension", label: "Extension" }, { pkg: "roofing", label: "Re-roof" }, { pkg: "demolition", label: "Demolition / strip out" }] },
+  { title: "House", items: [{ pkg: "loft", label: "Loft conversion" }, { pkg: "extension", label: "Extension" }, { pkg: "roofing", label: "Re-roof" }, { pkg: "demolition", label: "Demolition / strip out" }, { pkg: "basement", label: "Basement / cellar" }] },
+  { title: "Heating & energy", items: [
+    { pkg: "heating", label: "Boiler & heating", match: ["boiler", "COMBI_SWAP", "COMBI_SWAP"], values: { boiler: "COMBI_SWAP" } },
+    { pkg: "heating", label: "Air source heat pump", match: ["boiler", "NONE", "COMBI_SWAP"], values: { boiler: "NONE", heatPump: true, controls: false } },
+    { pkg: "aircon", label: "Air conditioning" },
+    { pkg: "energy", label: "Solar, battery, EV & insulation" },
+  ] },
+  { title: "Repairs & alterations", items: [{ pkg: "windows", label: "Windows & doors" }, { pkg: "internal", label: "Stairs, layout & fire safety" }, { pkg: "damp", label: "Damp & structural repairs" }] },
   { title: "Outside", items: [{ pkg: "external", label: "Render / cladding / EWI" }, { pkg: "garden", label: "Garden & landscaping" }, { pkg: "cleaning", label: "Exterior cleaning" }] },
 ];
 
@@ -215,6 +222,8 @@ export const packageTrades: Record<string, Trade[]> = {
   conversion: ["GENERAL_BUILDER", "BRICKLAYER", "CARPENTER", "PLASTERER", "ELECTRICIAN", "PLUMBER"],
   roofing: ["ROOFER", "CARPENTER"], external: ["RENDERER", "DECORATOR", "BRICKLAYER"], demolition: ["LABOURER", "GENERAL_BUILDER"],
   outbuilding: ["CARPENTER", "GENERAL_BUILDER", "ELECTRICIAN", "GROUNDWORKER"], garden: ["LANDSCAPER", "GROUNDWORKER", "CARPENTER", "BRICKLAYER"], cleaning: ["CLEANER"],
+  basement: ["GROUNDWORKER", "GENERAL_BUILDER", "BRICKLAYER"], damp: ["GENERAL_BUILDER", "PLASTERER", "BRICKLAYER"], internal: ["CARPENTER", "GENERAL_BUILDER", "ELECTRICIAN", "PLASTERER"],
+  windows: ["CARPENTER", "GENERAL_BUILDER"], heating: ["PLUMBER", "ELECTRICIAN"], aircon: ["ELECTRICIAN"], energy: ["ELECTRICIAN", "ROOFER", "LABOURER"],
 };
 /** Rooms-based services for each trade. */
 const tradeServices: Partial<Record<Trade, string>> = {
@@ -304,4 +313,120 @@ export function ReviewCard({ result, missing, onSave, canSave, saving, saved, gr
 }
 function Li({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return <li className="flex items-start gap-2"><CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${ok ? "text-emerald-600" : "text-neutral-300"}`} /><span className={ok ? "" : "text-amber-800"}>{children}</span></li>;
+}
+
+/* ---------------------------------------------------------------- Quick start (site visit) */
+
+type QuickJob = { id: string; label: string; hint: string; group: "Home" | "Rooms" | "Projects" | "Small"; pkg?: string; values?: Record<string, string | boolean | number>;
+  /** Rooms this job adds, for n of them. */ rooms?: (n: number) => RoomInput[]; count?: [string, number, number] };
+
+const qRoom = (type: RoomInput["type"], works: Record<string, string | number | boolean>, extra: Partial<RoomInput> = {}, name?: string): RoomInput =>
+  ({ ...newRoom(type, name), ...QUICK_SIZE[type], ...extra, works });
+const QUICK_SIZE: Partial<Record<RoomInput["type"], Partial<RoomInput>>> = {
+  KITCHEN: { length: 4, width: 3.5 }, BATHROOM: { length: 2.5, width: 2, floor: "FIRST" }, ENSUITE: { length: 2.2, width: 1.6, floor: "FIRST" }, WC: { length: 1.6, width: 1 },
+  BEDROOM: { length: 3.6, width: 3.2, floor: "FIRST" }, LIVING: { length: 4.5, width: 3.8 }, HALL: { length: 4, width: 1.2 }, LANDING: { length: 3, width: 1.2, floor: "FIRST" },
+  STAIRS: { length: 4, width: 0.9, height: 4.5, floor: "FIRST" }, DINING: { length: 3.8, width: 3.4 },
+};
+const REFRESH = { walls: "MAKE_GOOD", electrics: "ADD" };
+const many = (n: number, f: (i: number) => RoomInput) => Array.from({ length: n }, (_, i) => f(i));
+
+export const QUICK_JOBS: QuickJob[] = [
+  { id: "home", group: "Home", label: "Whole house refurbishment", hint: "Every room: plaster, electrics, decorating, kitchen & bathroom", count: ["Bedrooms", 3, 6],
+    rooms: n => [qRoom("LIVING", REFRESH), qRoom("KITCHEN", { kitchenRefit: true }), qRoom("HALL", REFRESH), qRoom("STAIRS", { walls: "MAKE_GOOD" }), qRoom("LANDING", REFRESH),
+      ...many(n, i => qRoom("BEDROOM", REFRESH, {}, n > 1 ? `Bedroom ${i + 1}` : "Bedroom")), qRoom("BATHROOM", { bathroomRefit: true })] },
+  { id: "kitchen", group: "Rooms", label: "Kitchen fit", hint: "Units, worktops, plumbing, electrics, tiling, floor", rooms: () => [qRoom("KITCHEN", { kitchenRefit: true })] },
+  { id: "bathroom", group: "Rooms", label: "Bathroom refit", hint: "Suite, tiling, plumbing, fan, lights", count: ["Bathrooms", 1, 4],
+    rooms: n => many(n, i => qRoom("BATHROOM", { bathroomRefit: true }, {}, n > 1 ? `Bathroom ${i + 1}` : "Bathroom")) },
+  { id: "decorate", group: "Rooms", label: "Decorate rooms", hint: "Fill, paint walls, ceilings & woodwork", count: ["Rooms", 1, 12],
+    rooms: n => many(n, i => qRoom("LIVING", { walls: "MAKE_GOOD" }, { floor: "GROUND" }, `Decorate room ${i + 1}`)) },
+  { id: "makeover", group: "Rooms", label: "Room refurbishment", hint: "Skim, new sockets & lights, flooring, decorate", count: ["Rooms", 1, 12],
+    rooms: n => many(n, i => qRoom("BEDROOM", { walls: "SKIM", ceiling: "SKIM", electrics: "ADD", flooring: "LAMINATE" }, { floor: "GROUND" }, `Room ${i + 1}`)) },
+  { id: "rewire", group: "Rooms", label: "Rewire", hint: "New wiring, sockets, lights & certificate", count: ["Rooms", 1, 14],
+    rooms: n => many(n, i => qRoom("BEDROOM", { electrics: "REWIRE", walls: "MAKE_GOOD" }, { floor: "GROUND" }, `Rewire room ${i + 1}`)) },
+  { id: "loft", group: "Projects", label: "Loft conversion", hint: "Dormer, bedroom & en-suite", pkg: "loft" },
+  { id: "extension", group: "Projects", label: "Extension", hint: "Rear, side return or wraparound", pkg: "extension" },
+  { id: "conversion", group: "Projects", label: "Garage conversion", hint: "Into a room, office or annexe", pkg: "conversion" },
+  { id: "basement", group: "Projects", label: "Basement / cellar", hint: "Waterproofed, ready for rooms", pkg: "basement" },
+  { id: "heating", group: "Projects", label: "Boiler & heating", hint: "Combi, radiators, heat pump", pkg: "heating" },
+  { id: "aircon", group: "Projects", label: "Air conditioning", hint: "Wall or cassette units, heat & cool", pkg: "aircon" },
+  { id: "energy", group: "Projects", label: "Solar, EV & insulation", hint: "Panels, battery, charger, loft", pkg: "energy", values: { panels: 10 } },
+  { id: "windows", group: "Projects", label: "Windows & doors", hint: "Windows, front & bi-fold doors", pkg: "windows", values: { windows: 6 } },
+  { id: "roofing", group: "Projects", label: "Roof", hint: "Re-roof, flat roof, repairs", pkg: "roofing" },
+  { id: "external", group: "Projects", label: "Render / outside walls", hint: "Render, EWI, masonry paint", pkg: "external" },
+  { id: "damp", group: "Projects", label: "Damp & repairs", hint: "DPC, cracks, lintels, repointing", pkg: "damp", values: { dpc: 10, replaster: 10 } },
+  { id: "internal", group: "Projects", label: "Stairs & fire safety", hint: "Staircase, walls, fire doors, alarms", pkg: "internal", values: { stairs: "REPLACE" } },
+  { id: "garden", group: "Projects", label: "Garden & landscaping", hint: "Patio, fencing, turf, drive", pkg: "garden", values: { patio: 20 } },
+  { id: "outbuilding", group: "Projects", label: "Garden room", hint: "Office, gym, summer house", pkg: "outbuilding" },
+  { id: "small", group: "Small", label: "Small jobs & repairs", hint: "Fix a door, a leak, a few sockets – price by hand", },
+];
+
+export type QuickTarget = "floors" | "rooms" | "projects" | "extras";
+
+/** Set up a quote from the quick-start picks: rooms with standard sizes and works, projects switched on, the mode and the step to go to. */
+export function applyQuick(input: TakeoffInput, picked: Record<string, number>, notes: string): [TakeoffInput, QuickTarget] {
+  const jobs = QUICK_JOBS.filter(j => j.id in picked);
+  const home = "home" in picked;
+  // A whole house already has a kitchen and one bathroom; extra bathrooms are added on top.
+  const rooms = jobs.flatMap(j => !j.rooms ? [] : home && j.id === "kitchen" ? [] : home && j.id === "bathroom" ? j.rooms(picked[j.id] - 1) : j.rooms(picked[j.id]));
+  // A brand-new quote starts with a default project switched on; the quick start replaces it with what was picked.
+  const untouched = !input.rooms.length && !input.customItems.length && Object.values(input.packages).every(p => !p.enabled || !Object.keys(p.values ?? {}).length);
+  const packages = untouched ? {} as TakeoffInput["packages"] : { ...input.packages };
+  for (const j of jobs) if (j.pkg) packages[j.pkg] = { enabled: true, values: { ...(packages[j.pkg]?.values ?? {}), ...(j.values ?? {}) } };
+  const anyRooms = rooms.length > 0, anyPkg = jobs.some(j => j.pkg);
+  const mode: QuoteMode = home ? "WHOLE_HOME" : anyRooms ? "ROOMS" : anyPkg ? "PROJECT" : input.mode === "WHOLE_HOME" ? "ROOMS" : input.mode;
+  // Room names are the area names on the quote, so they must be unique.
+  const used = new Set(input.rooms.map(r => r.name));
+  for (const r of rooms) { let name = r.name, k = 2; while (used.has(name)) name = `${r.name.replace(/ \d+$/, "")} ${k++}`; r.name = name; used.add(name); }
+  const next: TakeoffInput = { ...input, mode, packages, rooms: [...input.rooms, ...rooms], property: { ...input.property, notes: notes.trim(), ...(home ? { bedrooms: picked.home } : {}) } };
+  return [next, home ? "floors" : anyRooms ? "rooms" : anyPkg ? "projects" : "extras"];
+}
+
+/** One screen for a site visit: tap what the client wants, then everything is set up with standard specs to adjust. */
+export function QuickStart({ input, onApply }: { input: TakeoffInput; onApply: (next: TakeoffInput, go: QuickTarget) => void }) {
+  const [picked, setPicked] = useState<Record<string, number>>({});
+  const [notes, setNotes] = useState(input.property.notes);
+  const toggle = (j: QuickJob) => setPicked(p => { const n = { ...p }; if (j.id in n) delete n[j.id]; else n[j.id] = j.count?.[1] ?? 1; return n; });
+  const jobs = QUICK_JOBS.filter(j => j.id in picked);
+  const apply = () => { const [next, go] = applyQuick(input, picked, notes); onApply(next, go); setPicked({}); };
+  const groups: [QuickJob["group"], string][] = [["Home", "Whole home"], ["Rooms", "Rooms"], ["Projects", "Projects"], ["Small", "Anything else"]];
+  return (
+    <section className="space-y-4 overflow-hidden rounded-2xl border-2 border-amber-400 bg-gradient-to-br from-amber-50 via-white to-white p-4">
+      <div>
+        <h2 className="flex items-center gap-2 text-lg font-black text-[#0d3b72]"><span aria-hidden className="h-5 w-1.5 rounded-full bg-amber-500" />Quick start – what does the client want?</h2>
+        <p className="mt-0.5 text-xs text-neutral-600">Tap everything that applies. We set it up with standard sizes and specs – you just adjust what's different.</p>
+      </div>
+      {groups.map(([g, title]) => (
+        <div key={g}>
+          <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">{title}</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {QUICK_JOBS.filter(j => j.group === g).map(j => {
+              const on = j.id in picked;
+              return (
+                <div key={j.id} className={`relative rounded-xl border p-2.5 transition ${on ? "border-amber-500 bg-amber-500/10 ring-2 ring-amber-300" : "bg-white hover:border-amber-400"}`}>
+                  <button onClick={() => toggle(j)} className="block w-full text-left">
+                    <span className="flex items-start justify-between gap-1 text-[13px] font-bold leading-tight text-neutral-900">{j.label}{on && <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-600" />}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-neutral-500">{j.hint}</span>
+                  </button>
+                  {on && j.count && (
+                    <div className="mt-2 flex items-center justify-between gap-1 rounded-lg bg-white px-1.5 py-1 text-xs">
+                      <span className="font-semibold text-neutral-600">{j.count[0]}</span>
+                      <span className="flex items-center gap-1">
+                        <button onClick={() => setPicked(p => ({ ...p, [j.id]: Math.max(1, p[j.id] - 1) }))} className="h-7 w-7 rounded-full border text-base font-bold leading-none" aria-label={`Fewer ${j.count[0].toLowerCase()}`}>−</button>
+                        <span className="w-5 text-center font-black tabular-nums">{picked[j.id]}</span>
+                        <button onClick={() => setPicked(p => ({ ...p, [j.id]: Math.min(j.count![2], p[j.id] + 1) }))} className="h-7 w-7 rounded-full border text-base font-bold leading-none" aria-label={`More ${j.count[0].toLowerCase()}`}>+</button>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <label className="block text-xs font-semibold text-neutral-700">Brief description from the client (optional – shown on the quote)
+        <textarea value={notes} onChange={e => setNotes(e.target.value.slice(0, 2000))} rows={2} className={field} placeholder="e.g. Refresh the house before moving in; new kitchen and bathroom, rest decorated" /></label>
+      <button disabled={!jobs.length && notes.trim() === input.property.notes} onClick={apply} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-neutral-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+        {jobs.length ? `Set up ${jobs.length} job${jobs.length === 1 ? "" : "s"} →` : "Save description"}</button>
+    </section>
+  );
 }

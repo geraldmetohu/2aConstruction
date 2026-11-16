@@ -279,5 +279,5 @@ export function buildSitePack(a: PackArgs): SitePack {
 /** Work that normally needs Building Control (or a competent person scheme). */
 function needsBC(input: TakeoffInput) {
   const on = (id: string) => !!input.packages[id]?.enabled;
-  return on("loft") || on("extension") || on("conversion") || on("demolition") || (on("outbuilding") && input.packages.outbuilding?.values.habitable === true) || input.prelims.buildingControl && (on("roofing") || on("external"));
+  return on("loft") || on("extension") || on("conversion") || on("demolition") || on("basement") || on("heating") || (on("internal") && (input.packages.internal?.values.stairs !== "NONE" || Number(input.packages.internal?.values.doorways) > 0)) || (on("outbuilding") && input.packages.outbuilding?.values.habitable === true) || input.prelims.buildingControl && (on("roofing") || on("external"));
 }

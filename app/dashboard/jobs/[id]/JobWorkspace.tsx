@@ -86,8 +86,8 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
       </header>
       {j.status !== "ACCEPTED" && <p className="rounded-lg bg-sky-50 px-4 py-2 text-sm text-sky-900">This quote is not accepted yet ({j.status.toLowerCase()}). You can already add site photos; the client sees the project panel once they accept.</p>}
       {msg && <p className={`rounded-lg px-4 py-2 text-sm ${msg.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{msg.text}</p>}
-      <nav className="flex flex-wrap gap-1 rounded-2xl bg-neutral-100 p-1 text-sm font-semibold">
-        {TABS.map(([k, l, Icon]) => <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 rounded-xl px-3 py-2 ${tab === k ? "bg-white shadow" : "text-neutral-600"}`}><Icon className="h-4 w-4" />{l}
+      <nav className="flex gap-1 overflow-x-auto rounded-2xl bg-neutral-100 p-1 text-sm font-semibold [scrollbar-width:none] md:flex-wrap">
+        {TABS.map(([k, l, Icon]) => <button key={k} onClick={() => setTab(k)} className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-2 ${tab === k ? "bg-white shadow" : "text-neutral-600"}`}><Icon className="h-4 w-4" />{l}
           {k === "client" && openRequests > 0 && <span className="rounded-full bg-amber-500 px-1.5 text-[10px] text-white">{openRequests}</span>}
           {k === "money" && j.money.reported > 0 && <span className="rounded-full bg-red-500 px-1.5 text-[10px] text-white">!</span>}
           {k === "orders" && j.toOrder.some(o => !o.ordered) && <span className="rounded-full bg-red-500 px-1.5 text-[10px] text-white">{j.toOrder.filter(o => !o.ordered).length}</span>}</button>)}
@@ -336,13 +336,13 @@ function MoneyTab({ j, act, busy }: P) {
   const [exp, setExp] = useState({ category: "MATERIALS", description: "", supplier: "", amount: "", spentOn: today(), workerId: "" });
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {([["Contract (inc VAT)", f.contract], ["Received", f.received], ["Outstanding", j.money.outstanding], ["Planned cost", f.plannedCost], ["Spent so far", f.spent], ["Profit so far (ex VAT)", f.profitSoFar]] as const).map(([l, v]) =>
-          <div key={l} className="rounded-xl border bg-white p-3"><p className="text-xs text-neutral-500">{l}</p><p className={`text-lg font-black ${l.startsWith("Profit") && v < 0 ? "text-red-700" : ""}`}>{gbp(v)}</p></div>)}
+          <div key={l} className="min-w-0 rounded-xl border bg-white p-3"><p className="truncate text-xs text-neutral-500">{l}</p><p className={`text-base font-black tabular-nums [overflow-wrap:anywhere] sm:text-lg ${l.startsWith("Profit") && v < 0 ? "text-red-700" : ""}`}>{gbp(v)}</p></div>)}
       </div>
       <Card title="Payment schedule (client)">
-        <table className="w-full text-sm [&_td]:pr-3 [&_th]:pr-3"><thead className="text-left text-xs text-neutral-500"><tr><th>#</th><th>Payment</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Paid</th><th className="text-right">Balance</th><th></th></tr></thead>
-          <tbody>{j.money.rows.map(r => <tr key={r.n} className="border-t"><td className="py-1.5">{r.n}</td><td>{r.label}<span className="block text-xs text-neutral-500">{r.when}</span></td><td className="whitespace-nowrap">{r.date ?? "—"}</td><td className="text-right">{gbp(r.amount)}</td><td className="text-right">{gbp(r.paid)}</td><td className="text-right font-semibold">{gbp(r.balance)}</td><td className="pl-2"><span className={`rounded px-1.5 text-xs font-semibold ${stateTone[r.state]}`}>{r.state.replace("_", " ").toLowerCase()}</span></td></tr>)}</tbody></table>
+        <div className="-mx-1 overflow-x-auto px-1"><table className="w-full min-w-[540px] text-sm [&_td]:pr-3 [&_th]:pr-3"><thead className="text-left text-xs text-neutral-500"><tr><th>#</th><th>Payment</th><th>Due</th><th className="text-right">Amount</th><th className="text-right">Paid</th><th className="text-right">Balance</th><th></th></tr></thead>
+          <tbody>{j.money.rows.map(r => <tr key={r.n} className="border-t"><td className="py-1.5">{r.n}</td><td>{r.label}<span className="block text-xs text-neutral-500">{r.when}</span></td><td className="whitespace-nowrap">{r.date ?? "—"}</td><td className="text-right">{gbp(r.amount)}</td><td className="text-right">{gbp(r.paid)}</td><td className="text-right font-semibold">{gbp(r.balance)}</td><td className="pl-2"><span className={`rounded px-1.5 text-xs font-semibold ${stateTone[r.state]}`}>{r.state.replace("_", " ").toLowerCase()}</span></td></tr>)}</tbody></table></div>
       </Card>
       {j.portalOn && j.status === "ACCEPTED" && <InvoicesCard j={j} act={act} busy={busy} />}
       <div className="grid gap-5 xl:grid-cols-2">

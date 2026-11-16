@@ -6,7 +6,7 @@ import type { Ctx } from "../engine";
 import { claddingOptions, cladNewWall, newRenderOptions, renderNewWall } from "./external";
 import { brickOptions } from "./extension-options";
 import { buildKitchen, kitchenFields } from "./kitchen";
-import { bearingFields, bearings, boardAndSkim, elecSummary, electricsItems, fasciaSoffit, fitWindows, flooring, flooringOptions, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting } from "./common";
+import { bearingFields, bearings, boardAndSkim, electricUfh, elecSummary, electricsItems, fasciaSoffit, fitWindows, flooring, flooringOptions, paint, paintSystemOptions, radiators, rainwater, rooflineFields, skirting } from "./common";
 
 const rooflightOptions: [string, string][] = [["rooflight_600", "600 × 600 flat"], ["rooflight_800", "800 × 800 flat"], ["rooflight_1000", "1000 × 1000 flat"], ["rooflight_1000x1500", "1000 × 1500 flat"], ["rooflight_1000x2000", "1000 × 2000 flat"], ["lantern_2000x1000", "Lantern 2000 × 1000"], ["lantern_3000x1000", "Lantern 3000 × 1000"], ["lantern_3000x1500", "Lantern 3000 × 1500"]];
 
@@ -431,8 +431,7 @@ export const extensionPackage: WorkPackage = {
       ctx.labour(F, "heating_extend", 1, "Connect UFH to the heating system");
       if (screedType === "SAND_CEMENT" || screedType === "NONE") ctx.assume("Wet underfloor heating works best in a liquid screed; with sand & cement allow longer drying before floor finishes.");
     } else if (ufh) {
-      ctx.material(F, "ufh_mat", Math.ceil(A * 0.85), `${fmt(A)} m² × 85% heated`);
-      ctx.labour(F, "ufh_fit", A * 0.85);
+      electricUfh(ctx, F, A, 0.85);
     } else { ctx.labour(F, "heating_extend", 1, "Extend heating"); radiators(ctx, F, num(v, "radiators")); }
     if (dbl) radiators(ctx, F, num(v, "upperRadiators"));
 

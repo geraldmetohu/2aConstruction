@@ -1,7 +1,7 @@
 import {
   FileSignature, Hammer,
   Activity, BookUser, Calculator, Columns2, FileText, Film, FolderKanban, HardHat,
-  FolderOpen, Image as ImageIcon, Images, LayoutDashboard, Package, Settings, SlidersHorizontal, Tag, Users, type LucideIcon,
+  FolderOpen, Image as ImageIcon, Images, LayoutDashboard, Package, PoundSterling, Settings, ShieldCheck, SlidersHorizontal, Tag, Users, type LucideIcon,
 } from "lucide-react";
 
 // Dashboard navigation, shared by the sidebar (client) and the dashboard home page (server).
@@ -15,6 +15,7 @@ export const navSections: NavSection[] = [
     links: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { name: "Operations", href: "/dashboard/operations", icon: Activity, hint: "Quotes, projects and money at a glance" },
+      { name: "Finance", href: "/dashboard/finance", icon: PoundSterling, hint: "Job & company costs, bank, cash, CIS, VAT, year end" },
     ],
   },
   {
@@ -25,6 +26,7 @@ export const navSections: NavSection[] = [
       { name: "Labour & material rates", href: "/dashboard/rates", icon: SlidersHorizontal, hint: "Your standard prices per job and material" },
       { name: "Supplier prices", href: "/dashboard/supplier-prices", icon: Tag, hint: "Monthly merchant prices, price lists" },
       { name: "Company & documents", href: "/dashboard/company", icon: FileSignature, hint: "Details on quotes, contracts & H&S documents" },
+      { name: "ISO & tender documents", href: "/dashboard/compliance", icon: ShieldCheck, hint: "ISO 9001 / 14001 / 45001 system, policies, tender pack" },
       { name: "Catalogue quotes", href: "/dashboard/quotes", icon: FileText, hint: "Older catalogue-based quotes" },
       { name: "Price catalogue", href: "/dashboard/items", icon: Package, hint: "Materials, labour and prices" },
     ],

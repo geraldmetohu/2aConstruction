@@ -3,11 +3,11 @@ import { bool, num, readValues, str, type Field, type Values } from "../package"
 import type { RoomInput } from "../schema";
 import { fmt, qty2 } from "../util";
 import { buildBathroom } from "./bathroom";
-import { buildKitchen, fitByOptions } from "./kitchen";
+import { buildKitchen, fitByOptions, kitchenScopeOptions, type KitchenScope } from "./kitchen";
 import { pipeOptions, plumbFixtures, type PipeSystem } from "./plumbing";
 import type { ElecSpec } from "./common";
 import {
-  boardAndSkim, bondAndSkim, coatOptions, doorConditionOptions, doorPartsFor, elecItems, elecSummary, electricsItems, flooring, flooringOptions, gradeOptions, makeGood, newDoors, paint, paintSystemOptions,
+  boardAndSkim, bondAndSkim, coatOptions, doorConditionOptions, doorPartsFor, electricUfh, elecItems, elecSummary, electricsItems, flooring, flooringOptions, gradeOptions, makeGood, newDoors, paint, paintSystemOptions,
   fitWindows, radiators, skim, skirting, stripOut, tileOptions,
 } from "./common";
 
@@ -38,10 +38,14 @@ const elecOn: Field["when"] = [{ any: [{ key: "electrics", not: "NONE" }, { key:
 const elecLabels: Record<string, string> = {
   downlights: "Recessed spotlights", pendants: "Pendant light points", switches: "Light switches", sockets: "Double sockets", spurs: "Fused spurs",
   fanIsolators: "Fan isolators (extractor)", data: "Data points", tv: "TV points", cooker: "Cooker circuit (45 A)", shaver: "Shaver socket", outside: "Outside lights",
+  wallLights: "Wall lights", ledStrips: "LED strip / under-cabinet lights", dimmers: "Dimmer / smart switches", usbSockets: "USB double sockets", outdoorSockets: "Outdoor sockets",
+  extractFans: "New extractor fans (through the wall)", smokeAlarms: "Mains smoke / heat alarms",
 };
 
 /** What can be done in a room. `roomType` is available to conditions. */
 export const roomFields: Field[] = [
+  // Picked with the "Jobs in this room" buttons; comma list of ROOM_JOBS ids ("" = every job is open).
+  { key: "jobs", label: "Jobs in this room", type: "text", default: "", group: "Jobs" },
   { key: "strip", label: "Strip out", type: "select", default: "NONE", group: "Strip out", options: [["NONE", "Nothing to strip"], ["FLOORING", "Old flooring"], ["FULL", "Flooring, skirting & fittings"]] },
 
   { key: "oldTiles", label: "Old tiles to remove", type: "number", unit: "m²", default: 0, min: 0, max: 200, group: "Strip out" },
@@ -85,7 +89,10 @@ export const roomFields: Field[] = [
 
   { key: "electrics", label: "Electrics", type: "select", default: "NONE", group: "Electrics & heating", public: true, hint: "Items below start from typical numbers for this room – change any count", options: [["NONE", "No electrical work"], ["ADD", "New items as listed"], ["REWIRE", "Full rewire (all items listed)"]] },
   ...elecItems.map((i): Field => ({ key: i.key, label: elecLabels[i.key], type: "int", default: 0, min: 0, max: 40, group: "Electrics & heating", when: elecOn })),
+  { key: "fittingsBy", label: "Light fittings (pendants, wall lights, LED strips)", type: "select", default: "CLIENT", group: "Electrics & heating", when: elecOn,
+    hint: "Clients usually choose their own – we wire and fit them", options: [["CLIENT", "Client buys – we fit"], ["US", "We supply standard fittings"]] },
   { key: "newRadiators", label: "New radiators", type: "int", default: 0, min: 0, max: 6, group: "Electrics & heating" },
+  yesNo("floorHeating", "Electric underfloor heating (mat, insulation, thermostat & floor sensor)", false, "Electrics & heating", { when: [{ key: "bathroomRefit", not: true }] }),
 
   { key: "newDoors", label: "New doors", type: "int", default: 0, min: 0, max: 6, group: "Doors & windows" },
   { key: "doorType", label: "Door style", type: "select", default: "door_standard", clientChoice: true, group: "Doors & windows", options: [["door_standard", "Standard"], ["door_fire", "Fire door FD30"], ["door_premium", "Premium"]], when: [{ key: "newDoors", gt: 0 }] },
@@ -106,6 +113,7 @@ export const roomFields: Field[] = [
   { key: "kitchenFloor", label: "Kitchen flooring", type: "select", default: "LVT", options: flooringOptions, clientChoice: true, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
   yesNo("washingMachine", "Washing machine point", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
   yesNo("dishwasher", "Dishwasher point", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
+  { key: "kitchenScope", label: "Kitchen work", type: "select", default: "FULL", options: kitchenScopeOptions, public: true, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
   { key: "kitchenFitBy", label: "Who fits the kitchen", type: "select", default: "US", options: fitByOptions, group: "Kitchen", when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] },
   yesNo("hobCircuit", "New hob / cooker circuit (10 mm² cable, 45 A switch)", false, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
   yesNo("hood", "Cooker hood ducted outside", true, "Kitchen", { when: [{ key: "roomType", in: ["KITCHEN"] }, { key: "kitchenRefit", is: true }] }),
@@ -140,7 +148,31 @@ export function roomValues(room: RoomInput): Values {
   const v = readValues({ fields: roomFields }, { ...roomTypeDefaults(room.type), ...room.works });
   if (room.type !== "KITCHEN") v.kitchenRefit = false;
   if (!WET.includes(room.type)) v.bathroomRefit = false;
+  // Only the jobs the client asked for: everything else in the room is switched off.
+  const jobs = roomJobs(v);
+  if (jobs) for (const j of ROOM_JOBS) if (!jobs.includes(j.id)) Object.assign(v, j.off);
   return v;
+}
+
+/** The trades / processes in a room. Picking some of them prices only those; `on` is what a job starts with when it is picked. */
+export const ROOM_JOBS: { id: string; label: string; groups: string[]; off: Values; on?: Values; types?: RoomInput["type"][] }[] = [
+  { id: "STRIP", label: "Strip out", groups: ["Strip out"], off: { strip: "NONE", oldTiles: 0 }, on: { strip: "FLOORING" } },
+  { id: "PLASTER", label: "Plastering", groups: ["Plastering"], off: { walls: "NONE", ceiling: "NONE", coving: false }, on: { walls: "SKIM", ceiling: "SKIM" } },
+  { id: "ELECTRICS", label: "Electrics", groups: ["Electrics & heating"], off: { electrics: "NONE" }, on: { electrics: "ADD" } },
+  { id: "HEATING", label: "Radiators / UFH", groups: ["Electrics & heating"], off: { newRadiators: 0, floorHeating: false }, on: { newRadiators: 1 } },
+  { id: "PLUMBING", label: "Plumbing", groups: ["Plumbing"], off: { utilitySink: false, utilityWasher: false, boilerMove: false } },
+  { id: "KITCHEN", label: "Kitchen", groups: ["Kitchen"], off: { kitchenRefit: false, boilerMove: false }, on: { kitchenRefit: true }, types: ["KITCHEN"] },
+  { id: "BATHROOM", label: "Bathroom", groups: ["Bathroom"], off: { bathroomRefit: false }, on: { bathroomRefit: true }, types: ["BATHROOM", "ENSUITE", "WC"] },
+  { id: "FLOOR", label: "Flooring", groups: ["Floor & joinery"], off: { flooring: "NONE", kitchenFloor: "NONE" }, on: { flooring: "LAMINATE" } },
+  { id: "JOINERY", label: "Skirting & doors", groups: ["Floor & joinery", "Doors & windows"], off: { newSkirting: false, refitSkirting: false, refitArchitraves: false, newDoors: 0, refurbDoors: 0 }, on: { newSkirting: true } },
+  { id: "WINDOWS", label: "Windows", groups: ["Doors & windows"], off: { newWindows: 0 }, on: { newWindows: 1 } },
+  { id: "PAINT", label: "Painting", groups: ["Painting"], off: { paintCeiling: false, paintWalls: false, paintSkirting: false, paintDoors: false, paintWindows: false, paintStairs: false, paintRadiators: false } },
+];
+
+/** The picked jobs, or null when the room is open to every job. */
+export function roomJobs(v: Values): string[] | null {
+  const j = String(v.jobs ?? "").split(",").map(x => x.trim()).filter(Boolean);
+  return j.length ? j : null;
 }
 
 /** Room geometry used by every formula. */
@@ -168,7 +200,8 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
   if (bool(v, "kitchenRefit")) {
     buildKitchen(ctx, s => s, { length: room.length, width: room.width, height: room.height, baseRun: num(v, "baseRun"), wallRun: num(v, "wallRun"),
       tallUnits: num(v, "tallUnits"), island: num(v, "island"), grade: str(v, "kitchenGrade"), worktop: str(v, "worktop"), appliances: num(v, "appliances"),
-      splashback: true, points: 0, flooring: str(v, "kitchenFloor"), strip: str(v, "strip") !== "NONE", decorate: true, splashbackTile: str(v, "splashbackTile"),
+      splashback: true, points: 0, flooring: str(v, "kitchenFloor"), strip: str(v, "strip") !== "NONE", decorate: !roomJobs(v) || roomJobs(v)!.some(j => j === "PAINT" || j === "PLASTER"), splashbackTile: str(v, "splashbackTile"),
+      scope: (str(v, "kitchenScope") || "FULL") as KitchenScope,
       washingMachine: bool(v, "washingMachine"), dishwasher: bool(v, "dishwasher"), hood: bool(v, "hood"), supplyRun: num(v, "sinkSupplyRun"), wasteRun: num(v, "sinkWasteRun"), pipe: str(v, "pipe") as PipeSystem,
       fitBy: (str(v, "kitchenFitBy") || "US") as "US", hob: bool(v, "hobCircuit"), hoodType: str(v, "hoodType") as "WALL" }, R);
   }
@@ -294,15 +327,18 @@ export function buildRoom(ctx: Ctx, room: RoomInput, v: Values) {
 
   // Electrics, heating, doors, windows (all room types). Refits always include their electrics.
   const el = str(v, "electrics");
-  const mode = el !== "NONE" ? el : refit ? "ADD" : "NONE";
+  // A refit brings its own electrics, except a kitchen installed onto the existing services.
+  const installOnly = bool(v, "kitchenRefit") && str(v, "kitchenScope") === "INSTALL";
+  const mode = el !== "NONE" ? el : refit && !installOnly ? "ADD" : "NONE";
   if (mode !== "NONE") {
     const spec: ElecSpec = Object.fromEntries(elecItems.map(i => [i.key, num(v, i.key)]));
-    if (electricsItems(ctx, "First fix", spec, { label: R, rewire: mode === "REWIRE" })) did.push(`${mode === "REWIRE" ? "rewire" : "electrics"}: ${elecSummary(spec)}`);
+    if (electricsItems(ctx, "First fix", spec, { label: R, rewire: mode === "REWIRE", fittingsByClient: str(v, "fittingsBy") !== "US" })) did.push(`${mode === "REWIRE" ? "rewire" : "electrics"}: ${elecSummary(spec)}`);
   }
   else if (lowered) {
     const lights = Math.max(1, num(v, "pendants") + num(v, "downlights"));
     ctx.labour("First fix", "elec_reposition", lights, `${R}: ${lights} light point${lights > 1 ? "s" : ""} dropped to the new ceiling`);
   }
+  if (bool(v, "floorHeating") && !(refit && bool(v, "ufh"))) { electricUfh(ctx, "First fix", g.floor, room.type === "KITCHEN" || room.type === "UTILITY" ? 0.6 : 0.8, R); did.push("electric underfloor heating with thermostat and floor sensor"); }
   if (num(v, "newRadiators")) { radiators(ctx, "First fix", num(v, "newRadiators")); did.push(`${num(v, "newRadiators")} new radiator${num(v, "newRadiators") > 1 ? "s" : ""}`); }
   if (num(v, "newDoors")) { newDoors(ctx, "Second fix", num(v, "newDoors"), str(v, "doorType"), { paint: false, label: R }); did.push(`${num(v, "newDoors")} new door${num(v, "newDoors") > 1 ? "s" : ""}`); }
   if (num(v, "refurbDoors")) { ctx.labour("Second fix", "door_refurb", num(v, "refurbDoors"), `${num(v, "refurbDoors")} doors`); did.push(`refurbish ${num(v, "refurbDoors")} door${num(v, "refurbDoors") > 1 ? "s" : ""}`); }

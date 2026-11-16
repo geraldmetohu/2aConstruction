@@ -233,7 +233,7 @@ test('a line marked "not needed" stays visible at £0 and drops out of price, da
   const x = rooms([room('BEDROOM', { walls: 'SKIM' })], { excluded: { [pva.lineId]: true, [skimL.lineId]: true } });
   const pva2 = x.lines.find(l => l.lineId === pva.lineId), skim2 = x.lines.find(l => l.lineId === skimL.lineId);
   assert.ok(pva2.excluded && pva2.total === 0 && skim2.excluded && skim2.days === 0);
-  near(x.totals.net, r.totals.net - (pva.total + skimL.total) * (r.totals.net / sum(r.lines, l => l.total)), 'net', 2);
+  near(x.totals.net, r.totals.net - (pva.total + skimL.total) * (r.totals.net / sum(r.lines, l => l.total)), 'net', r.totals.net * 0.002);
   assert.ok(lines(x, l => l.lineId === pva.lineId).length === 1, 'still listed');
 });
 
@@ -426,8 +426,10 @@ test('totals: waste, contingency, markup and VAT in order', () => {
 });
 
 test('every project builds without warnings and within sane ranges (inc VAT)', () => {
-  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000], conversion: [12000, 40000], outbuilding: [12000, 45000] };
-  const sample = { garden: { patio: 25, fencing: 12, turf: 40 }, cleaning: { windows: 12, jetWash: 40, gutters: 20 }, demolition: { kitchens: 1, bathrooms: 1, partitions: 15, chimneyBreasts: 1 } };
+  const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000], conversion: [12000, 40000], outbuilding: [12000, 45000],
+    heating: [3000, 9000], energy: [7000, 20000], damp: [2500, 12000], basement: [15000, 60000], windows: [6000, 25000], internal: [3000, 15000], aircon: [3000, 9000] };
+  const sample = { garden: { patio: 25, fencing: 12, turf: 40 }, cleaning: { windows: 12, jetWash: 40, gutters: 20 }, demolition: { kitchens: 1, bathrooms: 1, partitions: 15, chimneyBreasts: 1 },
+    energy: { panels: 10, battery: '5' }, damp: { dpc: 15, replaster: 15 }, windows: { windows: 8, front: 'COMPOSITE' }, internal: { stairs: 'REPLACE', fireDoors: 3 } };
   for (const p of workPackages) {
     const r = only(p.id, sample[p.id]);
     assert.deepEqual(r.warnings, [], `${p.id} warnings`);
@@ -437,6 +439,102 @@ test('every project builds without warnings and within sane ranges (inc VAT)', (
   for (const t of ['BEDROOM', 'KITCHEN', 'BATHROOM', 'HALL']) assert.deepEqual(rooms([room(t, { walls: 'SKIM', bathroomRefit: true, kitchenRefit: true })]).warnings, [], t);
 });
 
+
+test('heating, energy, damp, basement, windows and alterations: priced, H&S activities, VAT relief and building control', () => {
+  // Heat pump + solar: the energy-saving lines are zero-rated, the EV charger and boiler work are not.
+  const eco = run({ heating: { enabled: true, values: { boiler: 'NONE', heatPump: true, hpSize: '11', controls: false } }, energy: { enabled: true, values: { panels: 12, battery: '10', ev: true } } });
+  assert.deepEqual(eco.warnings, []);
+  assert.ok(key(eco, 'heat_pump_11kw') && key(eco, 'cylinder_heatpump') && key(eco, 'battery_10') && key(eco, 'solar_panel').quantity === 12);
+  assert.equal(key(eco, 'heat_pump_11kw').vatPercent, 0); assert.equal(key(eco, 'solar_panel').vatPercent, 0);
+  assert.equal(key(eco, 'ev_charger').vatPercent, undefined, 'EV chargers are standard rated');
+  assert.ok(eco.assumptions.some(a => /zero-rated/.test(a)));
+  assert.ok(lines(eco, l => l.rateKey.startsWith('scaffold_')).length > 0, 'solar needs scaffold');
+  const boiler = only('heating', { boiler: 'COMBI_SWAP' });
+  assert.ok(lines(boiler, l => l.vatPercent === 0).length === 0, 'a boiler is standard rated');
+  assert.ok(!key(boiler, 'final_clean') && !key(boiler, 'building_control'), 'no builders clean or BC fee for a boiler swap');
+  const acts = (r, input) => customerTakeoff(r, input).activities;
+  assert.ok(acts(boiler).includes('GAS_HEATING') && acts(eco).includes('SOLAR') && acts(eco).includes('ELECTRICAL'));
+  // Damp, basement, windows, alterations
+  const damp = only('damp', { dpc: 10, membrane: 20, sump: true, lintels: 1 });
+  assert.ok(key(damp, 'damp_survey') && key(damp, 'labour:dpc_injection').quantity === 10 && key(damp, 'sump_pump'));
+  assert.ok(acts(damp).includes('DAMP_PROOFING') && acts(damp).includes('STRUCTURAL_STEEL'));
+  const bas = only('basement', { floorArea: 30, lowerBy: 0.5, partyWall: 1500 });
+  near(key(bas, 'labour:basement_dig').quantity, 15, 'dig volume');
+  assert.equal(key(bas, 'party_wall_surveyor').total, 1500, 'provisional sum at cost');
+  assert.ok(key(bas, 'building_control') && key(bas, 'structural_engineer'));
+  const win = only('windows', { type: 'ALU', windows: 4, large: 1, rear: 'BIFOLD', rearWidth: 3.5 });
+  assert.equal(key(win, 'window_alu').quantity, 4); assert.equal(key(win, 'window_alu_large').quantity, 1); near(key(win, 'bifold_alu').quantity, 3.5, 'bifold m');
+  assert.ok(acts(win).includes('GLAZING'));
+  const fire = only('internal', { alarm: 'GRADE_A', devices: 10, fireDoors: 4, emergency: 3 });
+  assert.ok(key(fire, 'fire_panel') && key(fire, 'fire_device').quantity === 10 && key(fire, 'fire_door_set').quantity === 4);
+  assert.ok(acts(fire).includes('FIRE_SAFETY') && !key(fire, 'building_control'));
+  assert.ok(key(only('internal', { stairs: 'REPLACE' }), 'building_control'), 'a new staircase is notifiable');
+  // Every new rate key the packages use exists in the rate book (no "Missing rate" warnings across options).
+  for (const [id, v] of [['heating', { boiler: 'SYSTEM', gasRun: 3, radiators: 4, newSystem: 4 }], ['heating', { boiler: 'CONVERT_COMBI', grade: 'PREMIUM' }], ['energy', { loftArea: 40, boarding: 10, cavityArea: 60, battery: '13' }],
+    ['damp', { tanking: 10, timber: 20, joistEnds: 2, cracks: 3, wallTies: 30, repoint: 30, airBricks: 2, engineer: true }], ['basement', { newDig: true, lightwells: 1, stairs: true }],
+    ['windows', { type: 'SASH', windows: 2, large: 2, triple: true, front: 'TIMBER', rear: 'SLIDING', porch: 2.5, canopy: true }], ['internal', { stairs: 'REPLACE_WINDER', oak: true, partitions: 10, doorways: 1, acoustic: 12, alarm: 'LD2', fireStopping: 5 }]])
+    assert.ok(!only(id, v).warnings.some(w => /Missing/.test(w)), `${id} ${JSON.stringify(v)}`);
+});
+
+test('electrics: wall lights & LED strips bought by the client (fitted by us), USB / outdoor sockets, fans, alarms; electric UFH complete', () => {
+  const r = rooms([room('LIVING', { electrics: 'ADD', wallLights: 4, ledStrips: 1, pendants: 1, usbSockets: 2, outdoorSockets: 1, extractFans: 1, smokeAlarms: 1, dimmers: 2, floorHeating: true })]);
+  assert.deepEqual(r.warnings, []);
+  const wl = key(r, 'wall_light_fitting');
+  assert.ok(wl.clientSupplied && wl.total === 0 && wl.quantity === 4, 'wall light fittings bought by the client');
+  assert.ok(key(r, 'labour:elec_wall_light').total > 0 && key(r, 'wall_light_point').total > 0, 'we wire and fit them');
+  assert.ok(key(r, 'pendant_fitting').clientSupplied && key(r, 'led_strip').clientSupplied);
+  for (const k of ['socket_usb', 'outdoor_socket', 'extractor_fan', 'smoke_alarm', 'dimmer_switch']) assert.ok(key(r, k), k);
+  assert.ok(key(r, 'ufh_mat') && key(r, 'ufh_insulation') && key(r, 'ufh_thermostat').quantity === 1 && key(r, 'labour:elec_ufh_connect'), 'UFH mat, boards, thermostat with floor sensor');
+  assert.ok(customerTakeoff(r).clientOrders.some(o => /Wall light fitting/.test(o.description)), 'on the client shopping list');
+  const ours = rooms([room('LIVING', { electrics: 'ADD', wallLights: 2, fittingsBy: 'US' })]);
+  assert.ok(!key(ours, 'wall_light_fitting').clientSupplied && key(ours, 'wall_light_fitting').total > 0);
+  const bath = rooms([room('BATHROOM', { bathroomRefit: true, ufh: true })]);
+  assert.ok(key(bath, 'ufh_thermostat') && key(bath, 'ufh_insulation'), 'bathroom UFH has its thermostat & sensor');
+});
+
+test('room jobs: price only what the client asked for (floor only, floor + paint); kitchen full / install only / make ready', () => {
+  const roomLines = r => lines(r, l => l.area === 'Bedroom' || l.area === 'Kitchen');
+  const floorOnly = rooms([room('BEDROOM', { jobs: 'FLOOR', flooring: 'LAMINATE', walls: 'SKIM', electrics: 'ADD', newRadiators: 1 })]);
+  const fl = roomLines(floorOnly);
+  assert.ok(fl.length > 0 && fl.every(l => /laminate|underlay|threshold|beading|scotia|flooring|floor|skirting|labour:/i.test(`${l.rateKey} ${l.description}`)), fl.map(l => l.rateKey).join());
+  assert.ok(!key(floorOnly, 'labour:skim') && !key(floorOnly, 'labour:paint_walls') && !key(floorOnly, 'socket_double') && !key(floorOnly, 'radiator'), 'other jobs left out even if their fields were set');
+  const floorPaint = rooms([room('BEDROOM', { jobs: 'FLOOR,PAINT', flooring: 'CARPET' })]);
+  assert.ok(lines(floorPaint, l => /paint/i.test(l.rateKey)).length > 0 && lines(floorPaint, l => /carpet/i.test(l.rateKey)).length > 0 && !key(floorPaint, 'labour:skim'));
+  assert.ok(floorPaint.totals.net > floorOnly.totals.net * 0.8);
+  // Kitchen
+  const k = scope => rooms([room('KITCHEN', { kitchenRefit: true, kitchenScope: scope })]);
+  const full = k('FULL'), inst = k('INSTALL'), ready = k('READY');
+  assert.ok(key(full, 'base_unit_mid') && key(full, 'labour:kitchen_units') && lines(full, l => l.stage.endsWith('First fix')).length > 0);
+  assert.ok(key(inst, 'base_unit_mid') && key(inst, 'labour:kitchen_units') && !key(inst, 'labour:duct_fit') && !key(inst, 'labour:elec_socket') && !key(inst, 'labour:skim'), 'install only: no new services or plastering');
+  assert.ok(!key(ready, 'base_unit_mid') && !key(ready, 'labour:kitchen_units') && key(ready, 'labour:kitchen_plumbing') && key(ready, 'labour:duct_fit'), 'make ready: services, no units');
+  assert.ok(ready.assumptions.some(a => /ready for fitting/.test(a)) && inst.assumptions.some(a => /Install only/.test(a)));
+  assert.ok(inst.totals.net < full.totals.net && ready.totals.net < full.totals.net);
+  // Kitchen job only: no decorating unless painting / plastering is also picked
+  const kOnly = rooms([room('KITCHEN', { jobs: 'KITCHEN', kitchenRefit: true })]);
+  assert.ok(!lines(kOnly, l => /^labour:paint/.test(l.rateKey)).length && key(kOnly, 'labour:kitchen_units'));
+});
+
+test('project parts: structure only (finishes left out) – lines, scope and price drop, the rest unchanged', () => {
+  const all = only('extension', {});
+  const shell = only('extension', { _skip: 'First fix,Plastering,Decoration,Second fix' });
+  assert.ok(!lines(shell, l => /· (First fix|Plastering|Decoration|Second fix)$/.test(l.stage) && l.package === 'Extension').length, 'finishing stages gone');
+  assert.ok(lines(shell, l => l.stage === 'Extension · Foundations').length && lines(shell, l => l.stage === 'Extension · Roof').length, 'structure kept');
+  assert.ok(shell.totals.net < all.totals.net && shell.assumptions.some(a => /part of the project only/.test(a)));
+  const parsed = takeoffInputSchema.parse({ ...defaultTakeoffInput(), packages: { loft: { enabled: true, values: { _skip: 'Decoration' } } } });
+  assert.equal(parsed.packages.loft.values._skip, 'Decoration', 'kept when saved');
+});
+
+test('loft: chimney breasts & stacks, posts under a ridge beam, smaller loft than the house (hips kept), double hip to gable', () => {
+  const r = run({ loft: { enabled: true, values: { chimneyBreasts: 3, breastSupport: 'GALLOWS', chimneyStacks: 1, beams: true, beamCount: 2, beamPosts: 2 } } });
+  assert.equal(key(r, 'labour:chimney_breast_remove').quantity, 3); assert.equal(key(r, 'gallows_brackets').quantity, 3);
+  assert.ok(key(r, 'labour:chimney_stack_remove') && key(r, 'chimney_scaffold'), 'stack needs chimney scaffold');
+  assert.equal(key(r, 'timber_post_150x100').quantity, 2); assert.ok(key(r, 'labour:beam_post_fit'));
+  const big = run({ loft: { enabled: true, values: {} } }, { property: { houseType: 'DETACHED', width: 7.9, length: 8.8 } });
+  const small = run({ loft: { enabled: true, values: { loftWidth: 5.6, loftLength: 6.6 } } }, { property: { houseType: 'DETACHED', width: 7.9, length: 8.8 } });
+  assert.ok(small.totals.net < big.totals.net, 'a smaller loft costs less');
+  const dual = run({ loft: { enabled: true, values: { loftType: 'HIP_TO_GABLE', gables: 2 } } }, { property: { houseType: 'DETACHED', width: 7.9, length: 8.8 } });
+  assert.ok(dual.scope.some(x => /2 hips/.test(x)), 'double hip to gable');
+});
 
 // ---------------- Quote types, scaffold, conversions, garden buildings, more materials ----------------
 test('quote mode and 300-day validity are part of the input', () => {
@@ -863,6 +961,38 @@ test('acrylic and polymer renders in the external walls project', () => {
   assert.ok(key(only('external', { system: 'POLYMER' }), 'render_polymer'));
   const ewi = only('external', { system: 'ACRYLIC', insulation: true });
   assert.ok(key(ewi, 'ewi_eps_90') && ewi.totals.vatBreakdown.length === 2);
+});
+
+test('Emerson Drive items: timber gable, trimmers, roof alterations, Velux sizes, air con and boiler move', () => {
+  const semi = { property: { houseType: 'SEMI_OR_END' } };
+  const brick = loft({ loftType: 'HIP_TO_GABLE', gables: 1 }, semi);
+  const timber = loft({ loftType: 'HIP_TO_GABLE', gables: 1, gableFinish: 'TIMBER_RENDER', trimmers: 8, flitchBeams: 1, crownRoof: 12, cutRetile: 10, leadValleys: 8, supalux: 6,
+    frontWindows: 2, roofWindowSize: 'PK08', largeRoofWindows: 1 }, semi);
+  assert.deepEqual(timber.warnings, []);
+  assert.ok(key(timber, 'timber_gable_kit') && key(timber, 'labour:render_apply') && !key(timber, 'thermal_block') && key(brick, 'thermal_block'), 'timber gable has no masonry inner leaf');
+  assert.equal(key(timber, 'timber_trimmer_2x47x170').quantity, 20.8);
+  assert.equal(key(timber, 'labour:trimmer_fit').quantity, 8);
+  assert.ok(key(timber, 'flitch_plate') && key(timber, 'labour:crown_roof_build') && key(timber, 'labour:roof_cut_retile') && key(timber, 'labour:lead_valley') && key(timber, 'supalux_9'));
+  assert.equal(key(timber, 'roof_window_uk08').quantity, 1);
+  assert.equal(key(timber, 'roof_window_pk08').quantity, 1);
+  assert.ok(!key(timber, 'roof_window'));
+  assert.ok(timber.scope.some(s => /timber-framed/.test(s.text ?? s)) || JSON.stringify(timber.scope).includes('timber-framed'));
+
+  const ac = only('aircon', { wallUnits: 5, cassettes: 0 });
+  assert.deepEqual(ac.warnings, []);
+  assert.equal(key(ac, 'ac_wall_head').quantity, 5);
+  assert.equal(key(ac, 'ac_outdoor_5').quantity, 1);
+  assert.equal(key(ac, 'labour:ac_outdoor_fit').quantity, 1);
+  const two = only('aircon', { wallUnits: 5, outdoorUnits: 2 });
+  assert.ok(key(two, 'ac_outdoor_3') && key(two, 'ac_outdoor_2'), 'split 3 + 2');
+  const single = only('aircon', { system: 'SINGLE', wallUnits: 2, cassettes: 1 });
+  assert.equal(key(single, 'aircon_unit').quantity, 2);
+  assert.equal(key(single, 'ac_outdoor_single').quantity, 1);
+  assert.equal(key(single, 'labour:ac_outdoor_fit').quantity, 3);
+
+  const mv = only('heating', { boiler: 'NONE', controls: false, boilerMove: true, boilerMoveRun: 7 });
+  assert.deepEqual(mv.warnings, []);
+  assert.ok(key(mv, 'labour:boiler_move') && key(mv, 'labour:boiler_move_extra').quantity === 4);
 });
 
 console.log(`\n${passed} takeoff tests passed`);

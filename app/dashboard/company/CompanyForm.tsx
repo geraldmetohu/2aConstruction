@@ -10,6 +10,9 @@ const groups: [string, [keyof CompanyProfile, string, string?][]][] = [
   ["Insurance", [["insurer", "Insurer"], ["policyNo", "Policy number"], ["publicLiability", "Public liability cover (e.g. £5m)"], ["employersLiability", "Employer's liability cover (e.g. £10m)"], ["contractorsAllRisk", "Contract works / all risks cover"]]],
   ["Payments (shown on quotes and invoices)", [["bankName", "Bank"], ["accountName", "Account name"], ["sortCode", "Sort code"], ["accountNumber", "Account number"]]],
   ["Site & health and safety", [["siteManager", "Site manager"], ["siteManagerPhone", "Site manager phone"], ["healthSafetyLead", "Health & safety lead"], ["firstAider", "First aider"], ["workingHours", "Working hours"], ["disputeScheme", "Dispute resolution scheme"]]],
+  ["Management system & tenders (ISO 9001 / 14001 / 45001)", [["director", "Managing director (signs the policies)"], ["employees", "Number of employees (incl. directors)"], ["imsStart", "Management system start date (e.g. 2026-11-16)"],
+    ["wasteCarrier", "Waste carrier registration number"], ["accreditations", "Accreditations held (e.g. CHAS, Constructionline Silver, ISO 9001 – only what you actually hold)", "multi"],
+    ["imsScope", "Scope of the management system (what work, where)", "multi"]]],
 ];
 
 export function CompanyForm({ company, version, storage }: { company: CompanyProfile; version: number; storage: boolean }) {

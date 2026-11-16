@@ -3,7 +3,7 @@ import { longDate, type DocSection, type QuoteDocs } from "@/app/lib/takeoff/doc
 import type { QuoteLayout } from "@/app/lib/takeoff/quote-format";
 
 import { PACK_RENDER, packKinds, type PackKind } from "./ProjectPack";
-import { band, H, Page, SectionTitle, Sections, Signatures } from "./DocParts";
+import { Callout, Cover, Page, RiskBadge, RiskKey, RiskMatrix, SafetySigns, ScrollX, SectionTitle, Sections, Signatures, ZonePlan } from "./DocParts";
 
 export type DocKind = "quote" | "contract" | "cancellation" | "guarantee" | "cpp" | "rams" | PackKind;
 type KindInfo = [DocKind, string, DocGroup, boolean];
@@ -22,7 +22,7 @@ const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigit
 /** The client document pack. Printable: each document starts on a new page. No costs, rates or margins. */
 export function QuoteDocuments({ docs: d, show }: { docs: QuoteDocs; show: DocKind[] }) {
   return (
-    <div className="space-y-8 text-[13px] leading-relaxed text-neutral-900 print:space-y-0">
+    <div className="space-y-8 text-[13px] leading-relaxed text-neutral-900 [-webkit-print-color-adjust:exact] [print-color-adjust:exact] print:space-y-0">
       {show.includes("quote") && <Quotation d={d} />}
       {show.includes("contract") && <Contract d={d} />}
       {show.includes("cancellation") && <Cancellation d={d} />}
@@ -48,70 +48,133 @@ const dayRange = (a: number, b: number) => {
   return `${w1 === w2 ? `Week ${w1}` : `Weeks ${w1}–${w2}`} · day${s === e ? ` ${s}` : `s ${s}–${e}`}`;
 };
 
-function Quotation({ d }: { d: QuoteDocs }) {
-  const sec = (() => { let n = 0; return () => ++n; })();
+/** Programme as a bar chart: one bar per stage over the working days. */
+function Gantt({ d }: { d: QuoteDocs }) {
+  const rows = d.programme.filter(r => r.days > 0);
+  const total = Math.max(1, ...rows.map(r => r.endDay + 1));
+  const weeks = Math.ceil(total / 5);
   return (
-    <Page d={d} title="Quotation" meta={[["Quotation no.", `${d.reference}${d.version > 1 ? ` · v${d.version}` : ""}`], ["Date", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)]]}>
-      <Parties d={d} />
-
-      {/* Price at a glance */}
-      <div className="grid break-inside-avoid gap-px overflow-hidden rounded-xl bg-[#071a33]/10 sm:grid-cols-4 print:grid-cols-4">
-        {([["Price (ex VAT)", gbp(d.price.net)], ["VAT", gbp(d.price.vat)], ["Total including VAT", gbp(d.price.gross)], ["Programme", `≈ ${d.weeks} week${d.weeks === 1 ? "" : "s"}`]] as const).map(([k, v], i) => (
-          <div key={k} className={`p-4 ${i === 2 ? "bg-[#071a33] text-white" : "bg-white"}`}><p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${i === 2 ? "text-[#f5b400]" : "text-neutral-500"}`}>{k}</p><p className="mt-1 text-lg font-black tabular-nums">{v}</p></div>
-        ))}
+    <div className="mt-3 break-inside-avoid overflow-hidden rounded-lg border border-neutral-200">
+      <div className="grid grid-cols-[38%_1fr] bg-[#071a33] text-[10px] font-bold uppercase tracking-wide text-white">
+        <div className="px-2 py-1.5">Stage</div>
+        <div className="relative">{Array.from({ length: weeks }, (_, i) => <span key={i} className="absolute top-1.5 text-white/80" style={{ left: `${(i * 5 / total) * 100}%` }}>{weeks > 14 && i % 2 ? "" : `W${i + 1}`}</span>)}</div>
       </div>
+      {rows.map((r, i) => (
+        <div key={r.stage} className={`grid grid-cols-[38%_1fr] items-center text-[11px] ${i % 2 ? "bg-neutral-50" : "bg-white"}`}>
+          <div className="truncate px-2 py-1">{r.label}</div>
+          <div className="relative h-5">
+            {Array.from({ length: weeks }, (_, w) => <span key={w} aria-hidden className="absolute inset-y-0 border-l border-neutral-200" style={{ left: `${(w * 5 / total) * 100}%` }} />)}
+            <span className="absolute top-1 h-3 rounded-sm bg-gradient-to-r from-[#071a33] to-[#28508a]" style={{ left: `${(r.startDay / total) * 100}%`, width: `${Math.max(1.5, ((r.endDay - r.startDay + 1) / total) * 100)}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-      {d.letter && <div className="space-y-2"><p>{d.letter.greeting}</p>{d.letter.paragraphs.map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}</div>}
+/** Payment schedule as a bar split by percentage. */
+const PaymentBar = ({ d }: { d: QuoteDocs }) => (
+  <div className="mt-3 flex h-6 overflow-hidden rounded-full ring-1 ring-black/10">
+    {d.payments.map((p, i) => <div key={p.n} title={p.label} className={`flex items-center justify-center text-[10px] font-bold ${i === 0 ? "bg-[#f5b400] text-neutral-950" : i === d.payments.length - 1 ? "bg-[#071a33] text-white" : i % 2 ? "bg-[#28508a] text-white" : "bg-[#3f6aa8] text-white"}`} style={{ width: `${p.percent}%` }}>{p.percent >= 7 ? `${p.percent.toFixed(0)}%` : ""}</div>)}
+  </div>
+);
 
-      <div><SectionTitle n={sec()}>Description of the works</SectionTitle>{d.description.map((p, i) => <p key={i} className="mt-2">{p}</p>)}</div>
-
-      {d.layout ? <ScopeTable layout={d.layout} price={d.price} n={sec()} /> : <div><SectionTitle n={sec()}>Scope of works</SectionTitle>
-        <ol className="mt-2 space-y-3">{d.scope.map(s => (
-          <li key={s.heading} className="break-inside-avoid"><p className="font-semibold">{s.heading}{s.dates && <span className="ml-2 text-xs font-normal text-neutral-500">{s.dates}</span>}</p>
-            <ul className="mt-0.5 list-disc space-y-0.5 pl-5">{s.items.map((x, i) => <li key={i}>{x}</li>)}</ul></li>
-        ))}</ol>
-      </div>}
-
-      <div className="break-inside-avoid"><SectionTitle n={sec()}>Programme</SectionTitle>
-        <p className="mt-2">{d.start ? <>Start <strong>{longDate(d.start)}</strong>, practical completion around <strong>{longDate(d.finish!)}</strong> – </> : null}about {d.workingDays} working days (≈ {d.weeks} weeks), Monday to Friday excluding bank holidays.</p>
-        <table className="mt-2 w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Stage</th><th className="text-right">{d.start ? "Dates" : "When"}</th></tr></thead>
-          <tbody>{d.programme.filter(r => r.days > 0).map(r => <tr key={r.stage} className="border-b border-neutral-100"><td className="py-1.5">{r.label}</td><td className="text-right text-neutral-700">{r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : dayRange(r.startDay, r.endDay)}</td></tr>)}</tbody></table>
-        <p className="mt-1 text-[11px] text-neutral-500">The programme is our planned sequence; stages may overlap and dates move with weather, inspections and any changes you ask for.</p>
+/** What the client gets with us – all of it is promised in the contract terms. */
+function WhyUs({ d }: { d: QuoteDocs }) {
+  const c = d.company;
+  const points: [string, string][] = [
+    ["Fixed price", "The price is fixed for the works described – nothing extra without your written agreement."],
+    [`${d.guarantee.years}-year guarantee`, "Our workmanship guarantee, plus the manufacturers' guarantees passed on to you."],
+    ["One point of contact", c.siteManager ? `${c.siteManager} manages your project from start to handover.` : "A dedicated site manager runs your project from start to handover."],
+    ["Safe, tidy site", "Full construction phase plan, risk assessments and daily clean-up; your home protected."],
+    ["Certified & compliant", "Building Regulations, registered electricians and Gas Safe engineers; all certificates at handover."],
+    ["Your online portal", "Track progress, photos, choices, invoices and snagging online, any time."],
+  ];
+  return (
+    <div className="break-inside-avoid rounded-xl bg-[#071a33] p-5 text-white">
+      <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#f5b400]">Why {c.name}</p>
+      <div className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-3 print:grid-cols-3">
+        {points.map(([t, x]) => <div key={t}><p className="flex items-center gap-2 text-sm font-bold"><span aria-hidden className="h-2 w-2 rotate-45 bg-[#f5b400]" />{t}</p><p className="mt-0.5 text-[11.5px] leading-snug text-white/75">{x}</p></div>)}
       </div>
+      {c.memberships && <p className="mt-4 border-t border-white/15 pt-2 text-[11px] text-[#f5b400]">{c.memberships}</p>}
+    </div>
+  );
+}
 
-      {!d.layout && <div className="break-inside-avoid"><SectionTitle n={sec()}>Price</SectionTitle>
-        <table className="mt-2 w-full"><tbody>
-          {d.price.areas.map(a => <tr key={a.area} className="border-b"><td className="py-1">{a.area}</td><td className="text-right">{gbp(a.net)}</td></tr>)}
-          <tr><td className="pt-2 font-semibold">Total (ex VAT)</td><td className="pt-2 text-right font-semibold">{gbp(d.price.net)}</td></tr>
-          {d.price.discount && <tr><td>Less: {d.price.discount.label}</td><td className="text-right">−{gbp(d.price.discount.amount)}</td></tr>}
-          <tr><td>VAT</td><td className="text-right">{gbp(d.price.vat)}</td></tr>
-          <tr className="text-base"><td className="font-black">Total including VAT</td><td className="text-right font-black">{gbp(d.price.gross)}</td></tr>
-        </tbody></table>
-      </div>}
+function Quotation({ d }: { d: QuoteDocs }) {
+  const titles = ["Description of the works", d.layout ? `Scope of works & price${d.layout.format === "ITEMISED" ? " – itemised" : ""}` : "Scope of works", "Programme",
+    ...(d.layout ? [] : ["Price"]), "Payment schedule", ...(d.supplies.length ? ["Items supplied by you"] : []), "Not included", "Assumptions", "Acceptance"];
+  const no = (t: string) => titles.findIndex(x => x.startsWith(t)) + 1;
+  const quoteNo = `${d.reference}${d.version > 1 ? ` · v${d.version}` : ""}`;
+  return (
+    <>
+      <Cover d={d} kind="Quotation" lead={d.description[1] ?? d.description[0]}
+        meta={[["Quotation no.", quoteNo], ["Issued", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)], ...(d.start ? [["Planned start", longDate(d.start)] as [string, string]] : [])]}
+        contents={titles} facts={[["Programme", `≈ ${d.weeks} week${d.weeks === 1 ? "" : "s"}`], ["Guarantee", `${d.guarantee.years} years`], ["Price ex VAT", gbp(d.price.net)], ["Total inc VAT", gbp(d.price.gross)]]} />
+      <Page d={d} title="Quotation" meta={[["Quotation no.", quoteNo], ["Date", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)]]}>
+        <Parties d={d} />
 
-      <div className="break-inside-avoid"><SectionTitle n={sec()}>Payment schedule</SectionTitle>
-        <table className="mt-2 w-full table-fixed text-xs"><colgroup><col className="w-[5%]" /><col className="w-[19%]" /><col className="w-[42%]" /><col className="w-[15%]" /><col className="w-[6%]" /><col className="w-[13%]" /></colgroup>
-          <thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">No.</th><th>Payment</th><th>Due when</th><th>Expected</th><th className="text-right">%</th><th className="text-right">Amount</th></tr></thead>
-          <tbody>{d.payments.map(p => <tr key={p.n} className="border-b border-neutral-100 align-top"><td className="py-1.5 text-neutral-500">{p.n}</td><td className="pr-2 font-semibold">{p.label}</td><td className="pr-2 text-neutral-700">{p.when}</td><td className="whitespace-nowrap">{p.date ? longDate(p.date) : "—"}</td><td className="text-right">{p.percent.toFixed(1)}</td><td className="text-right font-semibold tabular-nums">{gbp(p.amount)}</td></tr>)}
-            <tr className="border-t-2 border-[#071a33]"><td colSpan={5} className="pt-1.5 text-right font-semibold">Total including VAT</td><td className="pt-1.5 text-right font-black tabular-nums">{gbp(d.payments.reduce((s, p) => s + p.amount, 0))}</td></tr></tbody></table>
-        <p className="mt-1 text-[11px] text-neutral-600">Each payment is invoiced when it falls due and is payable within {d.paymentDays} days by bank transfer{d.company.accountNumber ? ` to ${d.company.accountName || d.company.registeredName}, sort code ${d.company.sortCode}, account ${d.company.accountNumber}` : ""}. We will never change our bank details by email.</p>
-      </div>
+        {d.letter && <div className="space-y-2"><p>{d.letter.greeting}</p>{d.letter.paragraphs.map((p, i) => <p key={i} className="whitespace-pre-line">{p}</p>)}</div>}
 
-      {d.supplies.length > 0 && <div><SectionTitle n={sec()}>Items supplied by you</SectionTitle>
-        <p className="mt-2 text-xs text-neutral-600">Not included in our price. Please order them to the specification below and have them on site by the date shown; quantities include an allowance for cuts. We are happy to advise before you buy.</p>
-        <table className="mt-2 w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Item</th><th>Specification</th><th className="text-right">Quantity</th><th className="pl-2">Needed</th></tr></thead>
-          <tbody>{d.supplies.map((s, i) => <tr key={i} className="border-b border-neutral-100 align-top"><td className="py-1.5 pr-2">{s.item}<span className="block text-neutral-500">{s.area}</span></td><td className="pr-2">{s.spec || "—"}</td><td className="whitespace-nowrap text-right">{s.quantity} {s.unit}</td><td className="whitespace-nowrap pl-2">{s.neededBy}</td></tr>)}</tbody></table></div>}
+        <WhyUs d={d} />
 
-      <div className="grid gap-6 sm:grid-cols-2 print:grid-cols-2">
-        <div><SectionTitle n={sec()}>Not included</SectionTitle><ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">{d.exclusions.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-        <div><SectionTitle n={sec()}>Assumptions</SectionTitle><ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">{d.assumptions.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
-      </div>
+        <div><SectionTitle n={no("Description")}>Description of the works</SectionTitle>{d.description.map((p, i) => <p key={i} className="mt-2">{p}</p>)}</div>
 
-      <div className="break-inside-avoid"><SectionTitle n={sec()}>Acceptance</SectionTitle>
-        <p className="mt-2">This quotation is valid until <strong>{longDate(d.validUntil)}</strong>. It is subject to our contract terms, {d.guarantee.years}-year workmanship guarantee and the health &amp; safety documents provided with it. You can accept online in your client portal, or sign below and return a copy.</p>
-        <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}` }, { role: "Client", name: d.client.name }]} /></div>
-      </div>
-    </Page>
+        {d.layout ? <ScopeTable layout={d.layout} price={d.price} n={no("Scope")} /> : <div><SectionTitle n={no("Scope")}>Scope of works</SectionTitle>
+          <ol className="mt-2 space-y-3">{d.scope.map(s => (
+            <li key={s.heading} className="break-inside-avoid"><p className="font-semibold">{s.heading}{s.dates && <span className="ml-2 text-xs font-normal text-neutral-500">{s.dates}</span>}</p>
+              <ul className="mt-0.5 list-disc space-y-0.5 pl-5">{s.items.map((x, i) => <li key={i}>{x}</li>)}</ul></li>
+          ))}</ol>
+        </div>}
+
+        <div className="break-inside-avoid"><SectionTitle n={no("Programme")}>Programme</SectionTitle>
+          <p className="mt-2">{d.start ? <>Start <strong>{longDate(d.start)}</strong>, practical completion around <strong>{longDate(d.finish!)}</strong> – </> : null}about {d.workingDays} working days (≈ {d.weeks} weeks), Monday to Friday excluding bank holidays.</p>
+          <Gantt d={d} />
+          <table className="mt-3 w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Stage</th><th className="text-right">{d.start ? "Dates" : "When"}</th></tr></thead>
+            <tbody>{d.programme.filter(r => r.days > 0).map(r => <tr key={r.stage} className="border-b border-neutral-100"><td className="py-1.5">{r.label}</td><td className="text-right text-neutral-700">{r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : dayRange(r.startDay, r.endDay)}</td></tr>)}</tbody></table>
+          <p className="mt-1 text-[11px] text-neutral-500">The programme is our planned sequence; stages may overlap and dates move with weather, inspections and any changes you ask for.</p>
+        </div>
+
+        {!d.layout && <div className="break-inside-avoid"><SectionTitle n={no("Price")}>Price</SectionTitle>
+          <table className="mt-2 w-full"><tbody>
+            {d.price.areas.map(a => <tr key={a.area} className="border-b"><td className="py-1">{a.area}</td><td className="text-right">{gbp(a.net)}</td></tr>)}
+            <tr><td className="pt-2 font-semibold">Total (ex VAT)</td><td className="pt-2 text-right font-semibold">{gbp(d.price.net)}</td></tr>
+            {d.price.discount && <tr><td>Less: {d.price.discount.label}</td><td className="text-right">−{gbp(d.price.discount.amount)}</td></tr>}
+            <tr><td>VAT</td><td className="text-right">{gbp(d.price.vat)}</td></tr>
+            <tr className="text-base"><td className="font-black">Total including VAT</td><td className="text-right font-black">{gbp(d.price.gross)}</td></tr>
+          </tbody></table>
+        </div>}
+
+        <div className="break-inside-avoid"><SectionTitle n={no("Payment")}>Payment schedule</SectionTitle>
+          <PaymentBar d={d} />
+          <ul className="mt-3 divide-y divide-neutral-100 rounded-lg border border-neutral-200 text-xs sm:hidden print:hidden">
+            {d.payments.map(p => <li key={p.n} className="px-3 py-2"><div className="flex items-baseline justify-between gap-3"><span className="font-semibold">{p.n}. {p.label} <span className="font-normal text-neutral-500">{p.percent.toFixed(1)}%</span></span><span className="shrink-0 font-bold tabular-nums">{gbp(p.amount)}</span></div>
+              <p className="text-neutral-600">{p.when}{p.date ? ` · expected ${longDate(p.date)}` : ""}</p></li>)}
+            <li className="flex justify-between bg-neutral-50 px-3 py-2 font-black"><span>Total including VAT</span><span className="tabular-nums">{gbp(d.payments.reduce((s, p) => s + p.amount, 0))}</span></li>
+          </ul>
+          <table className="mt-3 hidden w-full table-fixed text-xs sm:table print:table"><colgroup><col className="w-[5%]" /><col className="w-[19%]" /><col className="w-[42%]" /><col className="w-[15%]" /><col className="w-[6%]" /><col className="w-[13%]" /></colgroup>
+            <thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">No.</th><th>Payment</th><th>Due when</th><th>Expected</th><th className="text-right">%</th><th className="text-right">Amount</th></tr></thead>
+            <tbody>{d.payments.map(p => <tr key={p.n} className="border-b border-neutral-100 align-top"><td className="py-1.5 text-neutral-500">{p.n}</td><td className="pr-2 font-semibold">{p.label}</td><td className="pr-2 text-neutral-700">{p.when}</td><td className="pr-1">{p.date ? longDate(p.date) : "—"}</td><td className="text-right">{p.percent.toFixed(1)}</td><td className="text-right font-semibold tabular-nums">{gbp(p.amount)}</td></tr>)}
+              <tr className="border-t-2 border-[#071a33]"><td colSpan={5} className="pt-1.5 text-right font-semibold">Total including VAT</td><td className="pt-1.5 text-right font-black tabular-nums">{gbp(d.payments.reduce((s, p) => s + p.amount, 0))}</td></tr></tbody></table>
+          <div className="mt-2"><Callout title="Paying us safely">Each payment is invoiced when it falls due and is payable within {d.paymentDays} days by bank transfer{d.company.accountNumber ? ` to ${d.company.accountName || d.company.registeredName}, sort code ${d.company.sortCode}, account ${d.company.accountNumber}` : ""}. We will never change our bank details by email – always phone us to check.</Callout></div>
+        </div>
+
+        {d.supplies.length > 0 && <div><SectionTitle n={no("Items supplied")}>Items supplied by you</SectionTitle>
+          <p className="mt-2 text-xs text-neutral-600">Not included in our price. Please order them to the specification below and have them on site by the date shown; quantities include an allowance for cuts. We are happy to advise before you buy.</p>
+          <div className="mt-2"><ScrollX min={520}><table className="w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Item</th><th>Specification</th><th className="text-right">Quantity</th><th className="pl-2">Needed</th></tr></thead>
+            <tbody>{d.supplies.map((s, i) => <tr key={i} className="border-b border-neutral-100 align-top"><td className="py-1.5 pr-2">{s.item}<span className="block text-neutral-500">{s.area}</span></td><td className="pr-2">{s.spec || "—"}</td><td className="whitespace-nowrap text-right">{s.quantity} {s.unit}</td><td className="whitespace-nowrap pl-2">{s.neededBy}</td></tr>)}</tbody></table></ScrollX></div></div>}
+
+        <div className="grid gap-6 sm:grid-cols-2 print:grid-cols-2">
+          <div><SectionTitle n={no("Not included")}>Not included</SectionTitle><ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">{d.exclusions.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+          <div><SectionTitle n={no("Assumptions")}>Assumptions</SectionTitle><ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">{d.assumptions.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
+        </div>
+
+        <div className="break-inside-avoid"><SectionTitle n={no("Acceptance")}>Acceptance</SectionTitle>
+          <p className="mt-2">This quotation is valid until <strong>{longDate(d.validUntil)}</strong>. It is subject to our contract terms, {d.guarantee.years}-year workmanship guarantee and the health &amp; safety documents provided with it. You can accept online in your client portal, or sign below and return a copy.</p>
+          <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}` }, { role: "Client", name: d.client.name }]} /></div>
+        </div>
+      </Page>
+    </>
   );
 }
 
@@ -144,7 +207,21 @@ export function ScopeTable({ layout: L, price: p, n: sectionNo }: { layout: Quot
 
   if (L.format === "SIMPLE") return (
     <div><SectionTitle n={sectionNo}>{title}</SectionTitle>
-      <table className="mt-3 w-full table-fixed">
+      {/* Phones: stacked cards. Tablets, desktop and print: the table. */}
+      <div className="mt-3 space-y-4 sm:hidden print:hidden">
+        {L.groups.map((g, gi) => (
+          <section key={g.key} className="overflow-hidden rounded-lg border border-neutral-200">
+            <div className="flex items-baseline justify-between gap-3 bg-[#071a33] px-3 py-2 text-white"><h3 className="min-w-0 text-[13px] font-bold"><span className="mr-1.5 text-[#f5b400]">{gi + 1}</span>{g.title}</h3><span className="shrink-0 font-bold tabular-nums">{gbp(g.net)}</span></div>
+            {g.text && <p className="px-3 pt-2 text-xs italic text-neutral-600">{g.text}</p>}
+            <ul className="divide-y divide-neutral-100">{g.rows.map((r, ri) => (
+              <li key={r.key} className="px-3 py-2.5">
+                <div className="flex items-baseline justify-between gap-3"><p className="min-w-0 font-semibold text-[#071a33]"><span className="mr-1.5 text-neutral-400">{gi + 1}.{ri + 1}</span>{r.title}<Tags r={r} /></p><span className="shrink-0 font-semibold tabular-nums">{gbp(r.net)}</span></div>
+                <p className="mt-0.5 text-[12.5px] text-neutral-800">{r.text}</p>
+              </li>))}</ul>
+          </section>
+        ))}
+      </div>
+      <table className="mt-3 hidden w-full table-fixed sm:table print:table">
         <colgroup><col className="w-[7%]" /><col className="w-[23%]" /><col className="w-[52%]" /><col className="w-[18%]" /></colgroup>
         <thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">No.</th><th>Stage</th><th>Description of works</th><th className="text-right">Price (ex VAT)</th></tr></thead>
         {L.groups.map((g, gi) => (
@@ -166,27 +243,27 @@ export function ScopeTable({ layout: L, price: p, n: sectionNo }: { layout: Quot
       <div className="mt-3 space-y-6">
         {L.groups.map((g, gi) => (
           <section key={g.key}>
-            <div className="flex items-baseline justify-between gap-3 rounded-md bg-[#071a33] px-3 py-1.5 text-white"><h3 className="text-[13px] font-bold"><span className="mr-2 text-[#f5b400]">{gi + 1}</span>{g.title}</h3><span className="font-bold tabular-nums">{gbp(g.net)}</span></div>
+            <div className="flex items-baseline justify-between gap-3 rounded-md bg-[#071a33] px-3 py-1.5 text-white"><h3 className="min-w-0 text-[13px] font-bold"><span className="mr-2 text-[#f5b400]">{gi + 1}</span>{g.title}</h3><span className="font-bold tabular-nums">{gbp(g.net)}</span></div>
             {g.text && <p className="mt-2 text-xs italic text-neutral-600">{g.text}</p>}
             <div className="mt-2 divide-y divide-neutral-200">
               {g.rows.map((r, ri) => (
                 <div key={r.key} className="break-inside-avoid py-3">
-                  <div className="flex items-baseline justify-between gap-3"><p className="font-semibold text-[#071a33]"><span className="mr-2 text-neutral-400">{gi + 1}.{ri + 1}</span>{r.title}<Tags r={r} /></p><span className="font-semibold tabular-nums">{gbp(r.net)}</span></div>
-                  <p className="mt-0.5 pl-8 text-neutral-800">{r.text}</p>
+                  <div className="flex items-baseline justify-between gap-3"><p className="min-w-0 font-semibold text-[#071a33]"><span className="mr-2 text-neutral-400">{gi + 1}.{ri + 1}</span>{r.title}<Tags r={r} /></p><span className="shrink-0 font-semibold tabular-nums">{gbp(r.net)}</span></div>
+                  <p className="mt-0.5 text-neutral-800 sm:pl-8">{r.text}</p>
                   {L.format === "NORMAL" && r.items && r.items.length > 0 && (
-                    <ul className="mt-1.5 grid gap-x-6 pl-8 text-xs text-neutral-600 sm:grid-cols-2 print:grid-cols-2">
+                    <ul className="mt-1.5 grid gap-x-6 text-xs text-neutral-600 sm:grid-cols-2 sm:pl-8 print:grid-cols-2">
                       {r.items.map(i => <li key={i.id} className="flex justify-between gap-2 border-b border-dotted border-neutral-300 py-0.5"><span>{i.description}{i.byClient ? " (supplied by you)" : ""}</span><span className="whitespace-nowrap">{qty(i.quantity, i.unit)}</span></li>)}
                     </ul>
                   )}
                   {L.format === "ITEMISED" && r.items && r.items.length > 0 && (
-                    <table className="ml-8 mt-1.5 w-[calc(100%-2rem)] table-fixed text-xs">
+                    <div className="mt-1.5 sm:ml-8"><ScrollX min={420}><table className="w-full table-fixed text-xs">
                       <colgroup><col className="w-[55%]" /><col className="w-[15%]" /><col className="w-[14%]" /><col className="w-[16%]" /></colgroup>
                       <thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1 font-semibold">Item</th><th className="text-right font-semibold">Quantity</th><th className="text-right font-semibold">Rate</th><th className="text-right font-semibold">Amount</th></tr></thead>
                       <tbody>{[...r.items].sort((a, b) => (a.kind === "LABOUR" ? 1 : 0) - (b.kind === "LABOUR" ? 1 : 0)).map(i => (
                         <tr key={i.id} className="border-b border-neutral-100 align-top"><td className="py-1 pr-2">{i.description}{i.kind === "LABOUR" && <span className="ml-1.5 rounded bg-neutral-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-neutral-500">Labour</span>}</td><td className="whitespace-nowrap text-right">{qty(i.quantity, i.unit)}</td>
                           <td className="whitespace-nowrap text-right tabular-nums">{i.byClient ? "—" : gbp(i.rate ?? 0)}</td><td className="whitespace-nowrap text-right tabular-nums">{i.byClient ? <span className="text-neutral-500">By you</span> : gbp(i.net ?? 0)}</td></tr>
                       ))}</tbody>
-                    </table>
+                    </table></ScrollX></div>
                   )}
                 </div>
               ))}
@@ -199,7 +276,7 @@ export function ScopeTable({ layout: L, price: p, n: sectionNo }: { layout: Quot
   );
 }
 
-/** Contract terms: particulars, numbered clauses (1.1, 1.2…), the documents that form the contract, signatures. */
+/** Contract: cover with contents, particulars, numbered clauses (1.1, 1.2…), the documents that form the contract, signatures. */
 function Contract({ d }: { d: QuoteDocs }) {
   const co = d.company.registeredName || d.company.name;
   const deposit = d.payments[0];
@@ -208,30 +285,34 @@ function Contract({ d }: { d: QuoteDocs }) {
     ["The works", `${d.title} – quotation ${d.reference}${d.version > 1 ? ` v${d.version}` : ""} dated ${longDate(d.issueDate)}`],
     ["Contract sum", `${gbp(d.price.net)} + VAT = ${gbp(d.price.gross)}`], ["Deposit", deposit ? `${gbp(deposit.amount)} (${deposit.percent.toFixed(0)}%) on signing` : "—"],
     ["Start", d.start ? longDate(d.start) : "To be confirmed in writing"], ["Completion", d.finish ? `On or around ${longDate(d.finish)} (${d.workingDays} working days)` : `About ${d.workingDays} working days after starting`],
-    ["Payment terms", `${d.paymentDays} days from invoice`], ["Workmanship guarantee", `${d.guarantee.years} years from practical completion`],
+    ["Payment terms", `${d.paymentDays} days from invoice`], ["Working hours", d.company.workingHours || "08:00–17:30 Monday to Friday"],
+    ["Site manager", d.company.siteManager ? `${d.company.siteManager}${d.company.siteManagerPhone ? ` · ${d.company.siteManagerPhone}` : ""}` : "Named at the pre-start meeting"],
+    ["Workmanship guarantee", `${d.guarantee.years} years from practical completion`], ["Disputes", d.company.disputeScheme || "Independent mediation"],
   ];
+  const clauses = d.contract.map(s => { const m = s.heading.match(/^(\d+)\.\s*(.*)$/); return { s, no: m?.[1] ?? "", heading: m?.[2] ?? s.heading }; });
   return (
     <>
+      <Cover d={d} kind="Contract for building works" lead="Consumer building contract: the particulars, the terms that protect us both, and the documents that form the contract."
+        contents={["Contract particulars", ...clauses.map(c => c.heading), "Documents forming this contract", "Signed"].slice(0, 30)}
+        facts={[["Contract sum inc VAT", gbp(d.price.gross)]]} />
       <Page d={d} title="Contract for building works" subtitle="Consumer building contract – particulars and terms">
         <div><SectionTitle>Contract particulars</SectionTitle>
-          <table className="mt-2 w-full text-sm"><tbody>{particulars.map(([k, v]) => <tr key={k} className="border-b border-neutral-100 align-top"><td className="w-44 py-1.5 pr-3 text-neutral-500">{k}</td><td className="py-1.5 font-medium text-[#071a33]">{v}</td></tr>)}</tbody></table>
+          <table className="mt-2 w-full overflow-hidden rounded-lg text-sm"><tbody>{particulars.map(([k, v], i) => <tr key={k} className={`align-top ${i % 2 ? "bg-neutral-50" : ""}`}><td className="w-28 px-2 py-1.5 pr-3 text-neutral-500 sm:w-44">{k}</td><td className="py-1.5 pr-2 font-medium text-[#071a33]">{v}</td></tr>)}</tbody></table>
         </div>
+        <Callout tone="navy" title="Your key rights at a glance">You can cancel within 14 days of signing (clause {clauses.find(c => /cancel/i.test(c.heading))?.no ?? "—"}); nothing extra is charged without your written agreement (clause {clauses.find(c => /Variation/i.test(c.heading))?.no ?? "—"}); our workmanship is guaranteed for {d.guarantee.years} years; and your rights under the Consumer Rights Act 2015 are not affected.</Callout>
         <div className="space-y-5">
-          {d.contract.map(s => {
-            const m = s.heading.match(/^(\d+)\.\s*(.*)$/), no = m?.[1] ?? "", heading = m?.[2] ?? s.heading;
-            return (
-              <div key={s.heading} className="break-inside-avoid">
-                <h3 className="flex gap-3 font-bold text-[#071a33]"><span className="w-8 shrink-0 text-[#b07f00]">{no}</span>{heading}</h3>
-                {s.paragraphs?.map((p, i) => <p key={i} className="mt-1 flex gap-3"><span className="w-8 shrink-0 text-neutral-400">{no}.{i + 1}</span><span>{p}</span></p>)}
-                {s.items?.map((x, i) => <p key={i} className="mt-1 flex gap-3"><span className="w-8 shrink-0 text-neutral-400">{no}.{(s.paragraphs?.length ?? 0) + i + 1}</span><span>{x}</span></p>)}
-              </div>
-            );
-          })}
+          {clauses.map(({ s, no, heading }) => (
+            <div key={s.heading} className="break-inside-avoid">
+              <h3 className="flex items-center gap-2 border-b border-neutral-200 pb-1 font-bold text-[#071a33] sm:gap-3"><span className="flex h-6 w-8 shrink-0 items-center justify-center rounded bg-[#071a33] text-[11px] font-black text-[#f5b400]">{no}</span>{heading}</h3>
+              {s.paragraphs?.map((p, i) => <p key={i} className="mt-1.5 flex gap-2 sm:gap-3"><span className="w-8 shrink-0 text-right text-[11px] font-semibold text-neutral-400">{no}.{i + 1}</span><span>{p}</span></p>)}
+              {s.items?.map((x, i) => <p key={i} className="mt-1.5 flex gap-2 sm:gap-3"><span className="w-8 shrink-0 text-right text-[11px] font-semibold text-neutral-400">{no}.{(s.paragraphs?.length ?? 0) + i + 1}</span><span>{x}</span></p>)}
+            </div>
+          ))}
         </div>
         <div className="break-inside-avoid"><SectionTitle>Documents forming this contract</SectionTitle>
-          <ol className="mt-2 list-decimal space-y-0.5 pl-5 text-xs">
-            <li>These contract particulars and terms</li><li>Quotation {d.reference} with its scope of works, programme, payment schedule, items supplied by the client, exclusions and assumptions</li>
-            <li>{d.guarantee.years}-year workmanship guarantee</li><li>Construction phase plan, risk assessments and method statements</li><li>Any variation agreed in writing (variation order form or the client portal)</li>
+          <ol className="mt-2 grid gap-1.5 text-xs sm:grid-cols-2 print:grid-cols-2">
+            {["These contract particulars and terms", `Quotation ${d.reference} with its scope of works, programme, payment schedule, client supplies, exclusions and assumptions`, `${d.guarantee.years}-year workmanship guarantee`, "Construction phase plan, risk assessments, method statements and site zone plan", "Cancellation form", "Any variation agreed in writing (variation order form or the client portal)"]
+              .map((x, i) => <li key={i} className="flex gap-2 rounded-md border border-neutral-200 p-2"><span className="font-black text-[#b07f00]">{String.fromCharCode(65 + i)}</span><span>{x}</span></li>)}
           </ol>
         </div>
         <div className="break-inside-avoid"><SectionTitle>Signed</SectionTitle>
@@ -247,8 +328,8 @@ function Contract({ d }: { d: QuoteDocs }) {
 function Cancellation({ d }: { d: QuoteDocs }) {
   return (
     <Page d={d} title="Cancellation form" subtitle="Complete and return this form only if you wish to cancel within 14 days">
-      <p className="text-xs text-neutral-600">Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013 – model cancellation form.</p>
-      <div className="space-y-5">{d.cancellationForm.map((x, i) => <p key={i} className="border-b border-neutral-200 pb-3">{x}</p>)}</div>
+      <Callout title="Your right to cancel">Consumer Contracts (Information, Cancellation and Additional Charges) Regulations 2013 – model cancellation form. You may also tell us by email or in writing; you do not have to give a reason.</Callout>
+      <div className="space-y-5 rounded-xl border-2 border-dashed border-neutral-300 p-5">{d.cancellationForm.map((x, i) => <p key={i} className="border-b border-neutral-200 pb-3 [overflow-wrap:anywhere]">{x}</p>)}</div>
     </Page>
   );
 }
@@ -256,58 +337,81 @@ function Cancellation({ d }: { d: QuoteDocs }) {
 function Guarantee({ d }: { d: QuoteDocs }) {
   return (
     <Page d={d} title={`${d.guarantee.years}-year workmanship guarantee`}>
-      <div className="rounded-xl border-2 border-amber-400 p-5 text-center">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-600">Certificate</p>
-        <p className="mt-1 text-xl font-black">{d.guarantee.years}-Year Workmanship Guarantee</p>
-        <p className="mt-1">Issued to {d.client.name || "the client"} for the works at {d.client.siteAddress || "the property"} (contract {d.reference}).</p>
-        <p className="mt-1 text-neutral-600">Valid for {d.guarantee.years} years from the date of practical completion: ____________________</p>
+      <div className="relative overflow-hidden rounded-2xl border-[3px] border-[#f5b400] p-1">
+        <div className="rounded-xl border border-[#f5b400]/60 bg-[radial-gradient(circle_at_top,#fffbeb,white_70%)] px-6 py-8 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-[#b07f00]">Certificate of guarantee</p>
+          <p className="mt-2 text-3xl font-black text-[#071a33]">{d.guarantee.years}-Year Workmanship Guarantee</p>
+          <div className="mx-auto mt-3 h-0.5 w-24 bg-[#f5b400]" />
+          <p className="mt-3">Issued to <strong>{d.client.name || "the client"}</strong> for the works at <strong>{d.client.siteAddress || "the property"}</strong> (contract {d.reference}).</p>
+          <p className="mt-1 text-neutral-600">Valid for {d.guarantee.years} years from the date of practical completion: ____________________</p>
+          <div className="mx-auto mt-5 flex h-20 w-20 items-center justify-center rounded-full border-4 border-double border-[#071a33] text-center text-[10px] font-black uppercase leading-tight text-[#071a33]">{d.guarantee.years} year<br />guarantee</div>
+        </div>
       </div>
       <Sections list={d.guarantee.sections} />
-      <div className="mt-8 grid grid-cols-2 gap-10"><div className="border-t pt-1 text-xs">Signed for {d.company.registeredName || d.company.name}</div><div className="border-t pt-1 text-xs">Date of practical completion</div></div>
+      <div className="mt-8"><Signatures parties={[{ role: `Signed for ${d.company.registeredName || d.company.name}` }, { role: "Date of practical completion" }]} /></div>
     </Page>
   );
 }
 
 function Plan({ d }: { d: QuoteDocs }) {
   return (
-    <Page d={d} title="Construction phase plan" subtitle="Construction (Design and Management) Regulations 2015">
-      <Sections list={d.cpp} />
-    </Page>
+    <>
+      <Cover d={d} kind="Health & safety" safety lead="Construction phase plan under the Construction (Design and Management) Regulations 2015: how the site is organised, the people responsible, the danger zones and the rules everyone follows."
+        contents={[...d.cpp.map(s => s.heading.replace(/^\d+\.\s*/, "")), ...(d.zones ? ["Site zones – red, amber, green", "Safety signs on this site"] : [])]}
+        facts={[["Activities", String(d.methods.length)], ["Hazards assessed", String(d.risks.length)], ["High before controls", String(d.risks.filter(r => r.beforeBand === "High").length)], ["High after controls", String(d.risks.filter(r => r.afterBand === "High").length)]]} />
+      <Page d={d} title="Construction phase plan" subtitle="Construction (Design and Management) Regulations 2015" accent="safety">
+        <Sections list={d.cpp} />
+        {d.zones && <div><SectionTitle n={d.cpp.length + 1}>Site zones – red, amber, green</SectionTitle><p className="mt-2 text-xs text-neutral-600">Every area of the job is marked on site with barriers, tape and signs in these colours. Please keep children, pets and visitors out of red and amber areas.</p><div className="mt-3"><ZonePlan zones={d.zones} /></div></div>}
+        {d.signs && <div><SectionTitle n={d.cpp.length + 2}>Safety signs on this site</SectionTitle><div className="mt-3"><SafetySigns signs={d.signs} /></div></div>}
+      </Page>
+    </>
   );
 }
 
 function Rams({ d }: { d: QuoteDocs }) {
+  const high = d.risks.filter(r => r.beforeBand === "High").length;
   return (
     <>
-      <Page d={d} title="Risk assessment" subtitle="Risk = likelihood × severity (1–5 each): 1–7 low, 8–14 medium, 15–25 high">
-        <table className="w-full table-fixed text-xs"><colgroup><col className="w-[22%]" /><col className="w-[17%]" /><col className="w-[6%]" /><col className="w-[49%]" /><col className="w-[6%]" /></colgroup>
-          <thead><tr className="border-b text-left text-neutral-500"><th className="py-1 pr-2">Hazard</th><th className="pr-2">Who / harm</th><th>Before</th><th className="px-2">Control measures</th><th>After</th></tr></thead>
-          <tbody>{d.risks.map(r => (
-            <tr key={r.id} className="break-inside-avoid border-b align-top">
-              <td className="py-1.5 pr-2 font-semibold">{r.title}<span className="block font-normal text-neutral-500">{r.activities.join(", ")}</span></td>
-              <td className="pr-2">{r.who}<span className="block text-neutral-500">{r.harm}</span></td>
-              <td><span className={`rounded px-1.5 font-semibold ${band(r.beforeBand)}`}>{r.before}</span></td>
-              <td className="px-2"><ul className="list-disc pl-4">{r.controls.map((c, i) => <li key={i}>{c}</li>)}</ul></td>
-              <td><span className={`rounded px-1.5 font-semibold ${band(r.afterBand)}`}>{r.after}</span></td>
+      <Page d={d} title="Risk assessment" subtitle="Risk = likelihood × severity (1–5 each): 1–7 low, 8–14 medium, 15–25 high" accent="safety">
+        <RiskKey />
+        {d.risks.some(r => r.beforeLS) && <div className="grid gap-6 sm:grid-cols-2 print:grid-cols-2">
+          <RiskMatrix title="Before controls" points={d.risks.filter(r => r.beforeLS).map(r => r.beforeLS!)} />
+          <RiskMatrix title="After controls (residual risk)" points={d.risks.filter(r => r.afterLS).map(r => r.afterLS!)} />
+        </div>}
+        <Callout tone={high ? "red" : "green"} title="Summary">{d.risks.length} hazards assessed across {d.methods.length} activities; {high} rated high before controls and {d.risks.filter(r => r.afterBand === "High").length} after. Where severity stays high (for example falls or collapse) the work goes ahead only under the permit, supervision and exclusion zone shown.</Callout>
+        <ScrollX min={680}><table className="w-full table-fixed text-xs"><colgroup><col className="w-[22%]" /><col className="w-[17%]" /><col className="w-[9%]" /><col className="w-[43%]" /><col className="w-[9%]" /></colgroup>
+          <thead><tr className="bg-[#071a33] text-left text-[10px] uppercase tracking-wide text-white"><th className="px-2 py-1.5">Hazard</th><th className="pr-2">Who / harm</th><th>Before</th><th className="px-2">Control measures</th><th>After</th></tr></thead>
+          <tbody>{d.risks.map((r, i) => (
+            <tr key={r.id} className={`break-inside-avoid border-b align-top ${i % 2 ? "bg-neutral-50" : ""}`}>
+              <td className={`border-l-4 px-2 py-1.5 font-semibold ${r.beforeBand === "High" ? "border-red-600" : r.beforeBand === "Medium" ? "border-amber-400" : "border-emerald-600"}`}>{r.title}<span className="block font-normal text-neutral-500">{r.activities.join(", ")}</span></td>
+              <td className="py-1.5 pr-2">{r.who}<span className="block text-neutral-500">{r.harm}</span></td>
+              <td className="py-1.5"><RiskBadge score={r.before} label={r.beforeBand} /></td>
+              <td className="px-2 py-1.5"><ul className="list-disc pl-4">{r.controls.map((c, j) => <li key={j}>{c}</li>)}</ul></td>
+              <td className="py-1.5"><RiskBadge score={r.after} label={r.afterBand} /></td>
             </tr>
-          ))}</tbody></table>
+          ))}</tbody></table></ScrollX>
         <p className="text-xs text-neutral-600">Assessed by: ____________________  Date: ____________  Reviewed when the work or conditions change, and briefed to all operatives before they start.</p>
       </Page>
-      <Page d={d} title="Method statements" subtitle="How each part of the work will be carried out safely">
+      <Page d={d} title="Method statements" subtitle="How each part of the work will be carried out safely" accent="safety">
         {d.methods.map((m, i) => (
-          <div key={m.id} className="break-inside-avoid rounded-lg border p-4">
-            <h3 className="font-bold">{i + 1}. {m.title}</h3>
-            <ol className="mt-1 list-decimal space-y-0.5 pl-5">{m.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>
-            <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3 print:grid-cols-3">
-              <p><strong>Plant & equipment:</strong> {m.plant.join(", ")}</p><p><strong>PPE:</strong> {m.ppe.join(", ")}</p><p><strong>Competence:</strong> {m.competence}</p>
+          <div key={m.id} className="break-inside-avoid overflow-hidden rounded-lg border">
+            <h3 className="flex items-center gap-2 bg-[#071a33] px-4 py-2 font-bold text-white"><span className="text-[#f5b400]">{String(i + 1).padStart(2, "0")}</span>{m.title}</h3>
+            <div className="p-4">
+              <ol className="list-decimal space-y-0.5 pl-5">{m.steps.map((s, j) => <li key={j}>{s}</li>)}</ol>
+              <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3 print:grid-cols-3">
+                <p className="rounded bg-neutral-50 p-2"><strong className="block text-[10px] uppercase tracking-wide text-neutral-500">Plant & equipment</strong>{m.plant.join(", ")}</p>
+                <p className="rounded bg-blue-50 p-2"><strong className="block text-[10px] uppercase tracking-wide text-blue-800">PPE (mandatory)</strong>{m.ppe.join(", ")}</p>
+                <p className="rounded bg-neutral-50 p-2"><strong className="block text-[10px] uppercase tracking-wide text-neutral-500">Competence</strong>{m.competence}</p>
+              </div>
+              <p className="mt-2 rounded border-l-4 border-amber-400 bg-amber-50 p-2 text-xs"><strong>Main hazards:</strong> {m.hazards.join("; ")}</p>
             </div>
-            <p className="mt-1 text-xs text-neutral-600"><strong>Main hazards:</strong> {m.hazards.join("; ")}</p>
           </div>
         ))}
       </Page>
-      <Page d={d} title="COSHH register" subtitle="Hazardous substances expected on site – safety data sheets kept on site">
-        <table className="w-full text-xs"><tbody>{d.coshh.map(c => <tr key={c.activity} className="border-b align-top"><td className="py-1 pr-3 font-semibold">{c.activity}</td><td>{c.substances.join(" · ")}</td></tr>)}</tbody></table>
-        <p className="text-xs text-neutral-600">Controls: read the product label and safety data sheet; gloves and eye protection; ventilate; store securely; wash hands before eating. See the risk assessment.</p>
+      <Page d={d} title="COSHH register" subtitle="Hazardous substances expected on site – safety data sheets kept on site" accent="safety">
+        <table className="w-full text-xs"><thead><tr className="bg-[#071a33] text-left text-[10px] uppercase tracking-wide text-white"><th className="px-2 py-1.5">Activity</th><th>Substances</th></tr></thead>
+          <tbody>{d.coshh.map((c, i) => <tr key={c.activity} className={`border-b align-top ${i % 2 ? "bg-neutral-50" : ""}`}><td className="px-2 py-1.5 font-semibold">{c.activity}</td><td className="py-1.5">{c.substances.map(s => <span key={s} className="mb-1 mr-1 inline-block rounded-full border border-amber-400 bg-amber-50 px-2 py-0.5">{s}</span>)}</td></tr>)}</tbody></table>
+        <Callout title="Controls">Read the product label and safety data sheet; gloves and eye protection; ventilate; store securely; wash hands before eating. See the risk assessment.</Callout>
       </Page>
     </>
   );

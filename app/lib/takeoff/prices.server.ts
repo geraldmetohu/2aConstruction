@@ -17,8 +17,16 @@ function readEnvOverrides(): unknown {
   try { return JSON.parse(raw); } catch { return null; }
 }
 
+/** For a material with an edited price: use the edited price (default) or the website price when there is one. */
+export type MaterialChoice = "EDITED" | "WEBSITE";
+function readChoice(raw: unknown): Record<string, MaterialChoice> {
+  const out: Record<string, MaterialChoice> = {};
+  if (raw && typeof raw === "object") for (const [k, v] of Object.entries(raw)) if (v === "EDITED" || v === "WEBSITE") out[k] = v;
+  return out;
+}
+
 /** Company rates: defaults → TAKEOFF_RATEBOOK_JSON → latest saved rate set (Rates page). */
-export async function companyRates(): Promise<{ rates: RateBook; version: number; overrides: Record<string, Record<string, unknown>> }> {
+export async function companyRates(): Promise<{ rates: RateBook; version: number; overrides: Record<string, Record<string, unknown>>; choice: Record<string, MaterialChoice> }> {
   const env = (readEnvOverrides() ?? {}) as Record<string, Record<string, unknown>>;
   let saved: Record<string, Record<string, unknown>> = {}, version = 0;
   try {
@@ -29,7 +37,7 @@ export async function companyRates(): Promise<{ rates: RateBook; version: number
     }
   } catch { /* storage not set up yet */ }
   const merged = { materials: { ...env.materials, ...saved.materials }, labour: { ...env.labour, ...saved.labour }, trades: { ...env.trades, ...saved.trades } };
-  return { rates: mergeRateBook(defaultRateBook, merged), version, overrides: merged };
+  return { rates: mergeRateBook(defaultRateBook, merged), version, overrides: merged, choice: readChoice(saved.materialChoice) };
 }
 
 /**
@@ -38,7 +46,7 @@ export async function companyRates(): Promise<{ rates: RateBook; version: number
  * lowest ex-VAT) → older supplier import table → catalogue item TK-<KEY> → company rates → defaults.
  */
 export async function resolveTakeoffPrices(now = new Date()): Promise<{ rates: RateBook; prices: PriceTable; notes: string[]; rateVersion: number }> {
-  const { rates, version, overrides } = await companyRates();
+  const { rates, version, overrides, choice } = await companyRates();
   const prices: PriceTable = {};
   const notes: string[] = [];
   const label = version ? `Company rates v${version}` : "Company rate";
@@ -94,6 +102,10 @@ export async function resolveTakeoffPrices(now = new Date()): Promise<{ rates: R
       if (!live.length) notes.push("No live supplier prices yet. Link products (or let the monthly run find them) on the Supplier prices page.");
     } else notes.push("Quote saving, saved rates and live supplier prices need the new database tables (migration 20261101120000_add_takeoff_quotes).");
   } catch { notes.push("Live supplier prices are not available right now."); }
+
+  // An edited material price wins over the website, unless you chose the website price for that material.
+  for (const key of Object.keys(overrides.materials ?? {}))
+    if (rates.materials[key]?.confirmed && choice[key] !== "WEBSITE") prices[key] = { price: rates.materials[key].price, source: "COMPANY_RATE", label: `${label} (edited)` };
 
   return { rates, prices, notes, rateVersion: version };
 }

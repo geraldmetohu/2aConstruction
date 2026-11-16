@@ -5,7 +5,8 @@
 export type ActivityId =
   | "SITE_SETUP" | "SCAFFOLD" | "DEMOLITION" | "STRIP_OUT" | "EXCAVATION" | "CONCRETE" | "DRAINAGE" | "MASONRY" | "STRUCTURAL_STEEL"
   | "CARPENTRY" | "ROOFING" | "HOT_WORKS" | "ELECTRICAL" | "PLUMBING" | "PLASTERING" | "TILING" | "DECORATING" | "JOINERY"
-  | "KITCHEN" | "FLOORING" | "GLAZING" | "WASTE" | "RENDERING" | "LANDSCAPING" | "TREE_WORK" | "EXTERIOR_CLEANING";
+  | "KITCHEN" | "FLOORING" | "GLAZING" | "WASTE" | "RENDERING" | "LANDSCAPING" | "TREE_WORK" | "EXTERIOR_CLEANING"
+  | "GAS_HEATING" | "SOLAR" | "DAMP_PROOFING" | "INSULATION" | "FIRE_SAFETY";
 
 /** Which rate keys mean which activity. Site set-up and waste are always present. */
 const DETECT: [ActivityId, RegExp][] = [
@@ -32,7 +33,28 @@ const DETECT: [ActivityId, RegExp][] = [
   ["JOINERY", /^labour:(door_hang|door_refurb|skirting_fit|door_head_adjust)/],
   ["KITCHEN", /^labour:(kitchen_units|worktop_fit)/],
   ["FLOORING", /^labour:(laminate_floor|engineered_floor|lvt_floor|floor_tiling|solid_floor|vinyl_floor|resin_floor_lay)|^floor_carpet/],
-  ["GLAZING", /^labour:(window_fit|door_set_fit|rooflight_fit|roof_window_fit)/],
+  ["GLAZING", /^labour:(window_fit|door_set_fit|rooflight_fit|roof_window_fit|window_replace|front_door_replace|patio_door_replace|bifold_install|porch_build|door_canopy_fit)/],
+  // Heating & energy, damp, basements and alterations
+  ["GAS_HEATING", /^labour:(boiler_|gas_pipe_run|powerflush|heat_pump_fit|heating_new_system)/],
+  ["PLUMBING", /^labour:(cylinder_unvented_fit|radiator_replace|heating_new_system|heat_pump_fit|sump_pump_fit)/],
+  ["ELECTRICAL", /^labour:(heat_pump_electrics|heating_controls_fit|battery_fit|ev_charger_fit|ev_cable_run|solar_commission|fire_alarm_|emergency_light_fit)/],
+  ["SOLAR", /^labour:(solar_install|solar_commission|battery_fit)/],
+  ["ROOFING", /^labour:solar_install/],
+  ["EXCAVATION", /^labour:(ev_cable_run|basement_dig|lightwell_build|sump_pump_fit)/],
+  ["CONCRETE", /^labour:basement_slab/],
+  ["INSULATION", /^labour:(loft_insulation_lay|loft_boarding|cavity_wall_fill|acoustic_wall)/],
+  ["DAMP_PROOFING", /^labour:(dpc_injection|damp_hack_replaster|tanking_slurry|cavity_membrane|sump_pump_fit|timber_treatment)/],
+  ["PLASTERING", /^labour:(damp_hack_replaster|partition_build|acoustic_wall)/],
+  ["MASONRY", /^labour:(crack_stitch|wall_tie_replace|repointing|air_brick_fit|lintel_replace|lightwell_build|porch_build|doorway_form)/],
+  ["STRUCTURAL_STEEL", /^labour:(lintel_replace|basement_dig)/],
+  ["CARPENTRY", /^labour:(joist_end_repair|staircase_|basement_stairs|partition_build)/],
+  ["JOINERY", /^labour:(fire_door_fit|doorway_form)/],
+  ["ELECTRICAL", /^labour:(ac_supply|ac_head_fit|ac_cassette_fit|ac_outdoor_fit)/],
+  ["HOT_WORKS", /^labour:ac_outdoor_fit/],
+  ["CARPENTRY", /^labour:(trimmer_fit|timber_gable_build|crown_roof_build)/],
+  ["ROOFING", /^labour:(roof_cut_retile|lead_valley)/],
+  ["RENDERING", /^labour:render_apply/],
+  ["FIRE_SAFETY", /^labour:(fire_door_fit|fire_alarm_|emergency_light_fit|fire_stopping)/],
 ];
 
 export function activitiesOf(rateKeys: string[]): ActivityId[] {
@@ -42,13 +64,13 @@ export function activitiesOf(rateKeys: string[]): ActivityId[] {
 }
 
 /** Order in which activities happen on site (used for documents). */
-export const ORDER: ActivityId[] = ["SITE_SETUP", "SCAFFOLD", "DEMOLITION", "STRIP_OUT", "EXCAVATION", "DRAINAGE", "CONCRETE", "MASONRY", "STRUCTURAL_STEEL",
-  "CARPENTRY", "ROOFING", "HOT_WORKS", "GLAZING", "RENDERING", "ELECTRICAL", "PLUMBING", "PLASTERING", "TILING", "KITCHEN", "JOINERY", "FLOORING", "DECORATING",
+export const ORDER: ActivityId[] = ["SITE_SETUP", "SCAFFOLD", "DEMOLITION", "STRIP_OUT", "EXCAVATION", "DRAINAGE", "CONCRETE", "MASONRY", "STRUCTURAL_STEEL", "DAMP_PROOFING",
+  "CARPENTRY", "ROOFING", "SOLAR", "HOT_WORKS", "GLAZING", "RENDERING", "INSULATION", "ELECTRICAL", "PLUMBING", "GAS_HEATING", "FIRE_SAFETY", "PLASTERING", "TILING", "KITCHEN", "JOINERY", "FLOORING", "DECORATING",
   "TREE_WORK", "LANDSCAPING", "EXTERIOR_CLEANING", "WASTE"];
 
 export type HazardId =
   | "HEIGHT" | "FALLING_OBJECTS" | "COLLAPSE" | "MANUAL_HANDLING" | "DUST" | "ASBESTOS" | "NOISE_VIBRATION" | "TOOLS" | "SLIPS"
-  | "ELECTRIC" | "SERVICES" | "EXCAVATION" | "PLANT" | "FIRE" | "COSHH" | "LEAD" | "PUBLIC" | "WEATHER" | "DELIVERIES" | "GLASS" | "HOT_WATER" | "LONE";
+  | "ELECTRIC" | "SERVICES" | "EXCAVATION" | "PLANT" | "FIRE" | "COSHH" | "LEAD" | "PUBLIC" | "WEATHER" | "DELIVERIES" | "GLASS" | "HOT_WATER" | "LONE" | "GAS" | "CONFINED";
 
 /** Risk rating: likelihood × severity, each 1–5. */
 export interface Hazard { title: string; who: string; harm: string; before: [number, number]; controls: string[]; after: [number, number] }
@@ -96,6 +118,10 @@ export const HAZARDS: Record<HazardId, Hazard> = {
     controls: ["Glass lifting suction cups; enough people for the weight (or glazing robot for large bi-fold panes)", "Cut-resistant gloves and arm protection", "Units stored upright on A-frames, away from walkways"] },
   HOT_WATER: { title: "Hot water, pressurised systems and floods", who: "Operatives, occupants", harm: "Scalds, water damage", before: [2, 3], after: [1, 2],
     controls: ["Systems drained down and isolated before work; pressure tested after", "Unvented cylinders worked on only by G3 qualified plumbers", "Leak checks before covering pipework"] },
+  GAS: { title: "Gas escape, carbon monoxide and flue gases", who: "Operatives, occupants, neighbours", harm: "Explosion, fire, carbon monoxide poisoning", before: [2, 5], after: [1, 5],
+    controls: ["Gas work only by a Gas Safe registered engineer holding the right categories (CCN1, CENWAT, etc.)", "Gas isolated at the meter and capped before disconnecting; tightness test before and after every job", "Flue installed to the manufacturer's instructions and BS 5440, checked for spillage; combustion analysis recorded", "CO alarm fitted where any fuel-burning appliance is installed (Building Regs Part J)", "Smell of gas: no switches or flames, open windows, turn off at the meter, call 0800 111 999"] },
+  CONFINED: { title: "Confined and below-ground spaces (cellars, basements, lofts, sumps)", who: "Operatives", harm: "Asphyxiation, fumes build-up, entrapment, flooding", before: [2, 5], after: [1, 4],
+    controls: ["Forced ventilation in cellars and basements, especially with solvents, slurries or petrol plant (no petrol or diesel plant below ground)", "Gas monitor where fumes or low oxygen are possible; two people present and a means of rescue planned", "Two ways out kept clear; temporary lighting with emergency back-up", "Water ingress pumped and monitored; work stopped in heavy rain if the excavation floods"] },
   LONE: { title: "Lone working", who: "Operatives", harm: "Delay in getting help after an accident", before: [2, 4], after: [1, 3],
     controls: ["No high-risk work (height, electrics, hot works) alone", "Check-in calls with the site manager; mobile phone on the person"] },
 };
@@ -180,6 +206,21 @@ export const ACTIVITIES: Record<ActivityId, Activity> = {
   EXTERIOR_CLEANING: { title: "Exterior cleaning (windows, jet washing, roof & gutter cleaning)", hazards: ["HEIGHT", "SLIPS", "COSHH", "ELECTRIC", "PUBLIC"],
     steps: ["Water-fed poles used from the ground wherever possible; ladders only for short access, footed", "Roof and high-level work from an access platform or roof ladders, never on wet or mossy slopes without fall protection", "Biocides mixed and applied per the label, plants protected, run-off kept from drains", "Jet washing with the area cordoned, outside sockets and lights protected", "Surfaces re-sanded / sealed after cleaning where included"],
     plant: ["Water-fed pole system", "Pressure washer / surface cleaner", "Access platform (where needed)"], ppe: [...BASIC_PPE, "Eye protection", "Waterproofs", "Chemical gloves"], competence: "Trained exterior cleaning operatives; IPAF for access platforms" },
+  GAS_HEATING: { title: "Gas boilers, heating systems and heat pumps", hazards: ["GAS", "HOT_WATER", "ELECTRIC", "MANUAL_HANDLING", "FIRE"],
+    steps: ["Survey: gas supply, flue route, condensate, heat loss (heat pumps); confirm the boiler / heat pump size", "Isolate gas at the meter and electrics at the board; drain the system down", "Remove the old appliance; fit the new one, flue, filter and controls; gas pipe sized to the appliance", "Tightness test, purge, light and commission; flue and combustion checks; Benchmark completed", "Refill with inhibitor; balance radiators; show the client the controls; register with Gas Safe / MCS"],
+    plant: ["Gas analyser", "Manometer / tightness test kit", "Power flush machine", "Pipe press / blowtorch"], ppe: [...BASIC_PPE, "Eye protection"], competence: "Gas Safe registered engineer (relevant categories); G3 for unvented cylinders; MCS installer for heat pumps" },
+  SOLAR: { title: "Solar PV and batteries", hazards: ["HEIGHT", "ELECTRIC", "FALLING_OBJECTS", "MANUAL_HANDLING", "WEATHER", "FIRE"],
+    steps: ["Roof survey and structural check; array layout and electrical design; DNO application (G98 / G99)", "Scaffold with edge protection and a loading bay; panels lifted by hoist or two people", "Roof hooks fixed to rafters under the tiles; rails, panels and bird mesh fixed", "DC cabling with MC4 connectors – panels are live in daylight: cover or isolate", "Inverter, battery and AC connection; test, commission and issue MCS & EIC certificates"],
+    plant: ["Scaffold & hoist", "Insulation resistance / PV tester", "Torque driver"], ppe: [...BASIC_PPE, "Hard hat", "Harness where specified"], competence: "MCS-certified installer; Part P electrician; roofer for the fixings" },
+  DAMP_PROOFING: { title: "Damp proofing, tanking and timber treatment", hazards: ["COSHH", "DUST", "CONFINED", "MANUAL_HANDLING", "ELECTRIC"],
+    steps: ["Damp survey and moisture readings; find and fix the cause (gutters, ground levels, leaks) first", "Isolate electrics in the walls being stripped; hack off contaminated plaster", "Drill and inject DPC cream / apply tanking slurry / fix cavity drain membrane to the manufacturer's details", "Re-plaster in salt-resistant plaster; sump and pumps tested", "Guarantee issued; client told about drying out times"],
+    plant: ["SDS drill with extraction", "Injection gun", "Dehumidifier", "Moisture meter"], ppe: [...BASIC_PPE, "FFP3 mask", "Eye protection", "Chemical gloves"], competence: "PCA-trained remedial specialist (CSRT for waterproofing)" },
+  INSULATION: { title: "Loft, cavity and acoustic insulation", hazards: ["HEIGHT", "DUST", "CONFINED", "ELECTRIC", "SLIPS"],
+    steps: ["Check the loft: boards to walk on, lighting, cables lifted clear (not buried under insulation), downlighter covers", "Insulation laid in two cross-laid layers; eaves ventilation kept clear", "Cavity: borescope survey; drill pattern; inject bead; holes made good to match", "Raised boarding on loft legs so the insulation is not squashed"],
+    plant: ["Crawl boards", "Cavity injection machine", "Borescope"], ppe: [...BASIC_PPE, "FFP3 mask", "Eye protection", "Coveralls", "Knee pads"], competence: "Trained insulation installer; CIGA registered for cavity fill" },
+  FIRE_SAFETY: { title: "Fire doors, alarms, emergency lighting and fire stopping", hazards: ["ELECTRIC", "HEIGHT", "DUST", "MANUAL_HANDLING"],
+    steps: ["Check the fire risk assessment / design: alarm grade and category, door ratings, escape routes", "Hang fire door sets to the certified installation instructions (gaps 2–4 mm, intumescent and smoke seals, three hinges, closer)", "Install detectors, sounders and emergency lights; commission and test", "Fire-stop all service penetrations with tested products; photograph each one before it is covered", "Issue alarm, emergency lighting and door installation certificates"],
+    plant: ["Feeler gauges", "Alarm test kit", "Access tower"], ppe: [...BASIC_PPE, "Eye protection"], competence: "BM TRADA / FIRAS installers for doors & stopping; electrician competent to BS 5839-6 / BS 5266" },
   WASTE: { title: "Waste and site clearance", hazards: ["MANUAL_HANDLING", "PUBLIC", "DELIVERIES", "FIRE"],
     steps: ["Waste segregated where practicable (inert, timber, plasterboard, metal, general)", "Skips not overfilled; covered when needed; skip licence on the highway", "Waste removed by licensed carriers; waste transfer notes kept", "Builders' clean on completion"],
     plant: ["Skips / grab lorry", "Wheelbarrows"], ppe: BASIC_PPE, competence: "General operatives" },
@@ -197,5 +238,7 @@ export const COSHH: Partial<Record<ActivityId, string[]>> = {
   FLOORING: ["Flooring adhesives", "Self-levelling compound"], KITCHEN: ["Worktop adhesives & sealants"], DEMOLITION: ["Silica / brick dust", "Possible asbestos (survey)"],
   STRIP_OUT: ["Plaster / silica dust", "Possible lead paint"], STRUCTURAL_STEEL: ["Intumescent paint"],
   RENDERING: ["Cement render & base coats", "Silicone render & primers", "EPS / mineral wool dust"], LANDSCAPING: ["Cement mortar & concrete", "Silica dust from cutting paving", "Resin binders", "Wood preservatives & decking oil"],
-  TREE_WORK: ["Petrol & chain oil"], EXTERIOR_CLEANING: ["Biocides / moss killers", "Patio sealers", "Detergents"],
+  TREE_WORK: ["Petrol & chain oil"], GAS_HEATING: ["Central heating cleaner & inhibitor", "Solder flux", "Refrigerant (heat pumps – sealed system)"],
+  SOLAR: ["Sealants & roof adhesives"], DAMP_PROOFING: ["DPC injection cream (silane / siloxane)", "Tanking slurry (cement – alkaline)", "Timber treatment fluid (biocide)"],
+  INSULATION: ["Mineral wool fibres", "EPS bead & binder"], FIRE_SAFETY: ["Intumescent sealants & mastics", "Fire-stopping foam"], EXTERIOR_CLEANING: ["Biocides / moss killers", "Patio sealers", "Detergents"],
 };

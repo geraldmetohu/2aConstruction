@@ -33,6 +33,8 @@
     "test:suppliers": "node tests/suppliers.test.mjs",
     "test:auth": "node tests/auth.test.mjs",
     "test:client-portal": "node tests/client-portal.test.mjs",
+    "test:finance": "node tests/finance.test.mjs",
+    "test:compliance": "node tests/compliance.test.mjs",
     "preview:takeoff": "node scripts/preview-takeoff.mjs"
   },
   "dependencies": {

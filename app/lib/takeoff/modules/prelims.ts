@@ -11,12 +11,18 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
   const loft = has("loft"), ext = has("extension"), roof = has("roofing");
   const demo = has("demolition");
   const demoStructural = !!demo && (Number(demo.values.loadBearing) > 0 || Number(demo.values.chimneyBreasts) > 0);
-  const structural = !!loft || !!(ext && ext.values.knockThrough === true) || demoStructural;
+  const basement = has("basement"), internal = has("internal");
+  // A new staircase is controlled work (Part K); alarms, fire doors and non-structural doorways are not on their own.
+  const internalBC = !!internal && (internal.values.stairs === "REPLACE" || internal.values.stairs === "REPLACE_WINDER");
+  const structural = !!loft || !!(ext && ext.values.knockThrough === true) || demoStructural || !!basement;
   const roofOpen = (loft && loft.values.demolition === true) || (roof && roof.values.strip === true);
   const weeks = Math.max(1, Math.ceil(workDays / 5));
   const S = "Preliminaries";
   // Outside-only jobs (garden, cleaning, render) need no internal protection, dust control or builders' clean.
   const outdoorOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "garden" || a.pkg.id === "cleaning" || a.pkg.id === "external" || a.pkg.id === "outbuilding" || (a.pkg.id === "demolition" && !Number(a.values.kitchens) && !Number(a.values.bathrooms) && !Number(a.values.partitions) && !Number(a.values.loadBearing) && !Number(a.values.chimneyBreasts) && !Number(a.values.strip)));
+  // Installer-type jobs (boiler, solar, windows, alarms) clean as they go – no builders' clean.
+  const light = (a: { pkg: WorkPackage; values: Values }) => ["heating", "aircon", "energy", "windows"].includes(a.pkg.id) || (a.pkg.id === "internal" && !Number(a.values.partitions) && !Number(a.values.doorways) && !String(a.values.stairs).startsWith("REPLACE"));
+  const serviceOnly = !rooms.length && active.length > 0 && active.every(light);
   const cleaningOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "cleaning");
 
   if (pr.siteProtection && !outdoorOnly) ctx.material(S, "site_protection", 1, "Fixed allowance");
@@ -37,7 +43,7 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
     const names = elevations.map(e => e.toLowerCase()).join(", ");
     ctx.material(S, "scaffold_area", area, `${names}: ${elevations.map(e => `${(run(e)).toFixed(1)} m`).join(" + ")} × ${height.toFixed(1)} m high (${p.storeys} storeys + top lift) = ${area} m², first 2 weeks hire included`);
     if (scaffWeeks > 2) ctx.material(S, "scaffold_area_hire", area * (scaffWeeks - 2), `${area} m² × ${scaffWeeks - 2} extra weeks (${scaffWeeks} weeks in all)`);
-    if (pr.chimneyScaffold || (demo && Number(demo.values.stacks) > 0) || (roof && Number(roof.values.chimneyRemove) > 0)) ctx.material(S, "chimney_scaffold", 1, "Chimney scaffold / roof access");
+    if (pr.chimneyScaffold || (demo && Number(demo.values.stacks) > 0) || (roof && Number(roof.values.chimneyRemove) > 0) || (loft && Number(loft.values.chimneyStacks) > 0)) ctx.material(S, "chimney_scaffold", 1, "Chimney scaffold / roof access");
     ctx.scope(`Erect, maintain and dismantle scaffolding to the ${names} elevation${elevations.length > 1 ? "s" : ""} (${area} m², ${scaffWeeks} weeks) for the duration of the ${roof || loft ? "roof" : "external"} works, with handrails, toe boards and a debris chute where needed.`, S);
   }
   // Rooms that make waste: strip out, kitchen/bathroom refits, new ceilings. Roughly one skip per two such rooms.
@@ -51,9 +57,9 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
   }
   if (pr.welfare && !cleaningOnly) ctx.material(S, "welfare", weeks, `${weeks} weeks`);
   if (pr.structuralEngineer && structural) ctx.material(S, "structural_engineer", 1, "Calculations and drawings");
-  if (pr.buildingControl && (loft || ext || demoStructural || has("conversion") || (has("outbuilding") && has("outbuilding")!.values.habitable === true))) { ctx.material(S, "building_control", 1, "Provisional sum"); ctx.assume("Building control fee is a provisional sum and will be adjusted to the actual invoice."); }
+  if (pr.buildingControl && (loft || ext || demoStructural || has("conversion") || !!basement || internalBC || (has("outbuilding") && has("outbuilding")!.values.habitable === true))) { ctx.material(S, "building_control", 1, "Provisional sum"); ctx.assume("Building control fee is a provisional sum and will be adjusted to the actual invoice."); }
   if (pr.partyWallNeighbours > 0) ctx.material(S, "party_wall", pr.partyWallNeighbours, `${pr.partyWallNeighbours} neighbour${pr.partyWallNeighbours > 1 ? "s" : ""}`);
-  if (pr.finalClean && !outdoorOnly) ctx.material(S, "final_clean", 1, "On completion");
+  if (pr.finalClean && !outdoorOnly && !serviceOnly) ctx.material(S, "final_clean", 1, "On completion");
 
   // Electrics for the whole job: one board (optional) and one certificate, never per room.
   const E = "Electrical testing";
@@ -87,7 +93,6 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
 
   if (pr.healthSafety) {
     const H = "Health & safety";
-    ctx.material(H, "rams_cpp", 1, "Risk assessment, method statement and CDM 2015 construction phase plan");
     ctx.material(H, "ppe_first_aid", 1, "Fixed allowance");
     ctx.material(H, "fire_safety", 1, "Fixed allowance");
     if (roofOpen) {
@@ -96,6 +101,6 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
     }
     if (ext) ctx.material(H, "excavation_safety", 1, "Excavations open");
     if (rooms.length && ctx.input.property.occupancy === "OCCUPIED") ctx.material(H, "dust_control", 1, "Occupied home: dust screens, extraction, daily clean");
-    ctx.scope("Work carried out under a written risk assessment, method statement and CDM 2015 construction phase plan, with PPE, first aid and fire safety on site.", H);
+    ctx.scope("Health & safety site set-up: PPE, first aid and fire safety on site for the whole job. All the health & safety documents (risk assessments, method statements, CDM 2015 construction phase plan, site zone plan) and the contract, guarantee and handover documents are included at no charge.", H);
   }
 }

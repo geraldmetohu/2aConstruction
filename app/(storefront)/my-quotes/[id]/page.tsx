@@ -55,6 +55,7 @@ export default async function ClientQuotePage({ params, searchParams }: { params
   return <ClientProject initialTab={tab} greetingName={greetingName} quoteView={<ClientQuote {...quoteProps} embedded />} v={{
     quoteId: id, reference: q.quote.reference, title: job.docs.title, siteAddress: q.quote.siteAddress, status: job.job.status, startDate: job.docs.start ?? null, finish: job.docs.finish ?? null,
     progress: { stages: job.progress.stages, percent: job.progress.percent },
+    extType: input.packages?.extension?.enabled ? String(input.packages.extension.values?.extType ?? "REAR") : null,
     events: job.events.map(e => ({ id: e.id, kind: e.kind, message: e.message, actorKind: e.actorKind, createdAt: new Date(e.createdAt).toISOString() })),
     photos: job.photos.map(p => ({ id: p.id, url: p.url, caption: p.caption, stage: p.stage, createdAt: new Date(p.createdAt).toISOString() })),
     documents: job.documents.map(d => ({ id: d.id, title: d.title, category: d.category, categoryLabel: docCategoryLabel(d.category), url: d.url, fileName: d.fileName, sizeBytes: d.sizeBytes, createdAt: new Date(d.createdAt).toISOString() })),

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Banknote, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, ClipboardList, Ellipsis, FileText, House, ListTodo, Mail, MessageSquare, Phone, Receipt, Send, ShoppingCart, TriangleAlert, Users, X } from "lucide-react";
 import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
 import { isLoftJob, LoftJourney3D } from "@/app/componets/client/LoftJourney3D";
+import { ExtensionJourney3D, isExtensionJob } from "@/app/componets/client/ExtensionJourney3D";
 import type { DueRow, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
 import type { ClientContact } from "@/app/lib/takeoff/jobs-store";
 import { clientAddSnag, clientAnswer, clientMessage, clientReportPayment, clientSaveInfo, clientSetSnag, clientSupply } from "./project-actions";
@@ -22,6 +23,8 @@ export interface ClientProjectView {
   portalOn: boolean; requestedStart: string | null; manager: { name: string; phone: string; email: string };
   invoices: { number: string; label: string; scheduleNo: number; issuedOn: string; dueOn: string; gross: number; balance: number }[];
   snags: SnagView[];
+  /** Type of extension on this job (for the 3D build view), if any. */
+  extType?: string | null;
 }
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -197,6 +200,7 @@ function Overview({ v, todo, openActions, toOrder, due, current, go }: {
       </div>
 
       {isLoftJob(v.progress.stages) && <LoftJourney3D stages={v.progress.stages} jobStatus={v.status} />}
+      {(v.extType || isExtensionJob(v.progress.stages)) && <ExtensionJourney3D stages={v.progress.stages} jobStatus={v.status} type={v.extType ?? "REAR"} />}
 
       <div className="grid gap-5 lg:grid-cols-5">
         <section className="self-start rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6 lg:col-span-3">

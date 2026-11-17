@@ -40,6 +40,7 @@ type Status = "DONE" | "NOW" | "NEXT";
 type StageLike = { stage: string; label: string; status: string; percent: number };
 /** The status of each drawing phase, and the phase the job is in today. */
 export function loftProgress(stages: StageLike[], jobStatus?: string): { status: Status[]; current: number } {
+  stages = stages.filter(s => /^(loft|site)\b/i.test(s.stage) || !/ · /.test(s.stage));
   const by = new Map<number, StageLike[]>();
   for (const s of stages) { const p = phaseOf(s); if (p) by.set(p, [...(by.get(p) ?? []), s]); }
   const status: Status[] = LOFT_PHASES.map(() => "NEXT");

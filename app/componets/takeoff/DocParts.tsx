@@ -131,13 +131,19 @@ export const Callout = ({ title, children, tone = "gold" }: { title?: string; ch
 };
 
 /** Signature block: one column per party, with name, signature and date lines. */
-export function Signatures({ parties }: { parties: { role: string; name?: string }[] }) {
+export interface SignedBy { name: string; role?: string; signatureUrl?: string; date?: string }
+export function Signatures({ parties }: { parties: { role: string; name?: string; signed?: SignedBy }[] }) {
   return (
     <div className="grid gap-8 sm:grid-cols-2 print:grid-cols-2">
       {parties.map(p => (
         <div key={p.role} className="break-inside-avoid overflow-hidden rounded-lg border border-neutral-200 text-xs">
           <p className="bg-[#071a33] px-4 py-1.5 font-bold uppercase tracking-wide text-white">{p.role}</p>
-          <div className="px-4 pb-4">{(["Name", "Signature", "Date"] as const).map(l => <div key={l} className="mt-6 flex items-end gap-2"><span className="w-16 shrink-0 text-neutral-500">{l}</span><span className="flex-1 border-b border-neutral-400 pb-0.5 font-semibold">{l === "Name" ? p.name ?? "" : ""}</span></div>)}</div>
+          <div className="px-4 pb-4">{(["Name", "Signature", "Date"] as const).map(l => (
+            <div key={l} className={`flex items-end gap-2 ${l === "Signature" && p.signed?.signatureUrl ? "mt-2" : "mt-6"}`}><span className="w-16 shrink-0 text-neutral-500">{l}</span>
+              <span className="flex min-h-[1rem] flex-1 items-end border-b border-neutral-400 pb-0.5 font-semibold">
+                {l === "Name" ? (p.signed ? <span>{p.signed.name}{p.signed.role ? <span className="block text-[10px] font-normal text-neutral-600">{p.signed.role}</span> : null}</span> : p.name ?? "")
+                  : l === "Signature" ? (p.signed?.signatureUrl ? <img src={p.signed.signatureUrl} alt={`Signature of ${p.signed.name}`} className="h-12 max-w-[14rem] object-contain object-left-bottom" /> : "")
+                  : p.signed?.date ? longDate(p.signed.date) : ""}</span></div>))}</div>
         </div>
       ))}
     </div>

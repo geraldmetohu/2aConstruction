@@ -27,6 +27,7 @@ export const navSections: NavSection[] = [
       { name: "Supplier prices", href: "/dashboard/supplier-prices", icon: Tag, hint: "Monthly merchant prices, price lists" },
       { name: "Company & documents", href: "/dashboard/company", icon: FileSignature, hint: "Details on quotes, contracts & H&S documents" },
       { name: "ISO & tender documents", href: "/dashboard/compliance", icon: ShieldCheck, hint: "ISO 9001 / 14001 / 45001 system, policies, tender pack" },
+      { name: "Client portal demo", href: "/dashboard/demo", icon: Film, hint: "Show a client their portal, step by step, then reset" },
       { name: "Catalogue quotes", href: "/dashboard/quotes", icon: FileText, hint: "Older catalogue-based quotes" },
       { name: "Price catalogue", href: "/dashboard/items", icon: Package, hint: "Materials, labour and prices" },
     ],

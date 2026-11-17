@@ -41,7 +41,8 @@ export interface Ctx {
   warn(text: string): void;
 }
 
-const halfDays = (d: number) => Math.ceil(d * 2 - 1e-9) / 2;
+/** Programme days are whole days – part days are rounded up (1.5 → 2). */
+const wholeDays = (d: number) => Math.ceil(d - 1e-9);
 
 /** Which part of the job a stage belongs to (for the price summary). */
 export function phaseOf(stage: string): Phase {
@@ -367,9 +368,9 @@ function summariseStages(lines: TakeoffLine[]): StageSummary[] {
   }
   return order.map(k => {
     const { byTrade, crewByTrade, ...s } = map.get(k)!;
-    const days = halfDays(Math.max(0, ...byTrade.values()));
+    const days = wholeDays(Math.max(0, ...byTrade.values()));
     const crew = [...crewByTrade.values()].reduce((a, b) => a + b, 0);
-    return { ...s, days: Math.round(days * 100) / 100, crew, personDays: Math.round(s.personDays * 10) / 10 };
+    return { ...s, days, crew, personDays: Math.round(s.personDays * 10) / 10 };
   });
 }
 
@@ -389,7 +390,7 @@ function summariseTrades(lines: TakeoffLine[], rates: RateBook): TradeSummary[] 
     });
   }
   // Implied day rate = what this quote pays per person-day.
-  for (const s of map.values()) if (s.personDays > 0) s.dayRate = Math.round(s.cost / s.personDays);
+  for (const s of map.values()) { if (s.personDays > 0) s.dayRate = Math.round(s.cost / s.personDays); s.days = wholeDays(s.days); }
   return [...map.values()].sort((a, b) => b.cost - a.cost);
 }
 

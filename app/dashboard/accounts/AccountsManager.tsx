@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Search, UserPlus } from "lucide-react";
 import { inviteAccount, sendPasswordLink, setAccountDisabled, updateAccountRole } from "./actions";
+import { ConfirmDelete } from "@/app/componets/dashboard/ConfirmDelete";
+import { deleteAccountAction } from "../delete-actions";
 
 type Row = { id: string; email: string; name: string; phone: string; role: string; trade: string | null; admin: boolean; verified: boolean; password: boolean; google: boolean; disabled: boolean; lastLoginAt: string | null; createdAt: string };
 const ROLE_LABEL: Record<string, string> = { CLIENT: "Client", TRADE: "Trade", STAFF: "Staff / PM", ADMIN: "Admin" };
@@ -67,6 +69,8 @@ export function AccountsManager({ ready, q, google, mail, trades, accounts }: { 
                 <div className="flex flex-wrap justify-end gap-2 text-xs">
                   <button onClick={async () => done(await sendPasswordLink(a.id))} className="inline-flex items-center gap-1 rounded border px-2 py-1 hover:border-neutral-500"><KeyRound className="h-3 w-3" />Password link</button>
                   {!a.admin && <button onClick={async () => { if (a.disabled || confirm(`Switch off ${a.email}? They are signed out and can't sign in until you switch them back on.`)) done(await setAccountDisabled(a.id, !a.disabled)); }} className="rounded border px-2 py-1 hover:border-neutral-500">{a.disabled ? "Switch on" : "Switch off"}</button>}
+                  {!a.admin && <ConfirmDelete small word={a.email} title={`Delete the login ${a.email}?`} run={t => deleteAccountAction(a.id, a.email, t)}
+                    what={[`The login for ${a.email}`, "Their sessions and sign-in links", "Their quotes and projects are NOT deleted – delete those from Saved quotes"]} />}
                 </div>
               </td>
             </tr>

@@ -6,11 +6,14 @@ import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import { calculateTakeoff, customerTakeoff, type CustomerTakeoff } from "@/app/lib/takeoff/engine";
 import { companyProfile, resolveTakeoffPrices } from "@/app/lib/takeoff/prices.server";
 import { buildDocuments } from "@/app/lib/takeoff/documents";
+import { resolveSigner } from "@/app/lib/takeoff/company";
+import { getSignerId, setSigner, signerReady } from "@/app/lib/takeoff/signer-store";
 import { renderQuotationPdf } from "@/app/lib/takeoff/quote-pdf.server";
 import { customItemSchema, takeoffInputSchema } from "@/app/lib/takeoff/schema";
 import { createQuote, getQuote, latestRateSet, prismaDb, saveRateSet, saveVersion, sendQuote, storageReady, StoreError } from "@/app/lib/takeoff/store";
 import { emailQuoteSent, emailQuoteUpdated } from "@/app/lib/takeoff/quote-mail.server";
 import { notifyOffice } from "@/app/lib/takeoff/notify.server";
+import { rememberClient } from "@/app/lib/takeoff/client-record";
 
 const clientSchema = z.object({
   clientName: z.string().trim().min(1, "Enter the client's name").max(200),
@@ -56,6 +59,7 @@ export async function sendTakeoffQuote(quoteId: string) {
     const db = await ready();
     const id = z.string().uuid().parse(quoteId);
     const r = await sendQuote(db, id, actor);
+    try { await rememberClient(db, id); } catch { /* the quote is sent either way; the login can be made later */ }
     const pdf = r.already ? null : await quotationPdf(db, id);
     const mail = r.already ? { sent: false } : await emailQuoteSent({ quoteId: id, reference: r.reference, clientName: r.clientName, clientEmail: r.clientEmail, pdf });
     if (!r.already) await notifyOffice(db, id, { kind: "QUOTE_SENT", emailed: mail.sent, pdf }); // office copy with the PDF
@@ -72,7 +76,8 @@ async function quotationPdf(db: Awaited<ReturnType<typeof ready>>, quoteId: stri
     if (!q?.latest) return null;
     const input = takeoffInputSchema.parse(q.latest.input);
     const { company } = await companyProfile();
-    const docs = buildDocuments({ customer: q.latest.customer as CustomerTakeoff, input, company, client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress },
+    const signer = resolveSigner(company, await getSignerId(db, quoteId));
+    const docs = buildDocuments({ customer: q.latest.customer as CustomerTakeoff, input, company, client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress }, signer,
       reference: q.quote.reference, version: q.quote.currentVersion, issueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date()) });
     return await renderQuotationPdf(docs);
   } catch (e) { console.error("[quote-pdf]", e); return null; }
@@ -97,4 +102,23 @@ export async function saveJobToLibrary(raw: unknown, remove?: string) {
     revalidatePath("/dashboard/calculator");
     return { ok: true as const, jobs: next };
   } catch (e) { return { ok: false as const, message: message(e) }; }
+}
+
+/** Choose who signs the documents of one or more quotes ("" = the company default). */
+export async function setQuoteSignerAction(quoteIds: string[], signatoryId: string) {
+  try {
+    const actor = await requireCatalogueAdmin();
+    const db = prismaDb(prisma);
+    if (!(await signerReady(db))) throw new StoreError("Signing needs the database update 20261117140000_quote_signer.");
+    const ids = z.array(z.string().uuid()).min(1, "Pick at least one quote").max(500).parse(quoteIds);
+    const { company } = await companyProfile();
+    const id = z.string().max(40).parse(signatoryId);
+    if (id && !company.signatories.some(s => s.id === id)) throw new StoreError("That signatory isn't on the Company page any more.");
+    const n = await setSigner(db, ids, id, actor);
+    revalidatePath("/dashboard/saved-quotes"); revalidatePath("/dashboard/calculator"); for (const q of ids) { revalidatePath(`/dashboard/jobs/${q}`); revalidatePath(`/my-quotes/${q}`); }
+    const who = id ? company.signatories.find(s => s.id === id)!.name : "the company default";
+    return { ok: true as const, message: `${n} quote${n === 1 ? "" : "s"} now signed by ${who}.` };
+  } catch (e) {
+    return { ok: false as const, message: e instanceof StoreError ? e.message : e instanceof z.ZodError ? e.issues.map(i => i.message).join("; ") : "Could not set who signs." };
+  }
 }

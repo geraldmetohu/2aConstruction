@@ -15,6 +15,7 @@ import { notifyClient } from "@/app/lib/takeoff/notify.server";
 import { hashCrewToken, newCrewToken } from "@/app/lib/takeoff/crew-token.server";
 import { sendMail, siteUrl } from "@/app/lib/takeoff/mail.server";
 import { addDocuments, updateDocument } from "@/app/lib/takeoff/job-documents";
+import { addExtra, removeExtra } from "@/app/lib/takeoff/extras-store";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
 const uuid = z.string().uuid();
@@ -283,4 +284,25 @@ export async function setSnagAction(quoteId: string, snagId: string, done: boole
     const s = await setSnagStatus(db(), id, uuid.parse(snagId), done ? "DONE" : "OPEN", actor, "ADMIN");
     if (done && was?.status !== "DONE") await notifyClient(db(), id, { kind: "SNAG_FIXED", title: s.title });
   });
+}
+
+// ---------------------------------------------------------------- Free extras (not on the quote, not charged)
+
+export async function addExtraAction(quoteId: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    const amount = z.number().finite().min(0).max(1_000_000);
+    const p = z.object({
+      doneOn: day, title: z.string().trim().min(3, "Say what was done").max(200), detail: z.string().trim().max(2000), stage: z.string().trim().max(200),
+      hours: z.number().finite().min(0).max(2000), cost: amount, value: amount, reason: z.string().trim().max(80),
+    }).parse(raw);
+    await addExtra(db(), uuid.parse(quoteId), p, actor);
+  });
+}
+
+export async function removeExtraAction(quoteId: string, extraId: string, typed: string) {
+  const r = await run(quoteId, async () => {
+    if (typed.trim() !== "DELETE") throw new StoreError("Type DELETE to confirm.");
+    await removeExtra(db(), uuid.parse(quoteId), uuid.parse(extraId));
+  });
+  return r.ok ? { ok: true, message: "Free extra removed." } : r;
 }

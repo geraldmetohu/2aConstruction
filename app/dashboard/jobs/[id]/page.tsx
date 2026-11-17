@@ -6,6 +6,7 @@ import { db, jobsAvailable, loadJob } from "@/app/lib/takeoff/jobs.server";
 import { markSeen } from "@/app/lib/takeoff/store";
 import { JobWorkspace } from "./JobWorkspace";
 import { documentsReady } from "@/app/lib/takeoff/job-documents";
+import { extrasReady, listExtras } from "@/app/lib/takeoff/extras-store";
 
 export const metadata: Metadata = { title: "Job" };
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   if (!job?.admin) notFound();
   await markSeen(db(), id, "ADMIN");
   const a = job.admin;
-  const docsReady = await documentsReady(db());
+  const [docsReady, extrasOn, extras] = await Promise.all([documentsReady(db()), extrasReady(db()), listExtras(db(), id).catch(() => [])]);
   return <JobWorkspace initialTab={tab} job={{
     quoteId: id, reference: job.quote.reference, status: job.quote.status, clientName: job.quote.clientName, clientEmail: job.quote.clientEmail, siteAddress: job.quote.siteAddress,
     jobStatus: job.job.status, startDate: job.job.startDate ?? job.input.terms.startDate ?? "", contacts: job.job.clientContacts, accessNotes: job.job.accessNotes, phone: job.input.terms.clientPhone,
@@ -36,8 +37,11 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     toOrder: a.toOrder, orders: a.orders.map(o => ({ ...o, updatedAt: new Date(o.updatedAt).toISOString() })),
     stageMaterials: job.docs.programme.filter(r => r.days > 0).map(r => ({
       stage: r.stage, label: r.label, start: r.start ?? null,
-      items: a.result.lines.filter(l => l.stage === r.stage && (l.kind === "MATERIAL" || l.kind === "SUPPORTING") && !l.excluded && !l.clientSupplied).map(l => ({ description: l.description, quantity: l.quantity, unit: l.unit })),
+      items: a.result.lines.filter(l => l.stage === r.stage && (l.kind === "MATERIAL" || l.kind === "SUPPORTING") && !l.excluded && !l.clientSupplied).map(l => ({ description: l.description, quantity: l.quantity, unit: l.unit, cost: l.total })),
     })).filter(s => s.items.length),
+    plannedMaterials: a.result.lines.filter(l => (l.kind === "MATERIAL" || l.kind === "SUPPORTING") && !l.excluded && !l.clientSupplied).reduce((s, l) => s + l.total, 0),
+    plannedLabour: a.result.lines.filter(l => l.kind === "LABOUR" && !l.excluded).reduce((s, l) => s + l.total, 0),
+    extrasOn, extras: extras.map(x => ({ ...x, createdAt: new Date(x.createdAt).toISOString() })),
     portalOn: job.portalOn, requestedStart: job.portal.requestedStart,
     manager: { name: job.portal.managerName, phone: job.portal.managerPhone, email: job.portal.managerEmail },
     invoices: job.invoices.map(i => { const r = job.money.rows.find(x => x.n === i.scheduleNo); return { number: i.number, label: i.label, scheduleNo: i.scheduleNo, issuedOn: i.issuedOn, dueOn: i.dueOn, gross: i.gross, balance: r ? r.balance : i.gross, emailed: !!i.emailedAt }; }),

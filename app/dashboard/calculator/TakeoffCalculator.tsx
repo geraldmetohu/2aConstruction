@@ -19,10 +19,10 @@ import { isClientFinish, materialVariants } from "@/app/lib/takeoff/ratebook";
 import { PackageFields } from "@/app/componets/takeoff/PackageFields";
 import { DocumentsViewer } from "@/app/componets/takeoff/DocumentsViewer";
 import { buildDocuments } from "@/app/lib/takeoff/documents";
-import { defaultCompany, missingCompanyFields, type CompanyProfile } from "@/app/lib/takeoff/company";
+import { defaultCompany, missingCompanyFields, resolveSigner, type CompanyProfile } from "@/app/lib/takeoff/company";
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-import { saveTakeoffQuote, sendTakeoffQuote } from "./actions";
+import { saveTakeoffQuote, sendTakeoffQuote, setQuoteSignerAction } from "./actions";
 import { CustomWork, fieldsForTrades, LoftRooms, TradeFilter, WordingEditor } from "./QuoteExtras";
 import { ClientCard, missingClientDetails, ModePicker, packageTrades, ProjectPicker, QuickStart, ReviewCard, ScaffoldCard, TradePicker, WholeHome } from "./Wizard";
 
@@ -47,6 +47,8 @@ export type SavedQuote = {
   client: Client; input: TakeoffInput;
   versions: { version: number; reason: string; gross: number | null; visibleToClient: boolean; createdAt: string }[];
   events: { kind: string; message: string; actorKind: string; createdAt: string }[];
+  /** Who signs this quote's documents ("" = company default). */
+  signerId?: string;
 };
 
 export function TakeoffCalculator({ rates, prices, notes, commercial, storage, saved, company = defaultCompany, savedJobs = [], clientFormats = {} }: {
@@ -73,6 +75,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
   const [saving, setSaving] = useState<"" | "save" | "send">("");
   const [reason, setReason] = useState("");
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const [signerId, setSignerId] = useState(saved?.signerId ?? "");
 
   // Unsaved drafts for a new quote are kept in this browser only.
   useEffect(() => {
@@ -137,6 +140,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
     const r = await saveTakeoffQuote({ quoteId: saved?.id, expectedVersion: saved?.version, client: { clientName: client.name, clientEmail: client.email, siteAddress: client.address }, input, reason: reason || (saved ? "" : "First version") });
     setSaving("");
     if (!r.ok) { setFlash({ ok: false, text: r.message }); return; }
+    if (!saved && signerId) await setQuoteSignerAction([r.id], signerId);
     setDirty(false); setReason("");
     try { if (!saved) localStorage.removeItem(STORAGE); } catch { /* ignore */ }
     setFlash({ ok: true, text: r.notified ? `Saved version ${r.version}. The client will see an "updated" notice when they log in.` : `Draft saved (version ${r.version}). The client can't see it until you press Send to client.` });
@@ -341,8 +345,16 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
                 <Num label="Stage payments" int value={input.terms.stagePayments} onChange={v => setTerms({ stagePayments: v })} />
                 <Num label="Final payment %" value={input.terms.finalPercent} onChange={v => setTerms({ finalPercent: v })} />
                 <Num label="Pay invoices within (days)" int value={input.terms.paymentDays} onChange={v => setTerms({ paymentDays: v })} />
-                <Num label="Quote valid for (days)" hint="Price held – 300 days as standard" int value={input.terms.validityDays} onChange={v => setTerms({ validityDays: Math.min(365, Math.max(7, v)) })} />
+                <Num label="Quote valid for (days)" hint="Price held – 30 days as standard" int value={input.terms.validityDays} onChange={v => setTerms({ validityDays: Math.min(365, Math.max(7, v)) })} />
                 <Num label="Workmanship guarantee (years)" int value={input.terms.guaranteeYears} onChange={v => setTerms({ guaranteeYears: v })} />
+                <label className="block text-xs font-semibold text-neutral-700">Signed by (all documents)
+                  <select className={field} value={signerId} disabled={!company.signatories.length} onChange={async e => {
+                    const v = e.target.value; setSignerId(v);
+                    if (saved) { const r = await setQuoteSignerAction([saved.id], v); setFlash({ ok: r.ok, text: r.message }); }
+                  }}>
+                    <option value="">{company.signatories.length ? `Company default${resolveSigner(company, "") ? ` – ${resolveSigner(company, "")!.name}` : " (blank lines)"}` : "Add signatures on the Company page"}</option>
+                    {company.signatories.map(s => <option key={s.id} value={s.id}>{s.name}{s.role ? ` – ${s.role}` : ""}{s.signatureUrl ? "" : " (no signature uploaded)"}</option>)}
+                  </select></label>
                 <Text label="Site supervisor (this job)" value={input.terms.siteSupervisor} onChange={v => setTerms({ siteSupervisor: v })} />
                 <Text label="Supervisor phone" value={input.terms.siteSupervisorPhone} onChange={v => setTerms({ siteSupervisorPhone: v })} />
               </div>
@@ -420,7 +432,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
             {tab === "programme" && <Programme result={result} />}
             {tab === "choices" && <Choices result={result} />}
             {tab === "documents" && <DocumentsViewer note={saved?.status === "ACCEPTED" ? "Accepted – saved with the job." : "Preview – saved with the job when the client accepts."} warnings={missingCompanyFields(company)} docs={buildDocuments({ customer: customerTakeoff(result, input), input, company,
-              client: { name: client.name, email: client.email, siteAddress: client.address }, reference: saved?.reference ?? "DRAFT", version: saved?.version ?? 1, issueDate: todayIso() })} />}
+              client: { name: client.name, email: client.email, siteAddress: client.address }, reference: saved?.reference ?? "DRAFT", version: saved?.version ?? 1, issueDate: todayIso(), signer: resolveSigner(company, signerId) })} />}
             {tab === "history" && saved && <HistoryTab saved={saved} />}
           </>}
         </div>

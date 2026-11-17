@@ -537,9 +537,9 @@ test('loft: chimney breasts & stacks, posts under a ridge beam, smaller loft tha
 });
 
 // ---------------- Quote types, scaffold, conversions, garden buildings, more materials ----------------
-test('quote mode and 300-day validity are part of the input', () => {
+test('quote mode and 30-day validity are part of the input', () => {
   const d = takeoffInputSchema.parse({ property: { houseType: 'TERRACED', width: 5, length: 7 }, prelims: {}, commercial: {} });
-  assert.equal(d.mode, 'ROOMS'); assert.equal(d.terms.validityDays, 300);
+  assert.equal(d.mode, 'ROOMS'); assert.equal(d.terms.validityDays, 30); assert.equal(d.terms.finalPercent, 5);
   assert.equal(takeoffInputSchema.parse({ ...d, mode: 'TRADE', terms: { validityDays: 365 } }).terms.validityDays, 365);
   assert.throws(() => takeoffInputSchema.parse({ ...d, terms: { validityDays: 400 } }));
 });

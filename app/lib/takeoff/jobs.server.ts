@@ -3,6 +3,8 @@ import { prisma } from "@/app/lib/db";
 import type { CustomerTakeoff } from "./engine";
 import { buildDocuments, type QuoteDocs } from "./documents";
 import { companyProfile } from "./prices.server";
+import { resolveSigner } from "./company";
+import { getSignerId } from "./signer-store";
 import { takeoffInputSchema, type TakeoffInput } from "./schema";
 import { getQuote, getVersion, prismaDb, storageReady, type QuoteRow } from "./store";
 import type { TakeoffResult } from "./types";
@@ -33,9 +35,10 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
   const input: TakeoffInput = { ...parsed, terms: { ...parsed.terms, startDate: job.startDate ?? parsed.terms.startDate } };
   const customer = version.customer as CustomerTakeoff;
   const { company } = await companyProfile();
+  const signer = resolveSigner(company, await getSignerId(d, quoteId));
   const today = londonDay(new Date());
   const docs: QuoteDocs = buildDocuments({ customer, input, company, client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress },
-    reference: q.quote.reference, version: versionNo, issueDate: londonDay(version.createdAt) });
+    reference: q.quote.reference, version: versionNo, issueDate: londonDay(version.createdAt), autoStart: false, signer });
   const [stagesSaved, events, photos, actions, supplies, payments, documents] = await Promise.all([
     listStages(d, quoteId), listEvents(d, quoteId, opts.forClient), listPhotos(d, quoteId, opts.forClient), listActions(d, quoteId), listSupplies(d, quoteId), listPayments(d, quoteId),
     listDocuments(d, quoteId, opts.forClient).catch(() => []),

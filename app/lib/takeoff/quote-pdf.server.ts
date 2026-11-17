@@ -2,6 +2,7 @@ import "server-only";
 import PDFDocument from "pdfkit";
 import path from "node:path";
 import { longDate, type QuoteDocs } from "./documents";
+import { siteUrl } from "./mail.server";
 
 /**
  * The quotation as a PDF (attached to the "your quotation is ready" email). Same content as the
@@ -97,8 +98,8 @@ export async function renderQuotationPdf(d: QuoteDocs): Promise<Buffer> {
 
   // Programme & payments
   heading("Programme");
-  text(`${d.start ? `Start ${longDate(d.start)}, completion around ${longDate(d.finish!)} – ` : ""}about ${d.workingDays} working days (≈ ${d.weeks} weeks), Monday to Friday excluding bank holidays.`, { size: 9.5 });
-  for (const r of d.programme.filter(x => x.days > 0)) line(r.label, r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : `Day ${r.startDay + 1}${r.endDay > r.startDay ? `–${r.endDay + 1}` : ""}`, { size: 8.5 });
+  text(`${d.start ? `${d.startProvisional ? "Provisional start" : "Start"} ${longDate(d.start)}, completion around ${longDate(d.finish!)} – ` : ""}about ${d.workingDays} working days (≈ ${d.weeks} weeks), Monday to Friday excluding bank holidays.`, { size: 9.5 });
+  for (const r of d.programme.filter(x => x.days > 0)) line(`${r.label} (${r.days} day${r.days === 1 ? "" : "s"})`, r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : `Day ${r.startDay + 1}${r.endDay > r.startDay ? `–${r.endDay + 1}` : ""}`, { size: 8.5 });
   heading("Payment schedule");
   for (const p of d.payments) line(`${p.n}. ${p.label} – ${p.when}${p.date ? ` (due ${longDate(p.date)})` : ""}`, gbp(p.amount), { size: 9 });
   text(`Invoices are payable within ${d.paymentDays} days by bank transfer${c.accountNumber ? ` to ${c.accountName || c.registeredName}, sort code ${c.sortCode}, account ${c.accountNumber}` : ""}.`, { size: 8.5, color: grey });
@@ -111,10 +112,13 @@ export async function renderQuotationPdf(d: QuoteDocs): Promise<Buffer> {
   if (d.assumptions.length) { heading("Assumptions"); for (const x of d.assumptions) text(`• ${x}`, { size: 8.5, gap: 0.1 }); }
   heading("Acceptance");
   text(`This quotation is valid until ${longDate(d.validUntil)} and is subject to our contract terms, ${d.guarantee.years}-year workmanship guarantee and the health & safety documents in your client area. You can accept online in your client area or sign below.`, { size: 9.5, gap: 2 });
-  room(40);
+  const sig = d.signer?.signatureUrl ? await signatureImage(d.signer.signatureUrl) : null;
+  room(sig ? 80 : 40);
+  if (sig) { doc.moveDown(2.6); try { doc.image(sig, L, doc.y - 40, { fit: [200, 38], align: "left", valign: "bottom" }); } catch { /* unreadable image – leave the line blank */ } }
   const y = doc.y;
   doc.moveTo(L, y).lineTo(L + 220, y).moveTo(L + 279, y).lineTo(L + W, y).lineWidth(0.5).strokeColor(ink).stroke();
-  doc.font("Body").fontSize(8).fillColor(grey).text(`Signed for ${c.registeredName || c.name}`, L, y + 4, { width: 220 }).text("Client signature, name & date", L + 279, y + 4, { width: 220 });
+  const signedBy = d.signer ? `${d.signer.name}${d.signer.role ? `, ${d.signer.role}` : ""} · ${longDate(d.issueDate)}` : "";
+  doc.font("Body").fontSize(8).fillColor(grey).text(`Signed for ${c.registeredName || c.name}${signedBy ? `\n${signedBy}` : ""}`, L, y + 4, { width: 220 }).text("Client signature, name & date", L + 279, y + 4, { width: 220 });
 
   // Footer
   const count = doc.bufferedPageRange().count;
@@ -125,4 +129,18 @@ export async function renderQuotationPdf(d: QuoteDocs): Promise<Buffer> {
   }
   doc.end();
   return done;
+}
+
+/** The signatory's uploaded signature (PNG or JPEG) for the PDF; null if it can't be fetched quickly. */
+async function signatureImage(url: string): Promise<Buffer | null> {
+  try {
+    const abs = url.startsWith("/") ? `${siteUrl()}${url}` : url;
+    if (!/^https:\/\//.test(abs)) return null;
+    const r = await fetch(abs, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return null;
+    const b = Buffer.from(await r.arrayBuffer());
+    if (b.length > 3_000_000) return null;
+    const png = b[0] === 0x89 && b[1] === 0x50, jpg = b[0] === 0xff && b[1] === 0xd8;
+    return png || jpg ? b : null;
+  } catch { return null; }
 }

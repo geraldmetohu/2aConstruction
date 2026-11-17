@@ -6,7 +6,7 @@
 import type { CustomerTakeoff } from "./engine";
 import type { TakeoffInput } from "./schema";
 import { ageOptions, constructionOptions, houseTypeOptions, roomTypeOptions } from "./schema";
-import type { CompanyProfile } from "./company";
+import type { CompanyProfile, Signatory } from "./company";
 import { safetySigns, siteZones, type SafetySign, type SiteZone } from "./hs-zones";
 import { ACTIVITIES, COSHH, HAZARDS, ORDER, riskBand, riskScore, type ActivityId, type HazardId } from "./activities";
 import { extTypeOptions } from "./modules/extension";
@@ -56,7 +56,7 @@ export interface QuoteDocs {
   letter: { greeting: string; paragraphs: string[] };
   /** Scope & price table in the chosen format; missing on versions saved before formats existed. */
   layout?: QuoteLayout;
-  description: string[]; programme: ProgrammeRow[]; workingDays: number; weeks: number; start?: string; finish?: string;
+  description: string[]; programme: ProgrammeRow[]; workingDays: number; weeks: number; start?: string; finish?: string; startProvisional?: boolean; signer?: Signatory;
   scope: { heading: string; dates?: string; items: string[] }[];
   price: { areas: { area: string; net: number }[]; phases: { label: string; total: number }[]; net: number; vat: number; gross: number; scaffolding: boolean;
     discount?: { label: string; amount: number; netBeforeDiscount: number }; vatBreakdown?: { percent: number; net: number; vat: number }[] };
@@ -75,6 +75,10 @@ export interface DocArgs {
   customer: CustomerTakeoff; input: TakeoffInput; company: CompanyProfile;
   client: { name: string; email: string; siteAddress: string };
   reference: string; version: number; issueDate: string;
+  /** Quotes get a provisional start date when none is agreed; live jobs pass false so nothing shows as late against a guess. */
+  autoStart?: boolean;
+  /** Who signs for the company (name, role and uploaded signature); blank signature lines when missing. */
+  signer?: Signatory;
 }
 
 // ---------------------------------------------------------------- Description
@@ -427,8 +431,18 @@ function cpp(d: Pick<QuoteDocs, "company" | "client" | "reference" | "start" | "
 
 // ---------------------------------------------------------------- Build
 
+/** With no start date agreed yet, the quote is dated from a provisional start: the first Monday at least two weeks after the quote date. */
+export function provisionalStart(issueDate: string) {
+  const d = new Date(`${issueDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 14);
+  while (d.getUTCDay() !== 1) d.setUTCDate(d.getUTCDate() + 1);
+  return iso(d);
+}
+
 export function buildDocuments(a: DocArgs): QuoteDocs {
-  const { customer: c, input, company } = a;
+  const { customer: c, company } = a;
+  const startProvisional = !a.input.terms.startDate && a.autoStart !== false;
+  const input = startProvisional ? { ...a.input, terms: { ...a.input.terms, startDate: provisionalStart(a.issueDate) } } : a.input;
   const t = input.terms;
   const rows = programme(c, t.startDate);
   const start = t.startDate ? rows[0]?.start ?? workingDate(t.startDate, 0) : undefined;
@@ -451,13 +465,13 @@ export function buildDocuments(a: DocArgs): QuoteDocs {
     greeting: `Dear ${first || "Sir / Madam"},`,
     paragraphs: custom.length ? custom : [
       `Thank you for asking us to quote for the ${title.toLowerCase()}${a.client.siteAddress ? ` at ${a.client.siteAddress.split("\n")[0]}` : ""}. Following our visit we have set out below exactly what is included, with ${how}.`,
-      `Our price for the works is ${gbpText(c.net)} plus VAT (${gbpText(c.gross)} including VAT). The work takes about ${c.programme.workingDays} working days (≈ ${c.programme.weeks} week${c.programme.weeks > 1 ? "s" : ""})${t.startDate ? `, starting ${longDate(start ?? t.startDate)}` : ""}.`,
+      `Our price for the works is ${gbpText(c.net)} plus VAT (${gbpText(c.gross)} including VAT). The work takes about ${c.programme.workingDays} working days (≈ ${c.programme.weeks} week${c.programme.weeks > 1 ? "s" : ""})${t.startDate ? `, starting ${startProvisional ? "provisionally " : ""}${longDate(start ?? t.startDate)}${startProvisional ? " (we confirm the exact date when you accept)" : ""}` : ""}.`,
       "Everything listed in the scope below is included. Anything not listed, or listed under \"Not included\", is not part of this price – if you would like something added, just ask and we will price it before any work is done.",
     ],
   };
   const base = {
     company, client, reference: a.reference, version: a.version, issueDate: a.issueDate, validUntil: addDays(a.issueDate, t.validityDays), title, letter, layout,
-    description: describe(input, c), programme: rows, workingDays: c.programme.workingDays, weeks: c.programme.weeks, start, finish,
+    description: describe(input, c), programme: rows, workingDays: c.programme.workingDays, weeks: c.programme.weeks, start, finish, startProvisional, signer: a.signer,
     scope: scopeByStage(c, rows),
     price: { areas: c.areas, phases: c.phases.map(p => ({ label: phaseLabels[p.phase], total: p.total })), net: c.net, vat: c.vat, gross: c.gross, scaffolding: c.scaffolding.included, discount: c.discount, vatBreakdown: c.vatBreakdown },
     payments: paymentSchedule(c, input, rows, a.issueDate), paymentDays: t.paymentDays,

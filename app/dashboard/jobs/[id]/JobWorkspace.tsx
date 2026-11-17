@@ -3,18 +3,21 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Banknote, Camera, CircleCheck, ClipboardCheck, ClipboardList, Receipt, UserCog, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
+  ArrowLeft, Banknote, FolderKanban, Sparkles, Camera, CircleCheck, ClipboardCheck, ClipboardList, Receipt, UserCog, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
 } from "lucide-react";
 import { UploadDropzone } from "@/app/lib/uploadthing";
 import type { DueRow, OrderNeed, PayOwed, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
-import { daysWorked } from "@/app/lib/takeoff/jobs";
+import { daysWorked, outOfPhase } from "@/app/lib/takeoff/jobs";
+import type { ExtraRow } from "@/app/lib/takeoff/extras-store";
 import { DOC_CATEGORIES, docCategoryLabel, type DocCategory } from "@/app/lib/takeoff/job-documents";
 import { docKinds } from "@/app/componets/takeoff/QuoteDocuments";
 import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
+import { ConfirmDelete } from "@/app/componets/dashboard/ConfirmDelete";
+import { deleteProjectAction, deleteRecordAction } from "../../delete-actions";
 import type { ActionRow, CheckInRow, ClientContact, ExpenseRow, JobEvent, JobStatus, PaymentRow, AssignmentRow } from "@/app/lib/takeoff/jobs-store";
 import {
   addClientActionAction, addExpenseAction, addPhotosAction, adminCheckInAction, assignWorkerAction, postMessageAction, rateWorkerAction, recordPaymentAction, reviewPaymentAction,
-  addDocumentsAction, addSnagAction, issueInvoiceAction, resendInvoiceAction, saveClientInfoAction, setManagerAction, setSnagAction, setClientActionStatusAction, updateDocumentAction, setOrderAction, setStageAction, setSupplyAction, updateJobAction, updatePhotoAction, voidExpenseAction,
+  addDocumentsAction, addSnagAction, issueInvoiceAction, resendInvoiceAction, saveClientInfoAction, setManagerAction, setSnagAction, setClientActionStatusAction, updateDocumentAction, setOrderAction, setStageAction, setSupplyAction, updateJobAction, updatePhotoAction, voidExpenseAction, addExtraAction, removeExtraAction,
 } from "../actions";
 
 type Iso<T, K extends keyof T> = Omit<T, K> & { [P in K]: string };
@@ -30,7 +33,10 @@ export interface JobView {
   variations: { net: number; gross: number; count: number };
   expenses: Iso<ExpenseRow, "createdAt">[]; team: { assignment: AssignmentRow; worker: WorkerLite & { createdAt: string }; owed: PayOwed }[]; workers: WorkerLite[];
   checkIns: Iso<CheckInRow, "at">[]; toOrder: OrderNeed[]; orders: { stage: string; status: "ORDERED" | "DELIVERED"; supplier: string; note: string; updatedAt: string }[];
-  stageMaterials: { stage: string; label: string; start: string | null; items: { description: string; quantity: number; unit: string }[] }[];
+  stageMaterials: { stage: string; label: string; start: string | null; items: { description: string; quantity: number; unit: string; cost?: number }[] }[];
+  plannedMaterials: number; plannedLabour: number;
+  /** Free extras (not on the quote, not charged) – internal only. */
+  extrasOn: boolean; extras: Iso<ExtraRow, "createdAt">[];
   /** Client portal (empty until the client-portal migration has run). */
   portalOn: boolean; requestedStart: string | null; manager: { name: string; phone: string; email: string };
   invoices: { number: string; label: string; scheduleNo: number; issuedOn: string; dueOn: string; gross: number; balance: number; emailed: boolean }[];
@@ -42,13 +48,13 @@ const when = (d: string) => new Date(d).toLocaleString("en-GB", { day: "numeric"
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const input = "w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm";
 const btn = "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold disabled:opacity-40";
-const TABS = [["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["snags", "Snagging", ClipboardCheck], ["team", "Team", Users], ["orders", "Orders", Package]] as const;
+const TABS = [["manage", "Manage", FolderKanban], ["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["snags", "Snagging", ClipboardCheck], ["team", "Team", Users], ["orders", "Orders", Package], ["extras", "Free extras", Sparkles]] as const;
 type Tab = (typeof TABS)[number][0];
 const stateTone: Record<DueRow["state"], string> = { PAID: "bg-emerald-100 text-emerald-800", PART_PAID: "bg-sky-100 text-sky-800", DUE: "bg-amber-100 text-amber-800", OVERDUE: "bg-red-100 text-red-800", UPCOMING: "bg-neutral-100 text-neutral-700" };
 
 export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?: string }) {
   const router = useRouter();
-  const [tab, setTab] = useState<Tab>((TABS.find(([k]) => k === initialTab)?.[0] ?? "progress") as Tab);
+  const [tab, setTab] = useState<Tab>((TABS.find(([k]) => k === initialTab)?.[0] ?? "manage") as Tab);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const act = async (fn: () => Promise<{ ok: boolean; message?: string }>, done?: string) => {
@@ -82,6 +88,8 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
             <input type="date" className={input} defaultValue={j.startDate} onBlur={e => e.target.value !== j.startDate && act(() => updateJobAction(j.quoteId, { startDate: e.target.value || null }), "Start date saved – programme and payment dates updated.")} />
             {!j.startDate && j.requestedStart && <button type="button" disabled={busy} onClick={() => act(() => updateJobAction(j.quoteId, { startDate: j.requestedStart }), "Start date confirmed – the client can see it.")} className="mt-1 block text-[11px] font-semibold text-amber-700 hover:underline">Client asked for {j.requestedStart} – confirm</button>}</label>
           <div className="w-40"><p className="text-xs font-semibold">Progress {j.progress.percent}%</p><div className="mt-1 h-2 rounded-full bg-neutral-200"><div className="h-2 rounded-full bg-amber-500" style={{ width: `${j.progress.percent}%` }} /></div></div>
+          <ConfirmDelete word={j.reference} title={`Delete project ${j.reference}?`} label="Delete project" after="/dashboard/jobs" run={t => deleteProjectAction(j.quoteId, j.reference, t)}
+            what={[`Quote ${j.reference} for ${j.clientName}, every version and its history`, "The job: stages, messages, photos, documents, requests, snags, orders", "All money: client payments, invoices, expenses, job costs and finance entries", "Team assignments and check-ins on this job", "The client's access to it in their portal"]} />
         </div>
       </header>
       {j.status !== "ACCEPTED" && <p className="rounded-lg bg-sky-50 px-4 py-2 text-sm text-sky-900">This quote is not accepted yet ({j.status.toLowerCase()}). You can already add site photos; the client sees the project panel once they accept.</p>}
@@ -92,6 +100,7 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
           {k === "money" && j.money.reported > 0 && <span className="rounded-full bg-red-500 px-1.5 text-[10px] text-white">!</span>}
           {k === "orders" && j.toOrder.some(o => !o.ordered) && <span className="rounded-full bg-red-500 px-1.5 text-[10px] text-white">{j.toOrder.filter(o => !o.ordered).length}</span>}</button>)}
       </nav>
+      {tab === "manage" && <ManageTab {...p} go={setTab} />}
       {tab === "progress" && <ProgressTab {...p} />}
       {tab === "photos" && <PhotosTab {...p} />}
       {tab === "documents" && <DocumentsTab {...p} />}
@@ -102,6 +111,7 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
         : <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">The snagging list needs the client-portal migration (20261112120000_client_portal).</p>)}
       {tab === "team" && <TeamTab {...p} />}
       {tab === "orders" && <OrdersTab {...p} />}
+      {tab === "extras" && <ExtrasTab {...p} />}
     </div>
   );
 }
@@ -110,6 +120,127 @@ type P = { j: JobView; act: (fn: () => Promise<{ ok: boolean; message?: string }
 const Card = ({ title, children, right }: { title: string; children: ReactNode; right?: ReactNode }) => (
   <section className="rounded-xl border bg-white p-4"><div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-bold">{title}</h2>{right}</div>{children}</section>
 );
+
+// ---------------------------------------------------------------- Manage: where we are, materials, out of phase
+
+const stTone = { DONE: "bg-emerald-100 text-emerald-800", IN_PROGRESS: "bg-amber-100 text-amber-900", NOT_STARTED: "bg-neutral-100 text-neutral-600" } as const;
+const stLabel = { DONE: "Done", IN_PROGRESS: "In progress", NOT_STARTED: "Not started" } as const;
+const dm = (d?: string | null) => d ? new Date(`${d}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }) : "";
+
+function ManageTab({ j, act, busy, go }: P & { go: (t: Tab) => void }) {
+  const st = j.progress.stages;
+  const jumped = outOfPhase(st);
+  const current = st.find(s => s.status === "IN_PROGRESS") ?? st.find(s => s.status === "NOT_STARTED");
+  const mats = new Map(j.stageMaterials.map(m => [m.stage, m]));
+  const order = (stage: string) => j.orders.find(o => o.stage === stage);
+  const matStages = st.filter(s => mats.has(s.stage));
+  const bought = matStages.filter(s => order(s.stage)).length, delivered = matStages.filter(s => order(s.stage)?.status === "DELIVERED").length;
+  const spentOn = (cats: string[]) => j.expenses.filter(e => !e.void && cats.includes(e.category)).reduce((t, e) => t + e.amount, 0);
+  const matSpent = spentOn(["MATERIALS"]), labSpent = spentOn(["LABOUR", "SUBCONTRACTOR"]);
+  const extrasValue = j.extras.reduce((t, x) => t + x.value, 0);
+  // Materials needed soon but not bought: stage not done, no order, starting within 7 days (or already started).
+  const soon = (s: StageProgress) => s.status !== "DONE" && !order(s.stage) && mats.has(s.stage) && (s.status === "IN_PROGRESS" || (!!s.start && s.start <= addDays(today(), 7)));
+  const needNow = st.filter(soon);
+  const Tile = ({ k, v, sub, tone = "" }: { k: string; v: ReactNode; sub?: ReactNode; tone?: string }) => <div className={`rounded-xl border bg-white p-3 ${tone}`}><p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{k}</p><p className="mt-0.5 text-lg font-black leading-tight">{v}</p>{sub && <p className="text-xs text-neutral-600">{sub}</p>}</div>;
+  const Bar = ({ used, of }: { used: number; of: number }) => <div className="mt-1.5 h-1.5 rounded-full bg-neutral-200"><div className={`h-1.5 rounded-full ${of && used > of ? "bg-red-500" : "bg-emerald-500"}`} style={{ width: `${Math.min(100, of ? (used / of) * 100 : 0)}%` }} /></div>;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Tile k="Phase now" v={current ? current.label : "All stages done"} sub={current ? `${stLabel[current.status]}${current.status === "IN_PROGRESS" ? ` · ${current.percent}%` : current.start ? ` · planned ${dm(current.start)}` : ""}` : undefined} tone="border-amber-300" />
+        <Tile k="Progress" v={`${j.progress.percent}%`} sub={j.progress.behind ? <span className="font-semibold text-red-700">{j.progress.behind} stage{j.progress.behind === 1 ? "" : "s"} behind programme</span> : "On programme"} />
+        <Tile k="Out of phase" v={jumped.size} sub={jumped.size ? "Started before earlier stages – check below" : "Everything in order"} tone={jumped.size ? "border-amber-400 bg-amber-50" : ""} />
+        <Tile k="Materials bought" v={`${bought} of ${matStages.length} stages`} sub={<>{delivered} delivered{needNow.length ? <span className="font-semibold text-red-700"> · {needNow.length} to buy now</span> : null}</>} tone={needNow.length ? "border-red-300" : ""} />
+        <Tile k="Free extras" v={gbp(extrasValue)} sub={<button onClick={() => go("extras")} className="font-semibold text-amber-700 underline">{j.extras.length} logged – not charged</button>} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-xl border bg-white p-3 text-sm"><div className="flex justify-between"><span className="font-semibold">Materials spent</span><span>{gbp(matSpent)} <span className="text-neutral-500">of {gbp(j.plannedMaterials)} planned</span></span></div><Bar used={matSpent} of={j.plannedMaterials} /></div>
+        <div className="rounded-xl border bg-white p-3 text-sm"><div className="flex justify-between"><span className="font-semibold">Labour spent</span><span>{gbp(labSpent)} <span className="text-neutral-500">of {gbp(j.plannedLabour)} planned</span></span></div><Bar used={labSpent} of={j.plannedLabour} /></div>
+      </div>
+
+      <Card title="Stages – phase, materials and order of work" right={<span className="text-xs text-neutral-500">Planned materials cost at our cost price</span>}>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[46rem] text-sm">
+            <thead><tr className="border-b text-left text-[11px] uppercase tracking-wide text-neutral-500"><th className="py-1.5 pr-2">#</th><th className="pr-2">Stage</th><th className="pr-2">Planned</th><th className="pr-2">Status</th><th className="pr-2">Materials</th><th className="pr-2 text-right">Planned £</th><th /></tr></thead>
+            <tbody>{st.map((s, i) => {
+              const m = mats.get(s.stage), o = order(s.stage), jump = jumped.get(s.stage), now = s === current;
+              const matCost = m ? m.items.reduce((t, x) => t + (x.cost ?? 0), 0) : 0;
+              return (
+                <tr key={s.stage} className={`border-b align-top ${jump ? "bg-amber-50" : now ? "bg-sky-50/60" : ""}`}>
+                  <td className="py-2 pr-2 text-xs font-bold text-neutral-400">{i + 1}</td>
+                  <td className="py-2 pr-2"><p className="font-semibold">{s.label}{now && <span className="ml-2 rounded bg-sky-600 px-1.5 text-[10px] font-bold uppercase text-white">now</span>}</p>
+                    {jump && <p className="mt-0.5 flex items-start gap-1 text-xs font-semibold text-amber-800"><TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />Out of phase – started before {jump.slice(0, 3).join(", ")}{jump.length > 3 ? ` +${jump.length - 3} more` : ""}</p>}
+                    {s.note && <p className="text-xs text-neutral-500">{s.note}</p>}</td>
+                  <td className="py-2 pr-2 whitespace-nowrap text-xs text-neutral-600">{s.start ? `${dm(s.start)}${s.end && s.end !== s.start ? ` – ${dm(s.end)}` : ""}` : `${s.days} day${s.days === 1 ? "" : "s"}`}{s.late && <span className="block font-semibold text-red-700">late</span>}</td>
+                  <td className="py-2 pr-2"><span className={`rounded px-1.5 py-0.5 text-xs font-semibold ${stTone[s.status]}`}>{stLabel[s.status]}{s.status === "IN_PROGRESS" ? ` ${s.percent}%` : ""}</span></td>
+                  <td className="py-2 pr-2 text-xs">{!m ? <span className="text-neutral-400">None needed</span>
+                    : o ? <span className={`rounded px-1.5 py-0.5 font-semibold ${o.status === "DELIVERED" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"}`}>{o.status === "DELIVERED" ? "Delivered" : "Bought"}{o.supplier ? ` · ${o.supplier}` : ""}</span>
+                    : <span className={`rounded px-1.5 py-0.5 font-semibold ${soon(s) ? "bg-red-100 text-red-800" : "bg-neutral-100 text-neutral-600"}`}>{soon(s) ? "Buy now" : "Not bought"} · {m.items.length} item{m.items.length === 1 ? "" : "s"}</span>}</td>
+                  <td className="py-2 pr-2 text-right tabular-nums text-xs">{m ? gbp(matCost) : ""}</td>
+                  <td className="py-2 text-right whitespace-nowrap">{m && o?.status !== "DELIVERED" && (
+                    <button disabled={busy} onClick={() => act(() => setOrderAction(j.quoteId, { stage: s.stage, status: o ? "DELIVERED" : "ORDERED", supplier: o?.supplier ?? "", note: "" }), o ? "Marked delivered." : "Marked as bought.")} className={`${btn} border`}>{o ? "Delivered" : "Bought"}</button>)}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
+        <p className="mt-2 text-xs text-neutral-500">Tick stages off in <button onClick={() => go("progress")} className="font-semibold text-amber-700 underline">Progress</button>; see the item lists and suppliers in <button onClick={() => go("orders")} className="font-semibold text-amber-700 underline">Orders</button>. A stage is “out of phase” when it was started while an earlier stage in the programme hasn&apos;t started.</p>
+      </Card>
+    </div>
+  );
+}
+const addDays = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
+
+// ---------------------------------------------------------------- Free extras
+
+const EXTRA_REASONS = ["Goodwill", "Client asked – we absorbed it", "Our mistake / put right", "Small favour while on site", "Missed off the quote", "Other"];
+
+function ExtrasTab({ j, act, busy }: P) {
+  const blank = { doneOn: today(), title: "", detail: "", stage: "", hours: "", cost: "", value: "", reason: EXTRA_REASONS[0] };
+  const [f, setF] = useState(blank);
+  const num = (v: string) => (v.trim() === "" ? 0 : Number(v));
+  const tot = j.extras.reduce((t, x) => ({ hours: t.hours + x.hours, cost: t.cost + x.cost, value: t.value + x.value }), { hours: 0, cost: 0, value: 0 });
+  const save = async () => { if (await act(() => addExtraAction(j.quoteId, { ...f, hours: num(f.hours), cost: num(f.cost), value: num(f.value) }), "Free extra logged (internal – the client doesn't see this).")) setF({ ...blank, doneOn: f.doneOn }); };
+  if (!j.extrasOn) return <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">The free extras log needs the database update 20261117130000_job_extras (run <code>npx prisma migrate deploy</code>).</p>;
+  return (
+    <div className="grid gap-5 xl:grid-cols-5">
+      <div className="xl:col-span-2">
+        <Card title="Log a free extra" right={<span className="text-xs text-neutral-500">Internal only</span>}>
+          <p className="mb-3 text-xs text-neutral-600">Work we did that wasn&apos;t on the quote and that we&apos;re <strong>not</strong> charging for. Logging it shows what each job really gave away.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-xs font-semibold sm:col-span-2">What we did<input className={input} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="e.g. Boxed in the boiler pipes in bedroom 2" /></label>
+            <label className="text-xs font-semibold">Date<input type="date" className={input} value={f.doneOn} onChange={e => setF({ ...f, doneOn: e.target.value })} /></label>
+            <label className="text-xs font-semibold">Stage<select className={input} value={f.stage} onChange={e => setF({ ...f, stage: e.target.value })}><option value="">—</option>{j.progress.stages.map(s => <option key={s.stage} value={s.label}>{s.label}</option>)}</select></label>
+            <label className="text-xs font-semibold">Hours<input inputMode="decimal" className={input} value={f.hours} onChange={e => setF({ ...f, hours: e.target.value })} placeholder="0" /></label>
+            <label className="text-xs font-semibold">Our cost £ (materials)<input inputMode="decimal" className={input} value={f.cost} onChange={e => setF({ ...f, cost: e.target.value })} placeholder="0" /></label>
+            <label className="text-xs font-semibold">Normal price £ (what we&apos;d charge)<input inputMode="decimal" className={input} value={f.value} onChange={e => setF({ ...f, value: e.target.value })} placeholder="0" /></label>
+            <label className="text-xs font-semibold">Why<select className={input} value={f.reason} onChange={e => setF({ ...f, reason: e.target.value })}>{EXTRA_REASONS.map(r => <option key={r}>{r}</option>)}</select></label>
+            <label className="text-xs font-semibold sm:col-span-2">Notes<textarea rows={2} className={input} value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} /></label>
+          </div>
+          <button disabled={busy || f.title.trim().length < 3 || [f.hours, f.cost, f.value].some(v => v.trim() !== "" && !(Number(v) >= 0))} onClick={save} className={`${btn} mt-3 bg-neutral-950 text-white`}><Sparkles className="h-3.5 w-3.5" />Log extra</button>
+        </Card>
+      </div>
+      <div className="xl:col-span-3">
+        <Card title={`Free extras on this job (${j.extras.length})`} right={<span className="text-sm font-bold">{gbp(tot.value)} given away</span>}>
+          <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="rounded-lg bg-neutral-50 p-2"><p className="text-neutral-500">Hours</p><p className="text-base font-black">{Math.round(tot.hours * 10) / 10}</p></div>
+            <div className="rounded-lg bg-neutral-50 p-2"><p className="text-neutral-500">Our cost</p><p className="text-base font-black">{gbp(tot.cost)}</p></div>
+            <div className="rounded-lg bg-amber-50 p-2"><p className="text-amber-800">Normal price</p><p className="text-base font-black">{gbp(tot.value)}</p></div>
+          </div>
+          {!j.extras.length && <p className="text-sm text-neutral-500">Nothing logged yet.</p>}
+          <ul className="divide-y">{j.extras.map(x => (
+            <li key={x.id} className="flex items-start justify-between gap-3 py-2 text-sm">
+              <div className="min-w-0"><p className="font-semibold">{x.title}</p>
+                <p className="text-xs text-neutral-500">{dm(x.doneOn)}{x.stage ? ` · ${x.stage}` : ""}{x.reason ? ` · ${x.reason}` : ""}{x.hours ? ` · ${x.hours} h` : ""}{x.cost ? ` · cost ${gbp(x.cost)}` : ""} · by {x.createdBy}</p>
+                {x.detail && <p className="text-xs text-neutral-600">{x.detail}</p>}</div>
+              <div className="flex shrink-0 items-center gap-2"><span className="font-bold tabular-nums">{gbp(x.value)}</span>
+                <ConfirmDelete small word="DELETE" title="Remove this free extra?" what={[x.title]} run={t => removeExtraAction(j.quoteId, x.id, t)} label="Remove" /></div>
+            </li>))}</ul>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- Progress
 
@@ -178,6 +309,7 @@ function PhotosTab({ j, act, busy }: P) {
             <input className={input} defaultValue={ph.caption} placeholder="Caption" onBlur={e => e.target.value !== ph.caption && act(() => updatePhotoAction(j.quoteId, ph.id, { caption: e.target.value }))} />
             <p className="text-[11px] text-neutral-500">{ph.stage || "General"} · {when(ph.createdAt)}</p>
             <div className="flex flex-wrap gap-1.5">
+              <ConfirmDelete small label="" word="DELETE" title="Delete this photo?" what={[ph.caption || "This photo", "It disappears from the client's portal too"]} run={t => deleteRecordAction("photo", ph.id, t)} />
               <button disabled={busy} onClick={() => act(() => updatePhotoAction(j.quoteId, ph.id, { visibleToClient: !ph.visibleToClient }))} className={`${btn} ${ph.visibleToClient ? "bg-emerald-600 text-white" : "border"}`}>{ph.visibleToClient ? <><Eye className="h-3.5 w-3.5" />Client sees</> : <><EyeOff className="h-3.5 w-3.5" />Private</>}</button>
               <button disabled={busy} onClick={() => act(() => updatePhotoAction(j.quoteId, ph.id, { favourite: !ph.favourite }))} title="Favourites are kept for the website portfolio" className={`${btn} ${ph.favourite ? "bg-amber-400" : "border"}`}><Star className="h-3.5 w-3.5" />{ph.favourite ? "Favourite" : "Favourite?"}</button>
               <button disabled={busy} onClick={() => confirm("Remove this photo from the job? (It is hidden, not deleted.)") && act(() => updatePhotoAction(j.quoteId, ph.id, { hidden: true }))} className={`${btn} border text-red-700`}><Trash2 className="h-3.5 w-3.5" /></button>
@@ -237,6 +369,7 @@ function DocumentsTab({ j, act, busy }: P) {
               <a href={d.url} target="_blank" rel="noreferrer" className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-neutral-900 text-[10px] font-black text-amber-400">
                 {/^image\//.test(d.mimeType) ? <img src={d.url} alt="" className="h-full w-full object-cover" loading="lazy" /> : ext(d.fileName)}
               </a>
+              <ConfirmDelete small label="" word="DELETE" title="Delete this document?" what={[d.title || d.fileName, "It disappears from the client's portal too"]} run={t => deleteRecordAction("document", d.id, t)} />
               <div className="min-w-0 flex-1">
                 <input className={`${input} font-semibold`} defaultValue={d.title} onBlur={e => e.target.value.trim() && e.target.value !== d.title && act(() => updateDocumentAction(j.quoteId, d.id, { title: e.target.value }))} />
                 <p className="mt-1 truncate text-[11px] text-neutral-500">{d.fileName} · {fileSize(d.sizeBytes)} · {when(d.createdAt)}</p>
@@ -309,7 +442,8 @@ function ClientTab({ j, act, busy }: P) {
               {a.response && <p className="mt-1 rounded bg-sky-50 px-2 py-1 text-sky-900">Client: {a.response}</p>}
               <div className="mt-1 flex gap-2">{a.status !== "DONE" && <button onClick={() => act(() => setClientActionStatusAction(j.quoteId, a.id, "DONE"))} className={`${btn} border`}><CircleCheck className="h-3.5 w-3.5" />Close</button>}
                 {a.status === "DONE" && <button onClick={() => act(() => setClientActionStatusAction(j.quoteId, a.id, "OPEN"))} className={`${btn} border`}>Re-open</button>}
-                {a.status === "OPEN" && <button onClick={() => act(() => setClientActionStatusAction(j.quoteId, a.id, "CANCELLED"))} className={`${btn} border text-red-700`}>Cancel</button>}</div></li>
+                {a.status === "OPEN" && <button onClick={() => act(() => setClientActionStatusAction(j.quoteId, a.id, "CANCELLED"))} className={`${btn} border text-red-700`}>Cancel</button>}
+                <ConfirmDelete small word="DELETE" title="Delete this request?" what={[a.title, "The client's answer to it, if any"]} run={t => deleteRecordAction("action", a.id, t)} /></div></li>
           ))}</ul>
         </Card>
         <Card title="Items the client supplies">
@@ -350,7 +484,8 @@ function MoneyTab({ j, act, busy }: P) {
           <ul className="divide-y text-sm">{j.payments.map(p => (
             <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2"><span>{p.paidOn} · <strong>{gbp(p.amount)}</strong> {p.method.replace("_", " ").toLowerCase()}{p.reference ? ` · ref ${p.reference}` : ""}{p.scheduleNo ? ` · payment ${p.scheduleNo}` : ""}<span className="block text-xs text-neutral-500">{p.actorKind === "CLIENT" ? "Reported by client" : "Recorded by you"}{p.note ? ` · ${p.note}` : ""}</span></span>
               {p.status === "REPORTED" ? <span className="flex gap-1"><button disabled={busy} onClick={() => act(() => reviewPaymentAction(j.quoteId, p.id, "CONFIRMED"), "Payment confirmed – the client has been told.")} className={`${btn} bg-emerald-600 text-white`}>Confirm received</button><button disabled={busy} onClick={() => act(() => reviewPaymentAction(j.quoteId, p.id, "REJECTED"))} className={`${btn} border text-red-700`}>Not received</button></span>
-                : <span className={`rounded px-1.5 text-xs font-semibold ${p.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>{p.status.toLowerCase()}</span>}</li>
+                : <span className={`rounded px-1.5 text-xs font-semibold ${p.status === "CONFIRMED" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>{p.status.toLowerCase()}</span>}
+              <ConfirmDelete small label="" word="DELETE" title="Delete this payment?" what={[`${gbp(p.amount)} on ${p.paidOn}`, "It's taken off what the client has paid; a matched bank line is un-matched"]} run={t => deleteRecordAction("payment", p.id, t)} /></li>
           ))}{!j.payments.length && <li className="py-2 text-neutral-500">No payments yet.</li>}</ul>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <select className={input} value={pay.scheduleNo} onChange={e => { const r = j.money.rows.find(x => String(x.n) === e.target.value); setPay({ ...pay, scheduleNo: e.target.value, amount: r ? String(r.balance) : pay.amount }); }}><option value="">Not linked</option>{j.money.rows.map(r => <option key={r.n} value={r.n}>{r.n}. {r.label}</option>)}</select>
@@ -364,7 +499,8 @@ function MoneyTab({ j, act, busy }: P) {
         <Card title="Money out on this job">
           <ul className="max-h-72 divide-y overflow-y-auto text-sm">{j.expenses.map(e => (
             <li key={e.id} className={`flex items-center justify-between gap-2 py-1.5 ${e.void ? "opacity-40 line-through" : ""}`}><span>{e.spentOn} · {e.category.toLowerCase()} · {e.description}{e.supplier ? ` (${e.supplier})` : ""}{e.workerId ? ` · ${j.workers.find(w => w.id === e.workerId)?.name ?? "worker"}` : ""}</span>
-              <span className="flex items-center gap-2 font-semibold">{gbp(e.amount)}{!e.void && <button onClick={() => confirm("Void this expense?") && act(() => voidExpenseAction(j.quoteId, e.id))} className="text-neutral-400 hover:text-red-700"><Trash2 className="h-3.5 w-3.5" /></button>}</span></li>
+              <span className="flex items-center gap-2 font-semibold">{gbp(e.amount)}{!e.void && <button onClick={() => confirm("Void this expense?") && act(() => voidExpenseAction(j.quoteId, e.id))} title="Void (keeps a record)" className="text-xs text-neutral-400 hover:text-red-700">void</button>}
+                <ConfirmDelete small label="" word="DELETE" title="Delete this expense?" what={[`${gbp(e.amount)} · ${e.description || e.category.toLowerCase()}`]} run={t => deleteRecordAction("expense", e.id, t)} /></span></li>
           ))}{!j.expenses.length && <li className="py-2 text-neutral-500">Nothing recorded yet.</li>}</ul>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <select className={input} value={exp.category} onChange={e => setExp({ ...exp, category: e.target.value })}>{["MATERIALS", "PLANT", "SKIPS", "LABOUR", "SUBCONTRACTOR", "FEES", "OTHER"].map(c => <option key={c} value={c}>{c[0] + c.slice(1).toLowerCase()}</option>)}</select>

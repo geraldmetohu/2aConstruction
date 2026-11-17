@@ -32,7 +32,11 @@ export async function jobsReady(db: Sql): Promise<boolean> {
 const JOB_COLS = `"quoteId"::text AS "quoteId", "status", ${DATE("startDate")}, "completedAt", "clientContacts", "accessNotes", "createdAt", "updatedAt"`;
 
 export async function getJob(db: Sql, quoteId: string): Promise<JobRow> {
-  await db.query(`INSERT INTO "TakeoffJob" ("quoteId") VALUES ($1::uuid) ON CONFLICT ("quoteId") DO NOTHING RETURNING "quoteId"`, [quoteId]);
+  // A new job starts with the client from the quote as its main contact (name, email and the phone on the quote).
+  await db.query(`INSERT INTO "TakeoffJob" ("quoteId", "clientContacts")
+    SELECT $1::uuid, COALESCE((SELECT jsonb_build_array(jsonb_build_object('name', q."clientName", 'role', 'Client', 'phone', COALESCE(v."input" -> 'terms' ->> 'clientPhone', ''), 'email', q."clientEmail"))
+      FROM "TakeoffQuote" q LEFT JOIN "TakeoffQuoteVersion" v ON v."quoteId" = q."id" AND v."version" = q."currentVersion" WHERE q."id" = $1::uuid), '[]'::jsonb)
+    ON CONFLICT ("quoteId") DO NOTHING RETURNING "quoteId"`, [quoteId]);
   const [row] = await db.query<JobRow>(`SELECT ${JOB_COLS} FROM "TakeoffJob" WHERE "quoteId" = $1::uuid`, [quoteId]);
   return row;
 }

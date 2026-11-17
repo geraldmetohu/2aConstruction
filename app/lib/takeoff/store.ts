@@ -108,9 +108,11 @@ export async function sendQuote(db: Db, quoteId: string, actor: string) {
 }
 
 export async function listQuotes(db: Sql, limit = 100) {
-  return db.query<QuoteRow & { gross: number | null; unread: number }>(`
+  return db.query<QuoteRow & { gross: number | null; unread: number; clientPhone: string; title: string; clientAddress: string }>(`
     SELECT ${QUOTE_COLS.split(", ").map(c => c.startsWith('"id"') ? `q."id"::text AS "id"` : `q.${c}`).join(", ")},
       (v."result" -> 'totals' ->> 'gross')::float8 AS "gross",
+      COALESCE(v."input" -> 'terms' ->> 'clientPhone', '') AS "clientPhone", COALESCE(v."input" -> 'terms' ->> 'title', '') AS "title",
+      COALESCE(v."input" -> 'terms' ->> 'clientAddress', '') AS "clientAddress",
       (SELECT count(*)::int FROM "TakeoffQuoteEvent" e WHERE e."quoteId" = q."id" AND e."actorKind" = 'CLIENT'
         AND e."createdAt" > COALESCE((SELECT max(s."seenAt") FROM "TakeoffQuoteSeen" s WHERE s."quoteId" = q."id" AND s."viewer" = 'ADMIN'), 'epoch')) AS "unread"
     FROM "TakeoffQuote" q JOIN "TakeoffQuoteVersion" v ON v."quoteId" = q."id" AND v."version" = q."currentVersion"

@@ -6,6 +6,8 @@ import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
 import { buildDocuments } from "@/app/lib/takeoff/documents";
+import { resolveSigner } from "@/app/lib/takeoff/company";
+import { getSignerId } from "@/app/lib/takeoff/signer-store";
 import { companyProfile } from "@/app/lib/takeoff/prices.server";
 import { takeoffInputSchema } from "@/app/lib/takeoff/schema";
 import { getClientQuote, prismaDb, storageReady } from "@/app/lib/takeoff/store";
@@ -25,11 +27,12 @@ export default async function ClientDocumentsPage({ params }: { params: Promise<
   const q = await getClientQuote(db, id, user.email);
   if (!q?.version) notFound();
   const { company } = await companyProfile();
+  const signer = resolveSigner(company, await getSignerId(db, id));
   const issued = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(q.version.createdAt));
   const docs = buildDocuments({
     customer: q.version.customer as CustomerTakeoff, input: takeoffInputSchema.parse(q.version.input), company,
     client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress },
-    reference: q.quote.reference, version: q.version.version, issueDate: issued,
+    reference: q.quote.reference, version: q.version.version, issueDate: issued, signer,
   });
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 print:p-0">

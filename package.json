@@ -34,6 +34,7 @@
     "test:auth": "node tests/auth.test.mjs",
     "test:client-portal": "node tests/client-portal.test.mjs",
     "test:finance": "node tests/finance.test.mjs",
+    "test:deletes": "node tests/deletes.test.mjs",
     "test:compliance": "node tests/compliance.test.mjs",
     "preview:takeoff": "node scripts/preview-takeoff.mjs"
   },

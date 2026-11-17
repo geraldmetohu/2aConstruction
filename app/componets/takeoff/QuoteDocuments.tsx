@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { longDate, type DocSection, type QuoteDocs } from "@/app/lib/takeoff/documents";
+import { longDate, workingDate, type DocSection, type QuoteDocs } from "@/app/lib/takeoff/documents";
 import type { QuoteLayout } from "@/app/lib/takeoff/quote-format";
 
 import { PACK_RENDER, packKinds, type PackKind } from "./ProjectPack";
@@ -48,26 +48,51 @@ const dayRange = (a: number, b: number) => {
   return `${w1 === w2 ? `Week ${w1}` : `Weeks ${w1}–${w2}`} · day${s === e ? ` ${s}` : `s ${s}–${e}`}`;
 };
 
-/** Programme as a bar chart: one bar per stage over the working days. */
+/** Programme as a bar chart: one bar per stage over whole working days, week-commencing dates on top,
+ *  bars coloured by part of the job, and the stage payments marked where they fall due. */
+const PALETTE = ["#071a33", "#28508a", "#b07d00", "#2f7d6d", "#8a3b5c", "#5b4ea8", "#a35a1f", "#3f6f2a"];
+const packOf = (stage: string) => stage.split(" · ")[0].trim();
+const shortDay = (date: string) => new Date(`${date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 function Gantt({ d }: { d: QuoteDocs }) {
   const rows = d.programme.filter(r => r.days > 0);
   const total = Math.max(1, ...rows.map(r => r.endDay + 1));
   const weeks = Math.ceil(total / 5);
+  const step = weeks > 16 ? 4 : weeks > 8 ? 2 : 1;
+  const pct = (day: number) => `${(day / total) * 100}%`;
+  // Colour per part of the job (Site works grey); a key underneath.
+  const packs = [...new Set(rows.map(r => packOf(r.stage)))];
+  const colour = new Map(packs.filter(p => p !== "Site").map((p, i) => [p, PALETTE[i % PALETTE.length]] as const)).set("Site", "#7a8699");
+  // Week-commencing date for each week (first working day of the week).
+  const wc = (w: number) => d.start ? shortDay(workingDate(d.start, w * 5)) : "";
+  const paidAfter = new Map<string, string>();
+  for (const p of d.payments) if (p.kind === "STAGE" && p.stages?.length) paidAfter.set(p.stages[p.stages.length - 1], p.label);
+  const labelMin = Math.max(2, Math.ceil(total / 22));
   return (
     <div className="mt-3 break-inside-avoid overflow-hidden rounded-lg border border-neutral-200">
-      <div className="grid grid-cols-[38%_1fr] bg-[#071a33] text-[10px] font-bold uppercase tracking-wide text-white">
-        <div className="px-2 py-1.5">Stage</div>
-        <div className="relative">{Array.from({ length: weeks }, (_, i) => <span key={i} className="absolute top-1.5 text-white/80" style={{ left: `${(i * 5 / total) * 100}%` }}>{weeks > 14 && i % 2 ? "" : `W${i + 1}`}</span>)}</div>
+      <div className="grid grid-cols-[34%_3rem_1fr] bg-[#071a33] text-[10px] font-bold uppercase tracking-wide text-white">
+        <div className="px-2 py-1.5">Stage</div><div className="py-1.5 pr-2 text-right">Days</div>
+        <div className="mr-5"><div className="relative h-8">{Array.from({ length: weeks }, (_, i) => i % step || (i > 0 && i * 5 / total > 0.88) ? null : (
+          <span key={i} className="absolute top-1 whitespace-nowrap leading-tight" style={{ left: pct(i * 5) }}><span className="block">W{i + 1}</span>{d.start && <span className="block text-[9px] font-semibold normal-case text-white/65">{wc(i)}</span>}</span>))}</div></div>
       </div>
-      {rows.map((r, i) => (
-        <div key={r.stage} className={`grid grid-cols-[38%_1fr] items-center text-[11px] ${i % 2 ? "bg-neutral-50" : "bg-white"}`}>
-          <div className="truncate px-2 py-1">{r.label}</div>
-          <div className="relative h-5">
-            {Array.from({ length: weeks }, (_, w) => <span key={w} aria-hidden className="absolute inset-y-0 border-l border-neutral-200" style={{ left: `${(w * 5 / total) * 100}%` }} />)}
-            <span className="absolute top-1 h-3 rounded-sm bg-gradient-to-r from-[#071a33] to-[#28508a]" style={{ left: `${(r.startDay / total) * 100}%`, width: `${Math.max(1.5, ((r.endDay - r.startDay + 1) / total) * 100)}%` }} />
+      {rows.map((r, i) => {
+        const len = r.endDay - r.startDay + 1, pay = paidAfter.get(r.stage);
+        return (
+          <div key={r.stage} className={`grid grid-cols-[34%_3rem_1fr] items-center text-[11px] ${i % 2 ? "bg-neutral-50" : "bg-white"}`}>
+            <div className="truncate px-2 py-1" title={r.label}>{r.label}</div>
+            <div className="pr-2 text-right font-semibold tabular-nums text-neutral-700">{r.days}</div>
+            <div className="mr-5"><div className="relative h-6">
+              {Array.from({ length: weeks }, (_, w) => <span key={w} aria-hidden className="absolute inset-y-0 border-l border-neutral-200" style={{ left: pct(w * 5) }} />)}
+              <span className="absolute top-1 flex h-4 items-center justify-center overflow-hidden rounded-sm text-[9px] font-bold text-white" style={{ left: pct(r.startDay), width: `max(6px, ${(len / total) * 100}%)`, background: colour.get(packOf(r.stage)) }}>{len >= labelMin ? `${len}d` : ""}</span>
+              {pay && <span title={`${pay} due`} aria-label={`${pay} due`} className="absolute top-[7px] block h-2.5 w-2.5 rotate-45 bg-[#f5b400] ring-1 ring-[#071a33]/40" style={{ left: `calc(${pct(r.endDay + 1)} + 3px)` }} />}
+            </div></div>
           </div>
-        </div>
-      ))}
+        );
+      })}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-neutral-200 bg-white px-2 py-1.5 text-[10px] text-neutral-600">
+        {packs.map(p => <span key={p} className="inline-flex items-center gap-1"><span aria-hidden className="h-2.5 w-4 rounded-sm" style={{ background: colour.get(p) }} />{p === "Site" ? "Site & testing" : p}</span>)}
+        <span className="inline-flex items-center gap-1"><span aria-hidden className="h-2 w-2 rotate-45 bg-[#f5b400]" />Stage payment due</span>
+        <span className="ml-auto">Whole working days, Mon–Fri{d.start ? `; W = week commencing${d.startProvisional ? " (provisional)" : ""}` : ""}</span>
+      </div>
     </div>
   );
 }
@@ -109,7 +134,7 @@ function Quotation({ d }: { d: QuoteDocs }) {
   return (
     <>
       <Cover d={d} kind="Quotation" lead={d.description[1] ?? d.description[0]}
-        meta={[["Quotation no.", quoteNo], ["Issued", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)], ...(d.start ? [["Planned start", longDate(d.start)] as [string, string]] : [])]}
+        meta={[["Quotation no.", quoteNo], ["Issued", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)], ...(d.start ? [[d.startProvisional ? "Provisional start" : "Planned start", longDate(d.start)] as [string, string]] : [])]}
         contents={titles} facts={[["Programme", `≈ ${d.weeks} week${d.weeks === 1 ? "" : "s"}`], ["Guarantee", `${d.guarantee.years} years`], ["Price ex VAT", gbp(d.price.net)], ["Total inc VAT", gbp(d.price.gross)]]} />
       <Page d={d} title="Quotation" meta={[["Quotation no.", quoteNo], ["Date", longDate(d.issueDate)], ["Valid until", longDate(d.validUntil)]]}>
         <Parties d={d} />
@@ -128,10 +153,10 @@ function Quotation({ d }: { d: QuoteDocs }) {
         </div>}
 
         <div className="break-inside-avoid"><SectionTitle n={no("Programme")}>Programme</SectionTitle>
-          <p className="mt-2">{d.start ? <>Start <strong>{longDate(d.start)}</strong>, practical completion around <strong>{longDate(d.finish!)}</strong> – </> : null}about {d.workingDays} working days (≈ {d.weeks} weeks), Monday to Friday excluding bank holidays.</p>
+          <p className="mt-2">{d.start ? <>{d.startProvisional ? "Provisional start" : "Start"} <strong>{longDate(d.start)}</strong>, practical completion around <strong>{longDate(d.finish!)}</strong> – </> : null}about {d.workingDays} working days (≈ {d.weeks} weeks), Monday to Friday excluding bank holidays.</p>
           <Gantt d={d} />
-          <table className="mt-3 w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Stage</th><th className="text-right">{d.start ? "Dates" : "When"}</th></tr></thead>
-            <tbody>{d.programme.filter(r => r.days > 0).map(r => <tr key={r.stage} className="border-b border-neutral-100"><td className="py-1.5">{r.label}</td><td className="text-right text-neutral-700">{r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : dayRange(r.startDay, r.endDay)}</td></tr>)}</tbody></table>
+          <table className="mt-3 w-full text-xs"><thead><tr className="border-b border-neutral-300 text-left text-[10px] uppercase tracking-wide text-neutral-500"><th className="py-1.5">Stage</th><th className="text-right">Days</th><th className="text-right">{d.start ? "Dates" : "When"}</th></tr></thead>
+            <tbody>{d.programme.filter(r => r.days > 0).map(r => <tr key={r.stage} className="border-b border-neutral-100"><td className="py-1.5">{r.label}</td><td className="text-right tabular-nums text-neutral-700">{r.days}</td><td className="text-right text-neutral-700">{r.start ? (r.start === r.end ? longDate(r.start) : `${longDate(r.start)} – ${longDate(r.end!)}`) : dayRange(r.startDay, r.endDay)}</td></tr>)}</tbody></table>
           <p className="mt-1 text-[11px] text-neutral-500">The programme is our planned sequence; stages may overlap and dates move with weather, inspections and any changes you ask for.</p>
         </div>
 
@@ -171,7 +196,7 @@ function Quotation({ d }: { d: QuoteDocs }) {
 
         <div className="break-inside-avoid"><SectionTitle n={no("Acceptance")}>Acceptance</SectionTitle>
           <p className="mt-2">This quotation is valid until <strong>{longDate(d.validUntil)}</strong>. It is subject to our contract terms, {d.guarantee.years}-year workmanship guarantee and the health &amp; safety documents provided with it. You can accept online in your client portal, or sign below and return a copy.</p>
-          <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}` }, { role: "Client", name: d.client.name }]} /></div>
+          <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name }]} /></div>
         </div>
       </Page>
     </>
@@ -317,7 +342,7 @@ function Contract({ d }: { d: QuoteDocs }) {
         </div>
         <div className="break-inside-avoid"><SectionTitle>Signed</SectionTitle>
           <p className="mt-2 text-xs text-neutral-600">By signing, both parties agree to these terms. Accepting the quotation in the client portal has the same effect.</p>
-          <div className="mt-4"><Signatures parties={[{ role: `For ${co}` }, { role: "Client", name: d.client.name }]} /></div>
+          <div className="mt-4"><Signatures parties={[{ role: `For ${co}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name }]} /></div>
         </div>
       </Page>
     </>
@@ -348,7 +373,7 @@ function Guarantee({ d }: { d: QuoteDocs }) {
         </div>
       </div>
       <Sections list={d.guarantee.sections} />
-      <div className="mt-8"><Signatures parties={[{ role: `Signed for ${d.company.registeredName || d.company.name}` }, { role: "Date of practical completion" }]} /></div>
+      <div className="mt-8"><Signatures parties={[{ role: `Signed for ${d.company.registeredName || d.company.name}`, signed: d.signer && { ...d.signer, date: undefined } }, { role: "Date of practical completion" }]} /></div>
     </Page>
   );
 }

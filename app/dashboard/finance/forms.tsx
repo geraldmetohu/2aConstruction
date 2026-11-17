@@ -8,6 +8,8 @@ import {
   setWorkerTaxAction, voidEntryAction,
 } from "./actions";
 import { btn, gbp, input } from "./ui";
+import { ConfirmDelete } from "@/app/componets/dashboard/ConfirmDelete";
+import { deleteRecordAction } from "../delete-actions";
 
 export interface JobOpt { id: string; label: string }
 export interface WorkerOpt { id: string; name: string; kind: string; cisStatus: CisStatus; vatNumber: string; dayRate: number | null; utr: string; verificationNumber: string; active: boolean }
@@ -101,7 +103,7 @@ export function EntryForm({ dir: fixedDir, method: fixedMethod, jobs, workers, r
 }
 export function VoidButton({ id, label = "Cancel" }: { id: string; label?: string }) {
   const { pending, msg, act } = useAct();
-  return <span><button disabled={pending} onClick={() => confirm("Cancel this entry? It stays in the history but is left out of every total.") && act(() => voidEntryAction(id), "Cancelled.")} className="text-xs font-semibold text-red-700 hover:underline">{label}</button>{msg && !msg.ok && <span className="ml-2 text-xs text-red-700">{msg.text}</span>}</span>;
+  return <span className="inline-flex items-center gap-2"><ConfirmDelete small label="" word="DELETE" title="Delete this money entry?" what={["The entry, for good (Cancel keeps it in the history instead)", "A matched bank line is un-matched so it can be matched again"]} run={t => deleteRecordAction("entry", id, t)} /><button disabled={pending} onClick={() => confirm("Cancel this entry? It stays in the history but is left out of every total.") && act(() => voidEntryAction(id), "Cancelled.")} className="text-xs font-semibold text-red-700 hover:underline">{label}</button>{msg && !msg.ok && <span className="ml-2 text-xs text-red-700">{msg.text}</span>}</span>;
 }
 
 // ---------------------------------------------------------------- Workers
@@ -207,7 +209,7 @@ export function RecurringForm({ r }: { r?: { id: string; name: string; category:
 }
 export function RecurringToggle({ id, active }: { id: string; active: boolean }) {
   const { pending, act } = useAct();
-  return <button disabled={pending} onClick={() => act(() => setRecurringActiveAction(id, !active), active ? "Stopped." : "Restarted.")} className="text-xs font-semibold text-neutral-600 hover:underline">{active ? "Stop" : "Restart"}</button>;
+  return <span className="inline-flex items-center gap-2"><ConfirmDelete small label="" word="DELETE" title="Delete this regular cost?" what={["The regular cost", "Payments already recorded stay (they're no longer linked to it)"]} run={t => deleteRecordAction("recurring", id, t)} /><button disabled={pending} onClick={() => act(() => setRecurringActiveAction(id, !active), active ? "Stopped." : "Restarted.")} className="text-xs font-semibold text-neutral-600 hover:underline">{active ? "Stop" : "Restart"}</button></span>;
 }
 export function JobCostForm({ quoteId, jobs, workers }: { quoteId?: string; jobs: JobOpt[]; workers: WorkerOpt[] }) {
   const { pending, msg, act } = useAct();
@@ -233,7 +235,7 @@ export function JobCostForm({ quoteId, jobs, workers }: { quoteId?: string; jobs
 }
 export function JobCostCancel({ id, status }: { id: string; status: string }) {
   const { pending, act } = useAct();
-  return <button disabled={pending} onClick={() => act(() => setJobCostStatusAction(id, status === "OPEN" ? "CANCELLED" : "OPEN"), "Saved.")} className="text-xs font-semibold text-neutral-600 hover:underline">{status === "OPEN" ? "Cancel price" : "Reopen"}</button>;
+  return <span className="inline-flex items-center gap-2"><ConfirmDelete small label="" word="DELETE" title="Delete this job cost?" what={["The agreed price / cost", "Payments recorded against it"]} run={t => deleteRecordAction("jobcost", id, t)} /><button disabled={pending} onClick={() => act(() => setJobCostStatusAction(id, status === "OPEN" ? "CANCELLED" : "OPEN"), "Saved.")} className="text-xs font-semibold text-neutral-600 hover:underline">{status === "OPEN" ? "Cancel price" : "Reopen"}</button></span>;
 }
 
 // ---------------------------------------------------------------- Existing job expenses: add the VAT

@@ -2,6 +2,16 @@ import { z } from "zod";
 
 const t = (max: number) => z.string().trim().max(max).default("");
 
+/** A person who signs documents for the company (CEO, CTO, project manager, site supervisor …) with an uploaded signature. */
+export const signatorySchema = z.object({
+  id: z.string().trim().min(1).max(40).regex(/^[\w-]+$/),
+  name: z.string().trim().min(1, "Give each signatory a name").max(80),
+  role: t(80),
+  signatureUrl: t(500),
+});
+export type Signatory = z.output<typeof signatorySchema>;
+export const SIGNATORY_ROLES = ["Chief Executive Officer (CEO)", "Chief Technical Officer (CTO)", "Managing Director", "Director", "Project Manager", "Contracts Manager", "Site Supervisor", "Site Manager", "Quantity Surveyor"];
+
 /** Company details printed on quotes, contracts, guarantees and health & safety documents. */
 export const companySchema = z.object({
   name: t(120), registeredName: t(120), address: t(300), phone: t(40), email: t(120), website: t(120),
@@ -16,6 +26,9 @@ export const companySchema = z.object({
   /** How new quotes set out the price unless the client had another layout before. */
   quoteFormat: z.enum(["SIMPLE", "NORMAL", "ITEMISED"]).default("SIMPLE"),
   quoteGroupBy: z.enum(["AREA", "TRADE"]).default("AREA"),
+  /** People who sign documents, and who signs quotes when none is picked. */
+  signatories: z.array(signatorySchema).max(12).default([]),
+  defaultSignatory: t(40),
 });
 export type CompanyProfile = z.output<typeof companySchema>;
 
@@ -38,3 +51,9 @@ export const companyFromOverrides = (raw: unknown): CompanyProfile => {
 export const missingCompanyFields = (c: CompanyProfile) =>
   ([["address", "registered / trading address"], ["insurer", "insurer"], ["policyNo", "insurance policy number"], ["publicLiability", "public liability cover"],
     ["accountNumber", "bank account for payments"], ["siteManager", "site manager"]] as const).filter(([k]) => !c[k]).map(([, l]) => l);
+
+/** Who signs a quote's documents: the person picked for that quote, else the company default, else nobody (blank lines). */
+export function resolveSigner(c: CompanyProfile, signatoryId?: string | null): Signatory | undefined {
+  const list = c.signatories ?? [];
+  return list.find(x => x.id === signatoryId) ?? list.find(x => x.id === c.defaultSignatory) ?? undefined;
+}

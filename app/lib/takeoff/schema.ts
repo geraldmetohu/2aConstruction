@@ -114,10 +114,10 @@ export const termsSchema = z.object({
   depositPercent: z.number().finite().min(0).max(50).default(10),
   /** Interim stage payments between the deposit and the final payment. */
   stagePayments: z.number().int().min(1).max(8).default(3),
-  finalPercent: z.number().finite().min(0).max(30).default(10),
+  finalPercent: z.number().finite().min(0).max(30).default(5),
   paymentDays: z.number().int().min(0).max(60).default(7),
-  /** Days the price is held (300 by default). */
-  validityDays: z.number().int().min(7).max(365).default(300),
+  /** Days the price is held (30 by default). */
+  validityDays: z.number().int().min(7).max(365).default(30),
   guaranteeYears: z.number().int().min(1).max(10).default(5),
   /** Client's correspondence address if different from the site. */
   clientAddress: text(300),

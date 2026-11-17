@@ -148,3 +148,17 @@ export function invoiceAmounts(row: ScheduleRow, contract: { net: number; gross:
 
 export const invoiceNumber = (reference: string, n: number) => `${reference}-INV${String(n).padStart(2, "0")}`;
 export const addDaysIso = (d: string, n: number) => shift(d, n);
+
+// ---------------------------------------------------------------- Out of phase
+
+/** Stages that were started (or finished) while an earlier stage in the programme hasn't started yet.
+ *  Returns, for each such stage, the labels of the earlier stages it jumped ahead of. */
+export function outOfPhase(stages: Pick<StageProgress, "stage" | "label" | "status">[]): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  stages.forEach((s, i) => {
+    if (s.status === "NOT_STARTED") return;
+    const skipped = stages.slice(0, i).filter(e => e.status === "NOT_STARTED").map(e => e.label);
+    if (skipped.length) out.set(s.stage, skipped);
+  });
+  return out;
+}

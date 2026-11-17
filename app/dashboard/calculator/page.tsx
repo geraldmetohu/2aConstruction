@@ -7,6 +7,7 @@ import { takeoffInputSchema } from "@/app/lib/takeoff/schema";
 import { clientQuoteFormats, getQuote, latestRateSet, markSeen, prismaDb, storageReady } from "@/app/lib/takeoff/store";
 import { customItemSchema } from "@/app/lib/takeoff/schema";
 import { TakeoffCalculator, type SavedQuote } from "./TakeoffCalculator";
+import { getSignerId } from "@/app/lib/takeoff/signer-store";
 
 export const metadata: Metadata = { title: "Quote calculator" };
 export const dynamic = "force-dynamic";
@@ -33,6 +34,7 @@ export default async function CalculatorPage({ searchParams }: { searchParams: P
           input: input.data,
           versions: q.versions.map(v => ({ version: v.version, reason: v.reason, gross: v.gross, visibleToClient: v.visibleToClient, createdAt: new Date(v.createdAt).toISOString() })),
           events: q.events.map(e => ({ kind: e.kind, message: e.message, actorKind: e.actorKind, createdAt: new Date(e.createdAt).toISOString() })),
+          signerId: await getSignerId(db, q.quote.id).catch(() => ""),
         };
         await markSeen(db, quoteId, "ADMIN");
       }

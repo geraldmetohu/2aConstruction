@@ -3,6 +3,8 @@ import { prisma } from "@/app/lib/db";
 import { requireCatalogueAdmin } from "@/app/lib/catalogue/access";
 import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
 import { buildDocuments } from "@/app/lib/takeoff/documents";
+import { resolveSigner } from "@/app/lib/takeoff/company";
+import { getSignerId } from "@/app/lib/takeoff/signer-store";
 import { companyProfile } from "@/app/lib/takeoff/prices.server";
 import { renderQuotationPdf } from "@/app/lib/takeoff/quote-pdf.server";
 import { takeoffInputSchema } from "@/app/lib/takeoff/schema";
@@ -21,8 +23,9 @@ export async function GET(req: Request) {
   const q = await getQuote(db, id);
   if (!q?.latest) return new Response("Not found", { status: 404 });
   const { company } = await companyProfile();
+  const signer = resolveSigner(company, await getSignerId(db, id));
   const pdf = await renderQuotationPdf(buildDocuments({ customer: q.latest.customer as CustomerTakeoff, input: takeoffInputSchema.parse(q.latest.input), company,
     client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress }, reference: q.quote.reference, version: q.quote.currentVersion,
-    issueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date()) }));
+    issueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date()), signer }));
   return new Response(new Uint8Array(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `inline; filename="Quotation ${q.quote.reference}${q.quote.status === "DRAFT" ? " DRAFT" : ""}.pdf"`, "Cache-Control": "private, no-store" } });
 }

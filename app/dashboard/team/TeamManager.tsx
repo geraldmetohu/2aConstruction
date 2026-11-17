@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { ArrowUpDown, Copy, Link as LinkIcon, Mail, Pencil, Phone, Plus, Star, X } from "lucide-react";
 import type { PayOwed } from "@/app/lib/takeoff/jobs";
 import { checkInLinkAction, rateWorkerAction, saveWorkerAction } from "../jobs/actions";
+import { ConfirmDelete } from "@/app/componets/dashboard/ConfirmDelete";
+import { deleteWorkerAction } from "../delete-actions";
 
 type W = { id: string; name: string; kind: "EMPLOYEE" | "SUBCONTRACTOR"; trade: string; phone: string; email: string; payBasis: "DAY" | "JOB"; dayRate: number | null; notes: string; active: boolean; hasLink: boolean;
   rating: number | null; ratings: number; jobs: (PayOwed & { job: string; active: boolean })[]; owed: number; paid: number; days: number; activeJobs: number };
@@ -90,6 +92,8 @@ function Card({ w, email, link, busy, edit, makeLink, rate }: { w: W; email: boo
       {w.notes && <p className="mt-2 text-xs text-neutral-500">{w.notes}</p>}
       <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3 text-xs">
         <button onClick={edit} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1"><Pencil className="h-3.5 w-3.5" />Edit</button>
+        <ConfirmDelete small word="DELETE" title={`Delete ${w.name}?`} run={t => deleteWorkerAction(w.id, "DELETE", t)}
+          what={[`${w.name} and their check-in link`, "Their job assignments, check-ins and ratings", "Expenses, job costs and finance entries recorded against them"]} />
         <button disabled={busy} onClick={() => makeLink(false)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1"><LinkIcon className="h-3.5 w-3.5" />{w.hasLink ? "New check-in link" : "Check-in link"}</button>
         {email && w.email && <button disabled={busy} onClick={() => makeLink(true)} className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1"><Mail className="h-3.5 w-3.5" />Email link</button>}
         <span className="ml-auto flex items-center gap-1"><Star className="h-3.5 w-3.5 text-amber-500" /><select className="rounded border px-1 py-0.5" value="" onChange={e => rate(Number(e.target.value))}><option value="">Rate</option>{Array.from({ length: 10 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></span>

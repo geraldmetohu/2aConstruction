@@ -96,7 +96,7 @@ export function ModePicker({ mode, onChange }: { mode: QuoteMode; onChange: (m: 
 
 /* ---------------------------------------------------------------- Whole home: what is included + rooms per floor */
 
-const HOME_PROJECTS = ["loft", "extension", "conversion", "basement", "roofing", "external", "windows", "internal", "heating", "aircon", "energy", "damp", "demolition", "outbuilding", "garden", "cleaning"];
+const HOME_PROJECTS = ["loft", "extension", "conversion", "basement", "roofing", "external", "windows", "internal", "heating", "aircon", "joinery", "energy", "damp", "demolition", "outbuilding", "garden", "cleaning"];
 const REFURB_AREAS: { id: string; label: string; floor: RoomInput["floor"]; types?: RoomInput["type"][] }[] = [
   { id: "GROUND", label: "Ground floor", floor: "GROUND" },
   { id: "FIRST", label: "First floor", floor: "FIRST" },
@@ -186,6 +186,7 @@ const PROJECT_GROUPS: { title: string; items: Pick[] }[] = [
     { pkg: "heating", label: "Boiler & heating", match: ["boiler", "COMBI_SWAP", "COMBI_SWAP"], values: { boiler: "COMBI_SWAP" } },
     { pkg: "heating", label: "Air source heat pump", match: ["boiler", "NONE", "COMBI_SWAP"], values: { boiler: "NONE", heatPump: true, controls: false } },
     { pkg: "aircon", label: "Air conditioning" },
+    { pkg: "joinery", label: "Wardrobes, shelving & joinery" },
     { pkg: "energy", label: "Solar, battery, EV & insulation" },
   ] },
   { title: "Repairs & alterations", items: [{ pkg: "windows", label: "Windows & doors" }, { pkg: "internal", label: "Stairs, layout & fire safety" }, { pkg: "damp", label: "Damp & structural repairs" }] },
@@ -223,7 +224,7 @@ export const packageTrades: Record<string, Trade[]> = {
   roofing: ["ROOFER", "CARPENTER"], external: ["RENDERER", "DECORATOR", "BRICKLAYER"], demolition: ["LABOURER", "GENERAL_BUILDER"],
   outbuilding: ["CARPENTER", "GENERAL_BUILDER", "ELECTRICIAN", "GROUNDWORKER"], garden: ["LANDSCAPER", "GROUNDWORKER", "CARPENTER", "BRICKLAYER"], cleaning: ["CLEANER"],
   basement: ["GROUNDWORKER", "GENERAL_BUILDER", "BRICKLAYER"], damp: ["GENERAL_BUILDER", "PLASTERER", "BRICKLAYER"], internal: ["CARPENTER", "GENERAL_BUILDER", "ELECTRICIAN", "PLASTERER"],
-  windows: ["CARPENTER", "GENERAL_BUILDER"], heating: ["PLUMBER", "ELECTRICIAN"], aircon: ["ELECTRICIAN"], energy: ["ELECTRICIAN", "ROOFER", "LABOURER"],
+  windows: ["CARPENTER", "GENERAL_BUILDER"], heating: ["PLUMBER", "ELECTRICIAN"], aircon: ["ELECTRICIAN"], joinery: ["CARPENTER", "DECORATOR"], energy: ["ELECTRICIAN", "ROOFER", "LABOURER"],
 };
 /** Rooms-based services for each trade. */
 const tradeServices: Partial<Record<Trade, string>> = {
@@ -349,6 +350,7 @@ export const QUICK_JOBS: QuickJob[] = [
   { id: "basement", group: "Projects", label: "Basement / cellar", hint: "Waterproofed, ready for rooms", pkg: "basement" },
   { id: "heating", group: "Projects", label: "Boiler & heating", hint: "Combi, radiators, heat pump", pkg: "heating" },
   { id: "aircon", group: "Projects", label: "Air conditioning", hint: "Wall or cassette units, heat & cool", pkg: "aircon" },
+  { id: "joinery", group: "Projects", label: "Wardrobes & joinery", hint: "Fitted wardrobes, alcoves, shelves, media walls", pkg: "joinery" },
   { id: "energy", group: "Projects", label: "Solar, EV & insulation", hint: "Panels, battery, charger, loft", pkg: "energy", values: { panels: 10 } },
   { id: "windows", group: "Projects", label: "Windows & doors", hint: "Windows, front & bi-fold doors", pkg: "windows", values: { windows: 6 } },
   { id: "roofing", group: "Projects", label: "Roof", hint: "Re-roof, flat roof, repairs", pkg: "roofing" },

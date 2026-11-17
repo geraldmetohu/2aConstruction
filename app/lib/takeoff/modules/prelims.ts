@@ -21,7 +21,7 @@ export function buildPrelims(ctx: Ctx, workDays: number, active: { pkg: WorkPack
   // Outside-only jobs (garden, cleaning, render) need no internal protection, dust control or builders' clean.
   const outdoorOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "garden" || a.pkg.id === "cleaning" || a.pkg.id === "external" || a.pkg.id === "outbuilding" || (a.pkg.id === "demolition" && !Number(a.values.kitchens) && !Number(a.values.bathrooms) && !Number(a.values.partitions) && !Number(a.values.loadBearing) && !Number(a.values.chimneyBreasts) && !Number(a.values.strip)));
   // Installer-type jobs (boiler, solar, windows, alarms) clean as they go – no builders' clean.
-  const light = (a: { pkg: WorkPackage; values: Values }) => ["heating", "aircon", "energy", "windows"].includes(a.pkg.id) || (a.pkg.id === "internal" && !Number(a.values.partitions) && !Number(a.values.doorways) && !String(a.values.stairs).startsWith("REPLACE"));
+  const light = (a: { pkg: WorkPackage; values: Values }) => ["heating", "aircon", "joinery", "energy", "windows"].includes(a.pkg.id) || (a.pkg.id === "internal" && !Number(a.values.partitions) && !Number(a.values.doorways) && !String(a.values.stairs).startsWith("REPLACE"));
   const serviceOnly = !rooms.length && active.length > 0 && active.every(light);
   const cleaningOnly = !rooms.length && active.length > 0 && active.every(a => a.pkg.id === "cleaning");
 

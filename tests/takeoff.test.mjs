@@ -427,7 +427,7 @@ test('totals: waste, contingency, markup and VAT in order', () => {
 
 test('every project builds without warnings and within sane ranges (inc VAT)', () => {
   const ranges = { loft: [45000, 140000], extension: [40000, 130000], roofing: [8000, 40000], external: [6000, 25000], garden: [5000, 30000], cleaning: [200, 2000], demolition: [3000, 30000], conversion: [12000, 40000], outbuilding: [12000, 45000],
-    heating: [3000, 9000], energy: [7000, 20000], damp: [2500, 12000], basement: [15000, 60000], windows: [6000, 25000], internal: [3000, 15000], aircon: [3000, 9000] };
+    heating: [3000, 9000], energy: [7000, 20000], damp: [2500, 12000], basement: [15000, 60000], windows: [6000, 25000], internal: [3000, 15000], aircon: [3000, 9000], joinery: [1500, 8000] };
   const sample = { garden: { patio: 25, fencing: 12, turf: 40 }, cleaning: { windows: 12, jetWash: 40, gutters: 20 }, demolition: { kitchens: 1, bathrooms: 1, partitions: 15, chimneyBreasts: 1 },
     energy: { panels: 10, battery: '5' }, damp: { dpc: 15, replaster: 15 }, windows: { windows: 8, front: 'COMPOSITE' }, internal: { stairs: 'REPLACE', fireDoors: 3 } };
   for (const p of workPackages) {
@@ -993,6 +993,32 @@ test('Emerson Drive items: timber gable, trimmers, roof alterations, Velux sizes
   const mv = only('heating', { boiler: 'NONE', controls: false, boilerMove: true, boilerMoveRun: 7 });
   assert.deepEqual(mv.warnings, []);
   assert.ok(key(mv, 'labour:boiler_move') && key(mv, 'labour:boiler_move_extra').quantity === 4);
+});
+
+test('Joinery: wardrobes, sliding, alcoves, floating shelves, fit-only — boards, hardware and labour measured', () => {
+  const w = only('joinery', { items: 1, j1Type: 'WARDROBE', j1Room: 'Bedroom 1', j1W: 2.4, j1Drawers: 2 });
+  assert.deepEqual(w.warnings, []);
+  assert.equal(key(w, 'mdf_18_mr').quantity, 8);
+  assert.equal(key(w, 'hinge_softclose').quantity, 20, '4 doors x 5 hinges at 2.3 m');
+  assert.equal(key(w, 'drawer_runner_set').quantity, 2);
+  assert.ok(key(w, 'hanging_rail') && key(w, 'cabinet_handle') && key(w, 'labour:joinery_build') && key(w, 'labour:joinery_paint') && key(w, 'mdf_6'));
+  const sl = only('joinery', { items: 1, j1Type: 'SLIDING', j1W: 3 });
+  assert.equal(key(sl, 'labour:joinery_sliding_fit').quantity, 3);
+  assert.ok(key(sl, 'sliding_door_panel') && key(sl, 'sliding_track') && !key(sl, 'hinge_softclose') && !key(sl, 'cabinet_handle'));
+  const al = only('joinery', { items: 1, j1Type: 'ALCOVE', j1W: 1.1, j1Qty: 2 });
+  assert.equal(key(al, 'hinge_softclose').quantity, 8, '2 units x 2 doors x 2 hinges');
+  const fl = only('joinery', { items: 1, j1Type: 'FLOATING', j1W: 1.2, j1Shelves: 4, j1Finish: 'OAK' });
+  assert.equal(key(fl, 'floating_shelf_bracket').quantity, 12);
+  assert.equal(key(fl, 'labour:joinery_shelf_fit').quantity, 4);
+  assert.ok(key(fl, 'oak_shelf_30') && key(fl, 'hardwax_oil'));
+  const fac = only('joinery', { items: 1, j1Type: 'BASE_RUN', j1W: 2.4, j1Finish: 'FACTORY' });
+  assert.ok(key(fac, 'mfc_18_white') && key(fac, 'joinery_fronts') && key(fac, 'worktop_laminate') && key(fac, 'edging_abs') && !key(fac, 'labour:joinery_paint') || key(fac, 'labour:joinery_paint').quantity < 2);
+  const fit = only('joinery', { items: 1, j1Type: 'WARDROBE', j1W: 3, j1Build: 'FIT_ONLY' });
+  assert.ok(key(fit, 'labour:joinery_flatpack_fit') && !key(fit, 'labour:joinery_build') && !key(fit, 'hinge_softclose'));
+  const us = only('joinery', { items: 1, j1Type: 'UNDERSTAIRS', j1W: 2.4, j1Drawers: 4 });
+  assert.equal(key(us, 'pullout_hardware').quantity, 4);
+  const media = only('joinery', { items: 2, j1Type: 'MEDIA', j1W: 3.2, j1Led: true, j2Type: 'WINDOW_SEAT', j2W: 1.6, strip: 1 });
+  assert.ok(key(media, 'labour:joinery_frame') && key(media, 'led_strip_kit') && key(media, 'lid_stay_set') && key(media, 'labour:strip_wardrobe'));
 });
 
 console.log(`\n${passed} takeoff tests passed`);

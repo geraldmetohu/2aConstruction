@@ -15,6 +15,7 @@ import { windowsPackage } from "./windows";
 import { heatingPackage } from "./heating";
 import { energyPackage } from "./energy";
 import { airconPackage } from "./aircon";
+import { joineryPackage } from "./joinery";
 
 /**
  * Whole-house projects, in programme order. Room-by-room work (plastering,
@@ -23,6 +24,6 @@ import { airconPackage } from "./aircon";
  */
 export const workPackages: WorkPackage[] = [
   demolitionPackage, basementPackage, dampPackage, loftPackage, extensionPackage, conversionPackage, internalPackage, roofingPackage, windowsPackage,
-  externalPackage, heatingPackage, airconPackage, energyPackage, outbuildingPackage, gardenPackage, cleaningPackage,
+  externalPackage, heatingPackage, airconPackage, joineryPackage, energyPackage, outbuildingPackage, gardenPackage, cleaningPackage,
 ];
 export const packageById = (id: string) => workPackages.find(p => p.id === id);

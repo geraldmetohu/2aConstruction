@@ -52,6 +52,8 @@ const DETECT: [ActivityId, RegExp][] = [
   ["ELECTRICAL", /^labour:(ac_supply|ac_head_fit|ac_cassette_fit|ac_outdoor_fit)/],
   ["HOT_WORKS", /^labour:ac_outdoor_fit/],
   ["CARPENTRY", /^labour:(trimmer_fit|timber_gable_build|crown_roof_build)/],
+  ["JOINERY", /^labour:joinery_(build|flatpack_fit|drawer|pullout|sliding_fit|shelf_fit|frame)/],
+  ["DECORATING", /^labour:joinery_(paint|oil)/],
   ["ROOFING", /^labour:(roof_cut_retile|lead_valley)/],
   ["RENDERING", /^labour:render_apply/],
   ["FIRE_SAFETY", /^labour:(fire_door_fit|fire_alarm_|emergency_light_fit|fire_stopping)/],

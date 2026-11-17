@@ -110,6 +110,7 @@ function describe(input: TakeoffInput, c: CustomerTakeoff): string[] {
   const wd = pk("windows"); if (wd) works.push(Number(wd.windows ?? 0) + Number(wd.large ?? 0) > 0 ? `replacing ${Number(wd.windows ?? 0) + Number(wd.large ?? 0)} windows${wd.front && wd.front !== "NONE" ? " and the front door" : ""}` : "new external doors");
   const ht = pk("heating"); if (ht) works.push(ht.heatPump ? "an air source heat pump installation" : ht.boiler && ht.boiler !== "NONE" ? "a new boiler and heating upgrades" : "heating upgrades");
   const ac = pk("aircon"); if (ac) { const u = Number(ac.wallUnits ?? 2) + Number(ac.cassettes ?? 0); works.push(`air conditioning to ${u} room${u === 1 ? "" : "s"}`); }
+  const jn = pk("joinery"); if (jn) { const k = Number(jn.items ?? 1); works.push(`fitted joinery (${k} item${k === 1 ? "" : "s"}: wardrobes, shelving and storage)`); }
   const en = pk("energy"); if (en) works.push([Number(en.panels) > 0 && `${en.panels} solar panels`, en.battery && en.battery !== "NONE" && "a home battery", en.ev && "an EV charger", (Number(en.loftArea) > 0 || Number(en.cavityArea) > 0) && "insulation"].filter(Boolean).join(", ").replace(/, ([^,]*)$/, " and $1") || "energy-saving works");
   if (garden?.enabled) works.push("garden and landscaping works");
   if (cleaning?.enabled) works.push("exterior cleaning");

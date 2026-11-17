@@ -1,6 +1,7 @@
 
 "use client";
 
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -12,6 +13,10 @@ export type HeroSlide = {
   ctaText?: string;
   ctaHref?: string;
   durationSec?: number;
+  /** Smaller encodes picked by screen width (the browser takes the first that matches). */
+  sources?: { src: string; media?: string }[];
+  /** Still image shown until the video's first frame is ready. */
+  poster?: string;
 };
 
 type HeroClientProps = {
@@ -256,10 +261,13 @@ export default function HeroClient({
           PERMANENT HERO BACKGROUND
           ===================================================== */}
       <div className="absolute inset-0">
-        <img
+        <Image
           src="/images/hero_background.jpg"
           alt=""
-          className="h-full w-full object-cover"
+          fill
+          priority
+          sizes="100vw"
+          className="object-cover"
         />
 
         <div className="absolute inset-0 bg-black/35" />
@@ -313,14 +321,17 @@ export default function HeroClient({
               <div className="relative w-full overflow-hidden rounded-sm shadow-2xl">
                 <video
                   key={active.videoUrl}
-                  src={active.videoUrl}
+                  src={active.sources?.length ? undefined : active.videoUrl}
+                  poster={active.poster}
                   autoPlay
                   muted
                   playsInline
                   preload="auto"
                   className="block h-auto w-full"
                   onEnded={next}
-                />
+                >
+                  {active.sources?.map(s => <source key={s.src} src={s.src} media={s.media} type="video/mp4" />)}
+                </video>
               </div>
 
               {/* Subtle video edge */}

@@ -1,6 +1,8 @@
 "use server";
 import { getAuthSession } from "@/app/lib/auth/session.server";
 import { redirect } from "next/navigation";
+import { revalidateTag } from "next/cache";
+import { STOREFRONT_TAG } from "./lib/storefront-query";
 import {parseWithZod} from "@conform-to/zod"
 import { bannerSchema, beforeafterSchema, ProjectSchema, ContactSchema, heroVideoSchema } from "./lib/zodSchemas";
 import { prisma } from "./lib/db";
@@ -51,6 +53,7 @@ export async function CreateProject(prevState: unknown,formData: FormData) {
         },
     });
 
+    revalidateTag(STOREFRONT_TAG);
     redirect("/dashboard/projects");
 }
 
@@ -87,6 +90,7 @@ export async function EditProject(prevState: any,formData: FormData ) {
         }
     });
 
+    revalidateTag(STOREFRONT_TAG);
     redirect("/dashboard/projects");
 
 }
@@ -112,6 +116,7 @@ export async function DeleteProject(formData: FormData) {
         },
     });
 
+    revalidateTag(STOREFRONT_TAG);
     redirect("/dashboard/projects");
     
 }
@@ -142,6 +147,7 @@ export async function CreateBeforeAfter(prevState: any, formData: FormData) {
         },
     });
 
+    revalidateTag(STOREFRONT_TAG);
     redirect("/dashboard/beforeafter");
 
 }
@@ -175,6 +181,7 @@ const id = formData.get("beforeafterId") as string;
   await prisma.beforeAfter.delete({
     where: { id },
   });
+    revalidateTag(STOREFRONT_TAG);
     redirect("/dashboard/beforeafter");
 }
 
@@ -762,6 +769,7 @@ export async function CreateHeroVideo(_: any, formData: FormData) {
   }
 
   await prisma.heroVideo.create({ data: parsed.data });
+  revalidateTag(STOREFRONT_TAG);
   redirect("/dashboard/hero-videos");
 }
 
@@ -790,6 +798,7 @@ export async function DeleteHeroVideo(formData: FormData) {
   await prisma.heroVideo.delete({
     where: { id },
   });
+  revalidateTag(STOREFRONT_TAG);
   redirect("/dashboard/hero-videos");
 }
 

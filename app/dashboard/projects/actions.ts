@@ -1,5 +1,6 @@
 "use server";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { STOREFRONT_TAG } from "@/app/lib/storefront-query";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
 import { detailsReady, saveDetail } from "@/app/lib/portfolio/details-store";
@@ -69,7 +70,7 @@ export async function saveProjectAction(raw: unknown): Promise<SaveProjectResult
     }
 
     revalidatePath("/dashboard/projects"); revalidatePath(`/dashboard/projects/${id}`);
-    revalidatePath(`/project/${id}`); revalidatePath("/portfolio/[name]", "page"); revalidatePath("/");
+    revalidateTag(STOREFRONT_TAG); revalidatePath(`/project/${id}`); revalidatePath("/portfolio/[name]", "page"); revalidatePath("/");
     return { ok: true, id, note };
   } catch (e) {
     console.error("[projects] save failed", e);

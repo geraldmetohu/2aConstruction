@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import {
   ArrowRight,
   Calculator,
@@ -220,9 +221,11 @@ export function EstimatorOverview() {
                 lg:aspect-[4/5]
               "
             >
-              <img
+              <Image
                 src="/images/estimator_overview.jpg"
                 alt="2A Construction project"
+                fill
+                sizes="(min-width: 1024px) 45vw, 100vw"
                 className="
                   block
                   h-full

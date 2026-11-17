@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/app/lib/db";
 import { prismaDb } from "@/app/lib/takeoff/store";
 import { getDetail, getDetails, type ProjectDetail } from "./details-store";
+import { cachedPublic } from "@/app/lib/storefront-query";
 
 export const portfolioDb = () => prismaDb(prisma);
 
@@ -11,5 +12,9 @@ export async function loadDetail(projectId: string): Promise<ProjectDetail | nul
 }
 
 export async function loadDetails(projectIds: string[]): Promise<Map<string, ProjectDetail>> {
-  try { return await getDetails(portfolioDb(), projectIds); } catch (e) { console.warn("[portfolio] details unavailable", (e as Error)?.message); return new Map(); }
+  try {
+    // Cached with the rest of the public site (cleared when a project is saved).
+    const key = `details:${[...projectIds].sort().join(",")}`;
+    return new Map(await cachedPublic(key, async () => [...(await getDetails(portfolioDb(), projectIds)).entries()]));
+  } catch (e) { console.warn("[portfolio] details unavailable", (e as Error)?.message); return new Map(); }
 }

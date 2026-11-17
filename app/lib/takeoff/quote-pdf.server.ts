@@ -114,7 +114,7 @@ export async function renderQuotationPdf(d: QuoteDocs): Promise<Buffer> {
   text(`This quotation is valid until ${longDate(d.validUntil)} and is subject to our contract terms, ${d.guarantee.years}-year workmanship guarantee and the health & safety documents in your client area. You can accept online in your client area or sign below.`, { size: 9.5, gap: 2 });
   const sig = d.signer?.signatureUrl ? await signatureImage(d.signer.signatureUrl) : null;
   room(sig ? 80 : 40);
-  if (sig) { doc.moveDown(2.6); try { doc.image(sig, L, doc.y - 40, { fit: [200, 38], align: "left", valign: "bottom" }); } catch { /* unreadable image – leave the line blank */ } }
+  if (sig) { doc.moveDown(2.6); try { doc.image(sig, L, doc.y - 40, { fit: [200, 38], valign: "bottom" }); } catch { /* unreadable image – leave the line blank */ } }
   const y = doc.y;
   doc.moveTo(L, y).lineTo(L + 220, y).moveTo(L + 279, y).lineTo(L + W, y).lineWidth(0.5).strokeColor(ink).stroke();
   const signedBy = d.signer ? `${d.signer.name}${d.signer.role ? `, ${d.signer.role}` : ""} · ${longDate(d.issueDate)}` : "";

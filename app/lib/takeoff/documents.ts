@@ -56,7 +56,7 @@ export interface QuoteDocs {
   letter: { greeting: string; paragraphs: string[] };
   /** Scope & price table in the chosen format; missing on versions saved before formats existed. */
   layout?: QuoteLayout;
-  description: string[]; programme: ProgrammeRow[]; workingDays: number; weeks: number; start?: string; finish?: string; startProvisional?: boolean; signer?: Signatory;
+  description: string[]; programme: ProgrammeRow[]; workingDays: number; weeks: number; start?: string; finish?: string; startProvisional?: boolean; signer?: Signatory; clientSigned?: { name: string; signatureUrl: string; date: string; ip?: string };
   scope: { heading: string; dates?: string; items: string[] }[];
   price: { areas: { area: string; net: number }[]; phases: { label: string; total: number }[]; net: number; vat: number; gross: number; scaffolding: boolean;
     discount?: { label: string; amount: number; netBeforeDiscount: number }; vatBreakdown?: { percent: number; net: number; vat: number }[] };
@@ -79,6 +79,8 @@ export interface DocArgs {
   autoStart?: boolean;
   /** Who signs for the company (name, role and uploaded signature); blank signature lines when missing. */
   signer?: Signatory;
+  /** The client's signature from accepting online (name, drawn image, date). */
+  clientSigned?: { name: string; signatureUrl: string; date: string; ip?: string };
 }
 
 // ---------------------------------------------------------------- Description
@@ -471,7 +473,7 @@ export function buildDocuments(a: DocArgs): QuoteDocs {
   };
   const base = {
     company, client, reference: a.reference, version: a.version, issueDate: a.issueDate, validUntil: addDays(a.issueDate, t.validityDays), title, letter, layout,
-    description: describe(input, c), programme: rows, workingDays: c.programme.workingDays, weeks: c.programme.weeks, start, finish, startProvisional, signer: a.signer,
+    description: describe(input, c), programme: rows, workingDays: c.programme.workingDays, weeks: c.programme.weeks, start, finish, startProvisional, signer: a.signer, clientSigned: a.clientSigned,
     scope: scopeByStage(c, rows),
     price: { areas: c.areas, phases: c.phases.map(p => ({ label: phaseLabels[p.phase], total: p.total })), net: c.net, vat: c.vat, gross: c.gross, scaffolding: c.scaffolding.included, discount: c.discount, vatBreakdown: c.vatBreakdown },
     payments: paymentSchedule(c, input, rows, a.issueDate), paymentDays: t.paymentDays,

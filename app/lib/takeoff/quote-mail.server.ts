@@ -26,7 +26,7 @@ export function emailQuoteSent(q: { quoteId: string; reference: string; clientNa
         `Sign in or create an account with this email address (${q.clientEmail}) to open it.`,
       ],
       button: { label: "View my quotation", url: link(q.quoteId) },
-      footnote: `Reference ${q.reference}. Any questions, just reply to this email or give us a call.`,
+      footnote: `Reference ${q.reference}. Any questions, just reply to this email or give us a call. Now and then we may email you news and seasonal offers from 2A Construction – every email has a one-click unsubscribe, or just reply “no marketing”.`,
     }),
   }));
 }
@@ -46,7 +46,7 @@ export function emailQuoteUpdated(q: { quoteId: string; reference: string; clien
 
 export async function emailQuoteAccepted(q: { quoteId: string; reference: string; siteAddress: string; clientEmail: string; acceptedName: string; version: number; requestedStart?: string | null }) {
   const office = officeInbox();
-  const toOffice = office.length ? safe(() => sendMail({
+  const toOffice = office.length ? safe(() => sendMail({ from: "office",
     to: office,
     subject: `Quote accepted: ${q.reference} – ${q.acceptedName}`,
     ...brandEmail({
@@ -81,7 +81,7 @@ const ukDate = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-
  */
 export async function emailInvoice(i: { quoteId: string; reference: string; clientName: string; clientEmail: string; number: string; label: string; gross: number; dueOn: string; pdf?: Buffer | null }) {
   const attachments = i.pdf ? [{ filename: `Invoice ${i.number}.pdf`, content: i.pdf, contentType: "application/pdf" }] : undefined;
-  const client = await safe(() => sendMail({
+  const client = await safe(() => sendMail({ from: "invoices",
     to: i.clientEmail,
     subject: `Invoice ${i.number} – ${i.label} (${i.reference})`,
     ...(attachments ? { attachments } : {}),
@@ -97,7 +97,7 @@ export async function emailInvoice(i: { quoteId: string; reference: string; clie
     }),
   }));
   const office = officeInbox();
-  if (office.length) await safe(() => sendMail({
+  if (office.length) await safe(() => sendMail({ from: "office",
     to: office,
     subject: `Invoice issued: ${i.number} – ${i.clientName} – ${gbp(i.gross)}`,
     ...(attachments ? { attachments } : {}),

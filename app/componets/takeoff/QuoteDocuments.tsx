@@ -196,7 +196,7 @@ function Quotation({ d }: { d: QuoteDocs }) {
 
         <div className="break-inside-avoid"><SectionTitle n={no("Acceptance")}>Acceptance</SectionTitle>
           <p className="mt-2">This quotation is valid until <strong>{longDate(d.validUntil)}</strong>. It is subject to our contract terms, {d.guarantee.years}-year workmanship guarantee and the health &amp; safety documents provided with it. You can accept online in your client portal, or sign below and return a copy.</p>
-          <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name }]} /></div>
+          <div className="mt-4"><Signatures parties={[{ role: `For ${d.company.registeredName || d.company.name}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name, signed: d.clientSigned && { name: d.clientSigned.name, signatureUrl: d.clientSigned.signatureUrl, date: d.clientSigned.date, role: "Signed online" } }]} /></div>
         </div>
       </Page>
     </>
@@ -342,7 +342,7 @@ function Contract({ d }: { d: QuoteDocs }) {
         </div>
         <div className="break-inside-avoid"><SectionTitle>Signed</SectionTitle>
           <p className="mt-2 text-xs text-neutral-600">By signing, both parties agree to these terms. Accepting the quotation in the client portal has the same effect.</p>
-          <div className="mt-4"><Signatures parties={[{ role: `For ${co}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name }]} /></div>
+          <div className="mt-4"><Signatures parties={[{ role: `For ${co}`, signed: d.signer && { ...d.signer, date: d.issueDate } }, { role: "Client", name: d.client.name, signed: d.clientSigned && { name: d.clientSigned.name, signatureUrl: d.clientSigned.signatureUrl, date: d.clientSigned.date, role: "Signed online" } }]} /></div>
         </div>
       </Page>
     </>

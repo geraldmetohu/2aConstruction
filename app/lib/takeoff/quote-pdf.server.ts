@@ -113,12 +113,18 @@ export async function renderQuotationPdf(d: QuoteDocs): Promise<Buffer> {
   heading("Acceptance");
   text(`This quotation is valid until ${longDate(d.validUntil)} and is subject to our contract terms, ${d.guarantee.years}-year workmanship guarantee and the health & safety documents in your client area. You can accept online in your client area or sign below.`, { size: 9.5, gap: 2 });
   const sig = d.signer?.signatureUrl ? await signatureImage(d.signer.signatureUrl) : null;
-  room(sig ? 80 : 40);
-  if (sig) { doc.moveDown(2.6); try { doc.image(sig, L, doc.y - 40, { fit: [200, 38], valign: "bottom" }); } catch { /* unreadable image – leave the line blank */ } }
+  const clientSig = d.clientSigned?.signatureUrl?.startsWith("data:image/png;base64,") ? Buffer.from(d.clientSigned.signatureUrl.split(",")[1], "base64") : null;
+  room(sig || clientSig ? 80 : 40);
+  if (sig || clientSig) {
+    doc.moveDown(2.6);
+    const top = doc.y - 40;
+    if (sig) try { doc.image(sig, L, top, { fit: [200, 38], valign: "bottom" }); } catch { /* unreadable image – leave the line blank */ }
+    if (clientSig) try { doc.image(clientSig, L + 279, top, { fit: [200, 38], valign: "bottom" }); } catch { /* leave blank */ }
+  }
   const y = doc.y;
   doc.moveTo(L, y).lineTo(L + 220, y).moveTo(L + 279, y).lineTo(L + W, y).lineWidth(0.5).strokeColor(ink).stroke();
   const signedBy = d.signer ? `${d.signer.name}${d.signer.role ? `, ${d.signer.role}` : ""} · ${longDate(d.issueDate)}` : "";
-  doc.font("Body").fontSize(8).fillColor(grey).text(`Signed for ${c.registeredName || c.name}${signedBy ? `\n${signedBy}` : ""}`, L, y + 4, { width: 220 }).text("Client signature, name & date", L + 279, y + 4, { width: 220 });
+  doc.font("Body").fontSize(8).fillColor(grey).text(`Signed for ${c.registeredName || c.name}${signedBy ? `\n${signedBy}` : ""}`, L, y + 4, { width: 220 }).text(d.clientSigned ? `Signed online by ${d.clientSigned.name} · ${longDate(d.clientSigned.date)}` : "Client signature, name & date", L + 279, y + 4, { width: 220 });
 
   // Footer
   const count = doc.bufferedPageRange().count;

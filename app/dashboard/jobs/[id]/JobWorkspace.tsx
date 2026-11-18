@@ -3,12 +3,13 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ArrowLeft, Banknote, FolderKanban, Sparkles, Camera, CircleCheck, ClipboardCheck, ClipboardList, Receipt, UserCog, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
+  ArrowLeft, Banknote, Boxes, FolderKanban, Sparkles, Camera, CircleCheck, ClipboardCheck, ClipboardList, Receipt, UserCog, ExternalLink, Eye, EyeOff, FileText, FolderOpen, Search, HardHat, LogIn, LogOut, Mail, MapPin, MessageSquare, Package, Phone, Printer, Send, Star, Trash2, TriangleAlert, Users,
 } from "lucide-react";
 import { UploadDropzone } from "@/app/lib/uploadthing";
 import type { DueRow, OrderNeed, PayOwed, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
 import { daysWorked, outOfPhase } from "@/app/lib/takeoff/jobs";
 import type { ExtraRow } from "@/app/lib/takeoff/extras-store";
+import type { MaterialItem, MaterialStage, MaterialStatus } from "@/app/lib/takeoff/materials";
 import { DOC_CATEGORIES, docCategoryLabel, type DocCategory } from "@/app/lib/takeoff/job-documents";
 import { docKinds } from "@/app/componets/takeoff/QuoteDocuments";
 import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
@@ -18,6 +19,7 @@ import type { ActionRow, CheckInRow, ClientContact, ExpenseRow, JobEvent, JobSta
 import {
   addClientActionAction, addExpenseAction, addPhotosAction, adminCheckInAction, assignWorkerAction, postMessageAction, rateWorkerAction, recordPaymentAction, reviewPaymentAction,
   addDocumentsAction, addSnagAction, issueInvoiceAction, resendInvoiceAction, saveClientInfoAction, setManagerAction, setSnagAction, setClientActionStatusAction, updateDocumentAction, setOrderAction, setStageAction, setSupplyAction, updateJobAction, updatePhotoAction, voidExpenseAction, addExtraAction, removeExtraAction,
+  setMaterialsAction, addExtraMaterialAction, removeExtraMaterialAction,
 } from "../actions";
 
 type Iso<T, K extends keyof T> = Omit<T, K> & { [P in K]: string };
@@ -35,6 +37,8 @@ export interface JobView {
   checkIns: Iso<CheckInRow, "at">[]; toOrder: OrderNeed[]; orders: { stage: string; status: "ORDERED" | "DELIVERED"; supplier: string; note: string; updatedAt: string }[];
   stageMaterials: { stage: string; label: string; start: string | null; items: { description: string; quantity: number; unit: string; cost?: number }[] }[];
   plannedMaterials: number; plannedLabour: number;
+  /** Every material by stage (quote + extras), with what's been confirmed. */
+  materials: MaterialStage[]; materialsOn: boolean;
   /** Free extras (not on the quote, not charged) – internal only. */
   extrasOn: boolean; extras: Iso<ExtraRow, "createdAt">[];
   /** Client portal (empty until the client-portal migration has run). */
@@ -48,7 +52,7 @@ const when = (d: string) => new Date(d).toLocaleString("en-GB", { day: "numeric"
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 const input = "w-full rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm";
 const btn = "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold disabled:opacity-40";
-const TABS = [["manage", "Manage", FolderKanban], ["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["snags", "Snagging", ClipboardCheck], ["team", "Team", Users], ["orders", "Orders", Package], ["extras", "Free extras", Sparkles]] as const;
+const TABS = [["manage", "Manage", FolderKanban], ["progress", "Progress", ClipboardList], ["photos", "Photos", Camera], ["documents", "Documents", FileText], ["client", "Client", MessageSquare], ["money", "Money", Banknote], ["snags", "Snagging", ClipboardCheck], ["team", "Team", Users], ["materials", "Materials", Boxes], ["orders", "Orders", Package], ["extras", "Free extras", Sparkles]] as const;
 type Tab = (typeof TABS)[number][0];
 const stateTone: Record<DueRow["state"], string> = { PAID: "bg-emerald-100 text-emerald-800", PART_PAID: "bg-sky-100 text-sky-800", DUE: "bg-amber-100 text-amber-800", OVERDUE: "bg-red-100 text-red-800", UPCOMING: "bg-neutral-100 text-neutral-700" };
 
@@ -110,6 +114,7 @@ export function JobWorkspace({ job: j, initialTab }: { job: JobView; initialTab?
         add={d => act(() => addSnagAction(j.quoteId, d), "Snag added – the client can see it.")} toggle={(id, isDone) => act(() => setSnagAction(j.quoteId, id, isDone), isDone ? "Marked as done – the client can see it." : "Reopened.")} />
         : <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">The snagging list needs the client-portal migration (20261112120000_client_portal).</p>)}
       {tab === "team" && <TeamTab {...p} />}
+      {tab === "materials" && <MaterialsTab {...p} />}
       {tab === "orders" && <OrdersTab {...p} />}
       {tab === "extras" && <ExtrasTab {...p} />}
     </div>
@@ -580,6 +585,105 @@ function TeamRow({ t, j, act, busy }: { t: JobView["team"][number] } & P) {
 }
 
 // ---------------------------------------------------------------- Orders
+
+// ---------------------------------------------------------------- Materials: every item, confirmed one by one
+
+const M_LABEL: Record<MaterialStatus, string> = { NEEDED: "To buy", ORDERED: "Bought", DELIVERED: "Delivered", NOT_NEEDED: "Not needed" };
+const M_TONE: Record<MaterialStatus, string> = { NEEDED: "bg-amber-100 text-amber-900", ORDERED: "bg-sky-100 text-sky-800", DELIVERED: "bg-emerald-100 text-emerald-800", NOT_NEEDED: "bg-neutral-100 text-neutral-500" };
+const ST_LABEL = { DONE: "Stage done", IN_PROGRESS: "In progress", NOT_STARTED: "Not started" } as const;
+const ref = (i: MaterialItem) => ({ itemKey: i.itemKey, stage: i.stage, description: i.description, quantity: i.quantity, unit: i.unit });
+
+function MaterialsTab({ j, act, busy }: P) {
+  const [show, setShow] = useState<"open" | "all">("open");
+  const [q, setQ] = useState("");
+  const [sup, setSup] = useState<Record<string, string>>({});
+  const blank = { stage: j.materials[0]?.stage ?? j.progress.stages[0]?.stage ?? "", description: "", quantity: "1", unit: "nr", status: "NEEDED" as MaterialStatus, supplier: "", cost: "", note: "" };
+  const [x, setX] = useState(blank);
+  const all = j.materials.flatMap(s => s.items.filter(i => !i.clientSupplied));
+  const open = all.filter(i => i.status === "NEEDED"), extras = all.filter(i => i.extra);
+  const doneButOpen = j.materials.filter(s => s.stageStatus === "DONE" && s.open > 0);
+  const match = (i: MaterialItem) => !q.trim() || `${i.description} ${i.supplier} ${i.areas.join(" ")}`.toLowerCase().includes(q.trim().toLowerCase());
+  const setItems = (items: MaterialItem[], patch: { status?: MaterialStatus; supplier?: string; cost?: number | null; note?: string }, done: string) =>
+    act(() => setMaterialsAction(j.quoteId, { items: items.map(ref), patch }), done);
+  if (!j.materialsOn) return <p className="rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-900">The materials list needs the database update 20261118130000_admin_tools (run <code>npx prisma migrate deploy</code>).</p>;
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-3 sm:grid-cols-4">
+        {[["Items on this job", all.length], ["Still to buy", open.length], ["Confirmed", all.length - open.length], ["Extras added", extras.length]].map(([k, v]) => (
+          <div key={k as string} className={`rounded-xl border bg-white p-3 ${k === "Still to buy" && open.length ? "border-amber-300" : ""}`}><p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{k}</p><p className="text-xl font-black">{v}</p></div>))}
+      </div>
+      {doneButOpen.length > 0 && <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900"><TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />Stage{doneButOpen.length > 1 ? "s" : ""} marked done with items not confirmed: {doneButOpen.map(s => `${s.label} (${s.open})`).join(", ")}. Confirm them (or mark “not needed”) so the list is right.</p>}
+      <div className="flex flex-wrap items-center gap-2 print:hidden">
+        <input className={`${input} w-64`} placeholder="Search materials" value={q} onChange={e => setQ(e.target.value)} />
+        <button onClick={() => setShow(show === "open" ? "all" : "open")} className={`${btn} border`}>{show === "open" ? "Show everything" : "Show only to buy"}</button>
+        <button onClick={() => window.print()} className={`${btn} border`}><Printer className="h-3.5 w-3.5" />Print</button>
+      </div>
+      {j.materials.map(s => {
+        const items = s.items.filter(i => (show === "all" || (i.status === "NEEDED" && !i.clientSupplied)) && match(i));
+        const mine = s.items.filter(i => !i.clientSupplied && match(i)), openHere = mine.filter(i => i.status === "NEEDED");
+        if (!items.length && show === "open") return null;
+        return (
+          <Card key={s.stage} title={`${s.label}${s.start ? ` – ${dm(s.start)}` : ""}`} right={<span className="flex flex-wrap items-center gap-2 text-xs">
+            <span className={`rounded px-1.5 py-0.5 font-semibold ${s.stageStatus === "DONE" ? "bg-emerald-100 text-emerald-800" : s.stageStatus === "IN_PROGRESS" ? "bg-amber-100 text-amber-900" : "bg-neutral-100 text-neutral-600"}`}>{ST_LABEL[s.stageStatus]}</span>
+            <span className="text-neutral-500">{s.confirmed} of {s.total} confirmed</span></span>}>
+            {openHere.length > 1 && <div className="mb-2 flex flex-wrap gap-2 print:hidden">
+              <input className={`${input} w-44`} placeholder="Supplier for all" value={sup[s.stage] ?? ""} onChange={e => setSup({ ...sup, [s.stage]: e.target.value })} />
+              <button disabled={busy} onClick={() => setItems(openHere, { status: "ORDERED", ...(sup[s.stage] ? { supplier: sup[s.stage] } : {}) }, `${openHere.length} items marked bought.`)} className={`${btn} bg-neutral-950 text-white`}><Package className="h-3.5 w-3.5" />All {openHere.length} bought</button>
+              <button disabled={busy} onClick={() => setItems(openHere, { status: "DELIVERED", ...(sup[s.stage] ? { supplier: sup[s.stage] } : {}) }, `${openHere.length} items marked delivered.`)} className={`${btn} border`}>All delivered</button>
+            </div>}
+            <ul className="divide-y">{items.map(i => <MaterialRow key={i.itemKey} i={i} j={j} act={act} busy={busy} setItems={setItems} />)}</ul>
+          </Card>
+        );
+      })}
+      {show === "open" && !open.length && <p className="rounded-xl border bg-white p-4 text-sm text-emerald-800">Every material on this job is confirmed. Press “Show everything” to see the full list.</p>}
+      <Card title="Add a material that isn't on the quote" right={<span className="text-xs text-neutral-500">Shows in this list and in the stage’s totals</span>}>
+        <div className="grid gap-2 sm:grid-cols-6">
+          <label className="text-xs font-semibold sm:col-span-2">Material<input className={input} value={x.description} onChange={e => setX({ ...x, description: e.target.value })} placeholder="e.g. Extra 2.4 m 47×150 C24 joists" /></label>
+          <label className="text-xs font-semibold">Quantity<input inputMode="decimal" className={input} value={x.quantity} onChange={e => setX({ ...x, quantity: e.target.value })} /></label>
+          <label className="text-xs font-semibold">Unit<input className={input} value={x.unit} onChange={e => setX({ ...x, unit: e.target.value })} /></label>
+          <label className="text-xs font-semibold sm:col-span-2">Stage<select className={input} value={x.stage} onChange={e => setX({ ...x, stage: e.target.value })}>{j.progress.stages.map(st => <option key={st.stage} value={st.stage}>{st.label}</option>)}<option value="">Not tied to a stage</option></select></label>
+          <label className="text-xs font-semibold">Status<select className={input} value={x.status} onChange={e => setX({ ...x, status: e.target.value as MaterialStatus })}>{(Object.keys(M_LABEL) as MaterialStatus[]).map(k => <option key={k} value={k}>{M_LABEL[k]}</option>)}</select></label>
+          <label className="text-xs font-semibold">Supplier<input className={input} value={x.supplier} onChange={e => setX({ ...x, supplier: e.target.value })} /></label>
+          <label className="text-xs font-semibold">Cost £ (optional)<input inputMode="decimal" className={input} value={x.cost} onChange={e => setX({ ...x, cost: e.target.value })} /></label>
+          <label className="text-xs font-semibold sm:col-span-3">Note<input className={input} value={x.note} onChange={e => setX({ ...x, note: e.target.value })} /></label>
+        </div>
+        <button disabled={busy || x.description.trim().length < 2 || !(Number(x.quantity) >= 0) || (x.cost.trim() !== "" && !(Number(x.cost) >= 0))}
+          onClick={async () => { if (await act(() => addExtraMaterialAction(j.quoteId, { ...x, quantity: Number(x.quantity) || 0, cost: x.cost.trim() === "" ? null : Number(x.cost) }), "Material added.")) setX({ ...blank, stage: x.stage }); }}
+          className={`${btn} mt-3 bg-neutral-950 text-white`}><Boxes className="h-3.5 w-3.5" />Add material</button>
+      </Card>
+    </div>
+  );
+}
+
+function MaterialRow({ i, j, act, busy, setItems }: { i: MaterialItem; j: JobView; act: P["act"]; busy: boolean; setItems: (items: MaterialItem[], patch: { status?: MaterialStatus; supplier?: string; cost?: number | null; note?: string }, done: string) => Promise<boolean> }) {
+  const [edit, setEdit] = useState(false);
+  const [f, setF] = useState({ supplier: i.supplier, cost: i.cost == null ? "" : String(i.cost), note: i.note });
+  if (i.clientSupplied) return <li className="flex items-center justify-between gap-3 py-2 text-sm text-neutral-500"><span>{i.description} <span className="text-xs">({i.quantity} {i.unit})</span></span><span className="rounded bg-violet-100 px-1.5 py-0.5 text-xs font-semibold text-violet-800">Client supplies</span></li>;
+  return (
+    <li className="py-2 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium">{i.description}{i.extra && <span className="ml-2 rounded bg-fuchsia-100 px-1.5 text-[10px] font-bold uppercase text-fuchsia-800">extra</span>}</p>
+          <p className="text-xs text-neutral-500">{i.quantity} {i.unit}{i.areas.length ? ` · ${i.areas.join(", ")}` : ""}{i.quotedCost != null ? ` · quoted ${gbp(i.quotedCost)}` : ""}{i.cost != null ? ` · paid ${gbp(i.cost)}` : ""}{i.supplier ? ` · ${i.supplier}` : ""}{i.note ? ` · ${i.note}` : ""}{i.updatedBy ? ` · by ${i.updatedBy}` : ""}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-1 print:hidden">
+          {(Object.keys(M_LABEL) as MaterialStatus[]).map(k => (
+            <button key={k} disabled={busy || i.status === k} onClick={() => setItems([i], { status: k }, `${i.description}: ${M_LABEL[k].toLowerCase()}.`)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${i.status === k ? M_TONE[k] : "border text-neutral-600 hover:bg-neutral-50"}`}>{M_LABEL[k]}</button>))}
+          <button onClick={() => setEdit(!edit)} className="rounded-full px-2 py-1 text-[11px] font-semibold text-neutral-500 underline">{edit ? "Close" : "Details"}</button>
+          {i.extra && <ConfirmDelete small word="DELETE" title="Remove this extra material?" what={[i.description]} run={t => removeExtraMaterialAction(j.quoteId, i.itemKey, t)} label="Remove" />}
+        </div>
+        <span className={`hidden rounded px-1.5 py-0.5 text-xs font-semibold print:inline ${M_TONE[i.status]}`}>{M_LABEL[i.status]}</span>
+      </div>
+      {edit && <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_8rem_1fr_auto] print:hidden">
+        <input className={input} placeholder="Supplier" value={f.supplier} onChange={e => setF({ ...f, supplier: e.target.value })} />
+        <input className={input} inputMode="decimal" placeholder="Cost £" value={f.cost} onChange={e => setF({ ...f, cost: e.target.value })} />
+        <input className={input} placeholder="Note (e.g. delivery Tues)" value={f.note} onChange={e => setF({ ...f, note: e.target.value })} />
+        <button disabled={busy || (f.cost.trim() !== "" && !(Number(f.cost) >= 0))} onClick={async () => { if (await setItems([i], { supplier: f.supplier, cost: f.cost.trim() === "" ? null : Number(f.cost), note: f.note }, "Saved.")) setEdit(false); }} className={`${btn} bg-neutral-950 text-white`}>Save</button>
+      </div>}
+    </li>
+  );
+}
 
 function OrdersTab({ j, act, busy }: P) {
   const [supplier, setSupplier] = useState<Record<string, string>>({});

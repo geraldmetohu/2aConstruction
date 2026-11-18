@@ -7,7 +7,8 @@ import { addEvent, answerAction, recordPayment, saveClientInfo, setSupply } from
 import { getQuote, StoreError } from "@/app/lib/takeoff/store";
 import { addSnag, listSnags, portalReady, setSnagStatus } from "@/app/lib/takeoff/portal-store";
 import { notifyOffice } from "@/app/lib/takeoff/notify.server";
-import { listActions } from "@/app/lib/takeoff/jobs-store";
+import { getJob, listActions } from "@/app/lib/takeoff/jobs-store";
+import { reviewsReady, saveReview } from "@/app/lib/reviews/reviews";
 
 const fail = (e: unknown) => ({ ok: false as const, message: e instanceof StoreError ? e.message : e instanceof z.ZodError ? e.issues.map(i => i.message).join("; ") : "Something went wrong. Please try again or call us." });
 
@@ -93,6 +94,23 @@ export async function clientSetSnag(quoteId: string, snagId: string, isDone: boo
     const id = z.string().uuid().parse(snagId), was = (await listSnags(db(), quoteId)).find(s => s.id === id);
     const s = await setSnagStatus(db(), quoteId, id, isDone ? "DONE" : "OPEN", email, "CLIENT");
     if (!isDone && was?.status === "DONE") await notifyOffice(db(), quoteId, { kind: "SNAG_REOPENED", title: s.title });
+    return done(quoteId);
+  } catch (e) { return fail(e); }
+}
+
+/** After handover: the client's review (shown on the website only once we approve it, and only if they allow it). */
+export async function clientSaveReview(quoteId: string, raw: unknown) {
+  try {
+    await asClient(quoteId);
+    if (!(await reviewsReady(db()))) throw new StoreError("Reviews are not available yet.");
+    if ((await getJob(db(), quoteId)).status !== "COMPLETED") throw new StoreError("You can leave a review once the project is finished.");
+    const p = z.object({
+      rating: z.number().int().min(1, "Choose a star rating").max(5), title: z.string().trim().max(120), body: z.string().trim().min(10, "Write a few words about the work").max(3000),
+      displayName: z.string().trim().min(2, "How should we show your name?").max(80), area: z.string().trim().max(60), allowPublish: z.boolean(),
+    }).parse(raw);
+    await saveReview(db(), quoteId, p);
+    await notifyOffice(db(), quoteId, { kind: "REVIEW", rating: p.rating, body: p.body });
+    revalidatePath("/dashboard/reviews");
     return done(quoteId);
   } catch (e) { return fail(e); }
 }

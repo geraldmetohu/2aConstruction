@@ -1,11 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { db, jobsAvailable } from "@/app/lib/takeoff/jobs.server";
 import { listAssignments, listCheckIns, listJobs, workerByToken } from "@/app/lib/takeoff/jobs-store";
 import { hashCrewToken } from "@/app/lib/takeoff/crew-token.server";
 import { londonDay } from "@/app/lib/takeoff/jobs";
 import { CrewCheckIn } from "./CrewCheckIn";
 
-export const metadata: Metadata = { title: "Site check-in", robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const ok = /^[\w-]{20,100}$/.test(token);
+  return {
+    title: "Site check-in", robots: { index: false, follow: false },
+    ...(ok ? { manifest: `/crew/${token}/manifest.webmanifest` } : {}),
+    appleWebApp: { capable: true, title: "2A Site", statusBarStyle: "black-translucent" },
+  };
+}
+export const viewport: Viewport = { themeColor: "#071a33" };
 export const dynamic = "force-dynamic";
 
 export default async function CrewPage({ params }: { params: Promise<{ token: string }> }) {

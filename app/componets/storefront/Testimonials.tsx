@@ -4,7 +4,9 @@ import { useRef, useState, type PointerEvent } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, ArrowUpRight, Quote, Star } from "lucide-react";
 
-const reviews = [
+export type TestimonialReview = { source: string; sourceLabel: string; rating: string; quote: string; name: string; location: string; href: string };
+
+const fixedReviews: TestimonialReview[] = [
   {
     source: "Checkatrade",
     sourceLabel: "Verified customer review",
@@ -45,7 +47,9 @@ const reviews = [
   },
 ];
 
-export default function Testimonials() {
+/** Reviews clients left in their project portal (approved by us) come first, then the Checkatrade / FMB ones. */
+export default function Testimonials({ fromClients = [] }: { fromClients?: TestimonialReview[] }) {
+  const reviews = [...fromClients, ...fixedReviews];
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 

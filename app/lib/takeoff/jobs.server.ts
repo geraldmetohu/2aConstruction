@@ -5,14 +5,16 @@ import { buildDocuments, type QuoteDocs } from "./documents";
 import { companyProfile } from "./prices.server";
 import { resolveSigner } from "./company";
 import { getSignerId } from "./signer-store";
+import { clientSignedFor } from "./acceptance-signature";
 import { takeoffInputSchema, type TakeoffInput } from "./schema";
-import { getQuote, getVersion, prismaDb, storageReady, type QuoteRow } from "./store";
+import { getQuoteRow, getVersionLite, prismaDb, storageReady, type QuoteRow } from "./store";
 import type { TakeoffResult } from "./types";
 import {
   getJob, jobsReady, listActions, listAssignments, listCheckIns, listEvents, listExpenses, listJobs, listOrders, listPayments, listPhotos, listStages,
   listSupplies, listWorkers, monthlyMoney, unreadSince,
 } from "./jobs-store";
 import { listDocuments } from "./job-documents";
+import { confirmedStages, listMaterials, materialsFor, materialsReady } from "./materials";
 import { approvedVariations } from "./variations";
 import { addDaysIso, clientSupplies, invoiceAmounts, invoiceNumber, invoicesDue, londonDay, ordersToPlace, paymentsDue, payOwed, stageProgress, todoOrder, type Todo } from "./jobs";
 import { getPortalInfo, issueInvoice, listInvoices, listSnags, markInvoiceEmailed, portalReady, type InvoiceRow, type PortalInfo, type SnagRow } from "./portal-store";
@@ -25,20 +27,21 @@ export async function jobsAvailable() { const d = db(); return (await storageRea
 /** Everything about one job, from the version the client accepted (or the latest one sent). */
 export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {}) {
   const d = db();
-  const q = await getQuote(d, quoteId);
-  if (!q) return null;
-  const versionNo = q.quote.publishedVersion ?? q.quote.currentVersion;
-  const version = await getVersion(d, quoteId, versionNo);
+  // Only what the job needs: the quote row and one version without its (large) price and rate books.
+  const quote = await getQuoteRow(d, quoteId);
+  if (!quote) return null;
+  const q = { quote };
+  const versionNo = quote.publishedVersion ?? quote.currentVersion;
+  const [version, job] = await Promise.all([getVersionLite(d, quoteId, versionNo), getJob(d, quoteId)]);
   if (!version) return null;
-  const job = await getJob(d, quoteId);
   const parsed = takeoffInputSchema.parse(version.input);
   const input: TakeoffInput = { ...parsed, terms: { ...parsed.terms, startDate: job.startDate ?? parsed.terms.startDate } };
   const customer = version.customer as CustomerTakeoff;
   const { company } = await companyProfile();
-  const signer = resolveSigner(company, await getSignerId(d, quoteId));
+  const [signer, clientSigned] = await Promise.all([getSignerId(d, quoteId).then(x => resolveSigner(company, x)), clientSignedFor(d, quoteId)]);
   const today = londonDay(new Date());
   const docs: QuoteDocs = buildDocuments({ customer, input, company, client: { name: q.quote.clientName, email: q.quote.clientEmail, siteAddress: q.quote.siteAddress },
-    reference: q.quote.reference, version: versionNo, issueDate: londonDay(version.createdAt), autoStart: false, signer });
+    reference: q.quote.reference, version: versionNo, issueDate: londonDay(version.createdAt), autoStart: false, signer, clientSigned });
   const [stagesSaved, events, photos, actions, supplies, payments, documents] = await Promise.all([
     listStages(d, quoteId), listEvents(d, quoteId, opts.forClient), listPhotos(d, quoteId, opts.forClient), listActions(d, quoteId), listSupplies(d, quoteId), listPayments(d, quoteId),
     listDocuments(d, quoteId, opts.forClient).catch(() => []),
@@ -64,16 +67,23 @@ export async function loadJob(quoteId: string, opts: { forClient?: boolean } = {
     variations: { net: variations.net, gross: variations.gross, count: variations.list.length } };
   if (opts.forClient) return { ...base, admin: null };
   const result = version.result as TakeoffResult;
-  const [orders, expenses, assignments, checkIns, workers, unread] = await Promise.all([
+  const [savedOrders, expenses, assignments, checkIns, workers, unread, materialRows, materialsOn] = await Promise.all([
     listOrders(d, quoteId), listExpenses(d, { quoteId }), listAssignments(d, { quoteId }), listCheckIns(d, { quoteId }), listWorkers(d), unreadSince(d, quoteId, "ADMIN"),
+    listMaterials(d, quoteId).catch(() => []), materialsReady(d),
   ]);
+  // Materials item by item; a stage whose items are all confirmed counts as ordered (or delivered).
+  const materials = materialsFor(result.lines, progress.stages, materialRows);
+  const byItems = confirmedStages(materials);
+  const orders = [...savedOrders, ...[...byItems].filter(([st]) => !savedOrders.some(o => o.stage === st))
+    .map(([stage, status]) => ({ quoteId, stage, status, supplier: "", note: "All items confirmed in Materials", updatedAt: new Date() }))];
+  const finished = new Set(progress.stages.filter(st => st.status === "DONE").map(st => st.stage));
   const team = assignments.map(a => ({ assignment: a, worker: workers.find(w => w.id === a.workerId)!, owed: payOwed(a, checkIns, expenses, workers.find(w => w.id === a.workerId)?.dayRate ?? null) }));
   const spent = expenses.filter(e => !e.void).reduce((s, e) => s + e.amount, 0);
   return {
     ...base,
     admin: {
-      result, orders, expenses, team, checkIns, workers, unread,
-      toOrder: ordersToPlace(result.lines, docs.programme, orders, today, 5),
+      result, orders, expenses, team, checkIns, workers, unread, materials, materialsOn,
+      toOrder: ordersToPlace(result.lines, docs.programme, orders, today, 5, finished),
       // Planned cost is the quote's direct cost; actual is what has been spent so far.
       finance: { contract: customer.gross + variations.gross, net: customer.net + variations.net, plannedCost: result.totals.costSubtotal, spent, received: money.received, profitSoFar: money.received / (1 + input.commercial.vatPercent / 100) - spent },
     },

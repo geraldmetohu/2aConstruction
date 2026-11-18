@@ -3,6 +3,7 @@ import { brandEmail, mailConfigured, officeInbox, sendMail, siteUrl } from "./ma
 import { getQuote, type Sql } from "./store";
 import { after } from "next/server";
 import { queueNotice } from "./office-digest";
+import { getNotifications } from "../settings/app-settings";
 import { sendOfficeDigest } from "./office-digest.server";
 
 /**
@@ -83,7 +84,7 @@ export async function notifyClient(db: Sql, quoteId: string, e: ClientEvent) {
           paragraphs: [`${e.name} is your project manager and your main contact while we work${e.phone ? ` – ${e.phone}` : ""}${e.email ? `, ${e.email}` : ""}.`], button: { label: "Open my project", url: project } };
       }
     })();
-    await sendMail({ to: q.clientEmail, subject: m.subject, ...brandEmail({ heading: m.heading, paragraphs: m.paragraphs, button: m.button, footnote: `Reference ${q.reference}${q.siteAddress ? ` · ${q.siteAddress.replace(/\n/g, ", ")}` : ""}.` }) });
+    await sendMail({ from: "projects", to: q.clientEmail, subject: m.subject, ...brandEmail({ heading: m.heading, paragraphs: m.paragraphs, button: m.button, footnote: `Reference ${q.reference}${q.siteAddress ? ` · ${q.siteAddress.replace(/\n/g, ", ")}` : ""}.` }) });
   });
 }
 
@@ -94,7 +95,8 @@ export type OfficeEvent =
   | { kind: "SNAG"; title: string; location: string }
   | { kind: "SNAG_REOPENED"; title: string }
   | { kind: "SUPPLY"; label: string; status: string }
-  | { kind: "QUOTE_SENT"; emailed: boolean; pdf?: Buffer | null };
+  | { kind: "QUOTE_SENT"; emailed: boolean; pdf?: Buffer | null }
+  | { kind: "REVIEW"; rating: number; body: string };
 
 /** Tell the office (CONTACT_TO / ADMIN_EMAILS) about something the client did that needs us. */
 export async function notifyOffice(db: Sql, quoteId: string, e: OfficeEvent) {
@@ -113,11 +115,14 @@ export async function notifyOffice(db: Sql, quoteId: string, e: OfficeEvent) {
         case "SNAG": return { subject: `Snag raised by ${c}: ${e.title}`, heading: `${q.clientName} added a snag`, paragraphs: [`${e.title}${e.location ? ` (${e.location})` : ""}`], button: { label: "Open the snagging list", url: `${job}?tab=snags` } };
         case "SNAG_REOPENED": return { subject: `Snag reopened by ${c}: ${e.title}`, heading: `${q.clientName} reopened a snag`, paragraphs: [`“${e.title}” isn't right yet – please take another look.`], button: { label: "Open the snagging list", url: `${job}?tab=snags` } };
         case "SUPPLY": return { subject: `${e.label}: ${e.status.toLowerCase().replace("_", " ")} – ${c}`, heading: `${q.clientName} updated an item they supply`, paragraphs: [`${e.label} is now ${e.status === "DELIVERED" ? "delivered to site" : e.status === "ORDERED" ? "ordered" : "still to order"}.`], button: { label: "Open the job", url: `${job}?tab=orders` } };
+        case "REVIEW": return { subject: `New ${e.rating}★ review from ${c}`, heading: `${q.clientName} left a ${e.rating}-star review`, paragraphs: [`“${clip(e.body, 1500)}”`, "Approve it on the Reviews page to show it on the website."], button: { label: "Open Reviews", url: `${base()}/dashboard/reviews` } };
         case "QUOTE_SENT": return { subject: `Quote sent: ${q.reference} – ${q.clientName}`, heading: `Quote ${q.reference} sent`, paragraphs: [`To ${q.clientName} (${q.clientEmail})${q.siteAddress ? ` for ${q.siteAddress.replace(/\n/g, ", ")}` : ""}.`, e.emailed ? "The client has been emailed the quotation (PDF attached here for your records)." : "The client email did NOT go out – send them the link to their client area, or the attached PDF."], button: { label: "Open the quote", url: `${base()}/dashboard/calculator?quote=${quoteId}` } };
       }
     })();
     // Client portal activity goes into the hourly digest (one email listing everything), not one email each.
     if (e.kind !== "QUOTE_SENT") {
+      // Switched off on the Notifications page: no email at all (everything is still in the job page).
+      if (!(await getNotifications(db)).portalDigest) return;
       const queued = await queueNotice(db, { quoteId, kind: e.kind, heading: m.heading, detail: m.paragraphs.join(" "), link: m.button.url, replyTo: e.kind === "MESSAGE" || e.kind === "ANSWER" ? q.clientEmail : "" }).catch(err => { console.error("[notify] digest queue", err); return false; });
       if (queued) {
         // If a digest is overdue (the hourly schedule missed), send it once this request has finished.
@@ -126,6 +131,6 @@ export async function notifyOffice(db: Sql, quoteId: string, e: OfficeEvent) {
       }
     }
     const attachments = e.kind === "QUOTE_SENT" && e.pdf ? [{ filename: `Quotation ${q.reference}.pdf`, content: e.pdf, contentType: "application/pdf" }] : undefined;
-    await sendMail({ to, ...(e.kind === "MESSAGE" || e.kind === "ANSWER" ? { replyTo: q.clientEmail } : {}), ...(attachments ? { attachments } : {}), subject: m.subject, ...brandEmail({ heading: m.heading, paragraphs: m.paragraphs, button: m.button, footnote: q.siteAddress ? `Site: ${q.siteAddress.replace(/\n/g, ", ")}` : undefined }) });
+    await sendMail({ from: "office", to, ...(e.kind === "MESSAGE" || e.kind === "ANSWER" ? { replyTo: q.clientEmail } : {}), ...(attachments ? { attachments } : {}), subject: m.subject, ...brandEmail({ heading: m.heading, paragraphs: m.paragraphs, button: m.button, footnote: q.siteAddress ? `Site: ${q.siteAddress.replace(/\n/g, ", ")}` : undefined }) });
   });
 }

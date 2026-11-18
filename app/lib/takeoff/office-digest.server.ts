@@ -16,7 +16,7 @@ export async function sendOfficeDigest(db: Sql, opts: { ifOlderThanMinutes?: num
   if (!notices.length) return { sent: 0, reason: "nothing waiting" };
   const m = digestContent(notices, siteUrl() || "https://2aconstruction.co.uk");
   try {
-    const r = await sendMail({ to, subject: m.subject, text: m.text, html: m.html, ...(m.replyTo ? { replyTo: m.replyTo } : {}) });
+    const r = await sendMail({ from: "office", to, subject: m.subject, text: m.text, html: m.html, ...(m.replyTo ? { replyTo: m.replyTo } : {}) });
     if (!r.sent) { await releaseBatch(db, batch); return { sent: 0, reason: r.reason ?? "email failed" }; }
   } catch (e) { await releaseBatch(db, batch); throw e; }
   return { sent: notices.length };

@@ -1,5 +1,8 @@
 "use server";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { recordConsent } from "@/app/lib/marketing/contacts";
+import { saveAcceptanceSignature, signaturesReady, validSignatureImage } from "@/app/lib/takeoff/acceptance-signature";
 import { getAuthSession } from "@/app/lib/auth/session.server";
 import { z } from "zod";
 import { prisma } from "@/app/lib/db";
@@ -61,7 +64,7 @@ function applyChoices(input: TakeoffInput, raw: unknown) {
 
 async function load(quoteId: string) {
   const email = await clientEmail();
-  const q = await getClientQuote(prismaDb(prisma), z.string().uuid().parse(quoteId), email);
+  const q = await getClientQuote(prismaDb(prisma), z.string().uuid().parse(quoteId), email, { books: true });
   if (!q?.version) throw new StoreError("Quote not found.");
   // Rates saved with the quote; any rate added since then falls back to the defaults.
   const saved = q.version.rates as RateBook;
@@ -92,9 +95,11 @@ export async function confirmChoices(quoteId: string, version: number, raw: unkn
   } catch (e) { return { ok: false as const, message: msg(e) }; }
 }
 
-export async function acceptClientQuote(quoteId: string, version: number, fullName: string, agreed: boolean, preferredStart = "") {
+export async function acceptClientQuote(quoteId: string, version: number, fullName: string, agreed: boolean, preferredStart = "", signature = "", newsOptIn = false) {
   try {
     if (!agreed) throw new StoreError("Please tick the box to confirm you accept the quote and its terms.");
+    const sigOn = await signaturesReady(prismaDb(prisma));
+    if (sigOn && !validSignatureImage(signature)) throw new StoreError("Please sign in the box with your finger or mouse.");
     const name = z.string().trim().min(3).max(120).parse(fullName);
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
     const start = preferredStart ? z.string().regex(/^\d{4}-\d{2}-\d{2}$/).parse(preferredStart) : "";
@@ -103,8 +108,15 @@ export async function acceptClientQuote(quoteId: string, version: number, fullNa
     const id = z.string().uuid().parse(quoteId);
     const d = prismaDb(prisma);
     const r = await acceptQuote(d, id, email, version, name);
+    // The drawn signature, with when, where from and on what device – evidence of the online contract.
+    if (sigOn) {
+      const h = await headers();
+      await saveAcceptanceSignature(d, { quoteId: id, version, signedName: name, email, image: signature, ip: (h.get("x-forwarded-for") ?? "").split(",")[0].trim(), userAgent: h.get("user-agent") ?? "" })
+        .catch(e => console.error("[accept] signature", e));
+    }
     // The start date they would like; we confirm the actual date. Skipped quietly if the portal tables aren't set up yet.
     if (start) await (async () => { if (await jobsReady(d) && await portalReady(d)) await setRequestedStart(d, id, start, email); })().catch(e => console.error("[accept] requested start", e));
+    if (newsOptIn === true) await recordConsent(d, { email, name, source: "QUOTE_ACCEPTED", wording: "Send me occasional news and offers from 2A Construction. I can unsubscribe at any time." }).catch(() => {});
     await emailQuoteAccepted({ quoteId: id, reference: r.reference, siteAddress: r.siteAddress, clientEmail: r.clientEmail, acceptedName: name, version, requestedStart: start || null });
     revalidatePath(`/my-quotes/${quoteId}`);
     return { ok: true as const };

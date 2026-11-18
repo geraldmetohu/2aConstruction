@@ -4,6 +4,8 @@ import { companyOverview, db, jobsAvailable, loadJob } from "@/app/lib/takeoff/j
 import { listJobs } from "@/app/lib/takeoff/jobs-store";
 import { mailConfigured, sendMail, siteUrl } from "@/app/lib/takeoff/mail.server";
 import { sendOfficeDigest } from "@/app/lib/takeoff/office-digest.server";
+import { getNotifications } from "@/app/lib/settings/app-settings";
+import { sendReviewRequests } from "@/app/lib/reviews/reviews.server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,17 +25,19 @@ async function run(req: Request) {
   if (!authorised(req)) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   if (!(await jobsAvailable())) return NextResponse.json({ ok: false, reason: "Jobs tables not set up" });
   // Anything still waiting from the client portal goes out first (the hourly schedule normally sends it).
-  const portal = await sendOfficeDigest(db()).catch(e => { console.error("[daily] office digest", e); return { sent: 0 }; });
+  const notify = await getNotifications(db());
+  const portal = notify.portalDigest ? await sendOfficeDigest(db()).catch(e => { console.error("[daily] office digest", e); return { sent: 0 }; }) : { sent: 0 };
+  // The overview also raises invoices that have fallen due, so it always runs – only the emails are optional.
   const o = await companyOverview();
   const base = siteUrl();
   const lines = o.todos.map(t => `• ${t.text}${base ? `\n  ${base}${t.href}` : ""}`);
   const digest = `Good morning,\n\n${lines.length ? `Today (${o.today}) these need you:\n\n${lines.join("\n")}` : "Nothing urgent today."}\n\nMoney: ${Math.round(o.finance.outstanding)} to collect, ${Math.round(o.finance.overdue)} overdue, team owed ${Math.round(o.finance.owedToTeam)}.\n`;
   const sent: string[] = [];
   const admins = (process.env.ADMIN_EMAILS ?? "").split(/[,;\s]+/).filter(Boolean);
-  if (mailConfigured() && admins.length) { const r = await sendMail({ to: admins, subject: `2A Construction – today's list (${o.todos.length})`, text: digest }); if (r.sent) sent.push("office digest"); }
+  if (notify.morningList && mailConfigured() && admins.length) { const r = await sendMail({ from: "office", to: admins, subject: `2A Construction – today's list (${o.todos.length})`, text: digest }); if (r.sent) sent.push("office digest"); }
 
-  // Client reminders: items to order within 5 days, payments due within 3 days.
-  if (mailConfigured()) {
+  // Client reminders: items to order within 5 days, payments due within 3 days (off until switched on).
+  if (notify.clientReminders && mailConfigured()) {
     for (const j of (await listJobs(db())).filter(x => x.status !== "COMPLETED")) {
       const job = await loadJob(j.quoteId, { forClient: true });
       if (!job) continue;
@@ -41,11 +45,13 @@ async function run(req: Request) {
       const pays = job.money.rows.filter(r => r.balance > 0 && r.date && (r.state === "DUE" || r.state === "OVERDUE"));
       if (!items.length && !pays.length) continue;
       const text = `Hello ${j.clientName.split(" ")[0]},\n\nA quick reminder about your project at ${j.siteAddress}:\n\n${items.map(s => `• Please order: ${s.item} – ${s.quantity} ${s.unit}${s.spec ? ` (${s.spec})` : ""}, needed by ${s.neededBy}`).join("\n")}${items.length && pays.length ? "\n" : ""}${pays.map(r => `• ${r.label}: £${r.balance.toFixed(2)} ${r.state === "OVERDUE" ? "was due" : "is due"} on ${r.date}`).join("\n")}\n\nYou can see everything and let us know in your project panel${base ? `: ${base}/my-quotes/${j.quoteId}` : "."}\n\nThank you,\n2A Construction`;
-      const r = await sendMail({ to: j.clientEmail, subject: `Your project ${j.reference} – reminder`, text });
+      const r = await sendMail({ from: "projects", to: j.clientEmail, subject: `Your project ${j.reference} – reminder`, text });
       if (r.sent) sent.push(`client ${j.reference}`);
     }
   }
-  return NextResponse.json({ ok: true, portalDigest: portal.sent, todos: o.todos.length, orders: o.orders.length, emailed: sent, email: mailConfigured() });
+  // Reviews: a week after handover, ask the client (once).
+  const reviews = notify.reviewRequests ? await sendReviewRequests(db()).catch(e => { console.error("[daily] reviews", e); return 0; }) : 0;
+  return NextResponse.json({ ok: true, notifications: notify, reviewRequests: reviews, portalDigest: portal.sent, todos: o.todos.length, orders: o.orders.length, emailed: sent, email: mailConfigured() });
 }
 export const GET = run;
 export const POST = run;

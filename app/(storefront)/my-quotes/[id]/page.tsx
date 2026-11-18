@@ -14,6 +14,7 @@ import { firstName } from "../PortalParts";
 import { docCategoryLabel } from "@/app/lib/takeoff/job-documents";
 import { jobsAvailable, loadJob } from "@/app/lib/takeoff/jobs.server";
 import { unreadSince } from "@/app/lib/takeoff/jobs-store";
+import { getReview, reviewsReady } from "@/app/lib/reviews/reviews";
 
 export const metadata: Metadata = { title: "Your quote", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export default async function ClientQuotePage({ params, searchParams }: { params
   // Accepted: the client's project panel. Only client-safe data goes to the browser (no costs, margins or internal notes).
   const job = await loadJob(id, { forClient: true });
   if (!job) return quoteView;
+  const [reviewOn, review] = await Promise.all([reviewsReady(db), getReview(db, id)]);
   const c = job.company;
   return <ClientProject initialTab={tab} greetingName={greetingName} quoteView={<ClientQuote {...quoteProps} embedded />} v={{
     quoteId: id, reference: q.quote.reference, title: job.docs.title, siteAddress: q.quote.siteAddress, status: job.job.status, startDate: job.docs.start ?? null, finish: job.docs.finish ?? null,
@@ -68,6 +70,7 @@ export default async function ClientQuotePage({ params, searchParams }: { params
     portalOn: job.portalOn, requestedStart: job.portal.requestedStart,
     manager: { name: job.portal.managerName, phone: job.portal.managerPhone, email: job.portal.managerEmail },
     invoices: job.invoices.map(i => { const r = job.money.rows.find(x => x.n === i.scheduleNo); return { number: i.number, label: i.label, scheduleNo: i.scheduleNo, issuedOn: i.issuedOn, dueOn: i.dueOn, gross: i.gross, balance: r ? r.balance : i.gross }; }),
+    reviewOn, review: review ? { rating: review.rating, title: review.title, body: review.body, displayName: review.displayName, area: review.area, allowPublish: review.allowPublish, status: review.status, reply: review.reply } : null,
     snags: job.snags.map(s => ({ id: s.id, title: s.title, detail: s.detail, location: s.location, photoUrl: s.photoUrl, status: s.status, raisedByKind: s.raisedByKind, doneByKind: s.doneByKind, doneAt: s.doneAt ? new Date(s.doneAt).toISOString() : null, createdAt: new Date(s.createdAt).toISOString() })),
   }} />;
 }

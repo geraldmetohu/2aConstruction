@@ -3,6 +3,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn, LogOut, MapPin } from "lucide-react";
 import { crewCheckIn } from "../actions";
+import { PhotoQueue } from "./PhotoQueue";
+import { InstallHint } from "./InstallHint";
 
 type Site = { quoteId: string; name: string; reference: string; inside: boolean; times: string[] };
 
@@ -40,6 +42,8 @@ export function CrewCheckIn({ token, name, sites }: { token: string; name: strin
         ))}
         {!sites.length && <p className="rounded-2xl bg-white/10 p-4 text-sm">You are not booked on a site right now. Call the office if this is wrong.</p>}
       </div>
+      <PhotoQueue token={token} sites={sites.map(s => ({ quoteId: s.quoteId, name: s.name }))} />
+      <InstallHint />
       <p className="mt-6 text-xs text-neutral-500">Your location is saved with each check-in to confirm you are on site. Keep this link private.</p>
     </main>
   );

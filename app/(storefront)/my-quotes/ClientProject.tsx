@@ -2,13 +2,13 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Banknote, Camera, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, ClipboardList, Ellipsis, FileText, House, ListTodo, Mail, MessageSquare, Phone, Receipt, Send, ShoppingCart, TriangleAlert, Users, X } from "lucide-react";
+import { ArrowLeft, Banknote, Camera, Star, ChevronLeft, ChevronRight, CircleCheck, ClipboardCheck, ClipboardList, Ellipsis, FileText, House, ListTodo, Mail, MessageSquare, Phone, Receipt, Send, ShoppingCart, TriangleAlert, Users, X } from "lucide-react";
 import { SnagList, type SnagView } from "@/app/componets/takeoff/SnagList";
 import { isLoftJob, LoftJourney3D } from "@/app/componets/client/LoftJourney3D";
 import { ExtensionJourney3D, isExtensionJob } from "@/app/componets/client/ExtensionJourney3D";
 import type { DueRow, StageProgress, SupplyNeed } from "@/app/lib/takeoff/jobs";
 import type { ClientContact } from "@/app/lib/takeoff/jobs-store";
-import { clientAddSnag, clientAnswer, clientMessage, clientReportPayment, clientSaveInfo, clientSetSnag, clientSupply } from "./project-actions";
+import { clientAddSnag, clientAnswer, clientMessage, clientReportPayment, clientSaveInfo, clientSaveReview, clientSetSnag, clientSupply } from "./project-actions";
 
 export interface ClientProjectView {
   quoteId: string; reference: string; title: string; siteAddress: string; status: string; startDate: string | null; finish: string | null;
@@ -25,6 +25,9 @@ export interface ClientProjectView {
   snags: SnagView[];
   /** Type of extension on this job (for the 3D build view), if any. */
   extType?: string | null;
+  /** The client's review (after handover). */
+  reviewOn?: boolean;
+  review?: { rating: number; title: string; body: string; displayName: string; area: string; allowPublish: boolean; status: string; reply: string } | null;
 }
 
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -41,8 +44,8 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
   const due = v.money.rows.filter(r => r.state === "DUE" || r.state === "OVERDUE");
   const todo = openActions.length + toOrder.length + due.length;
   const openSnags = v.snags.filter(s => s.status === "OPEN").length;
-  const ALL = [["overview", "Overview", House, 0], ["todo", "To do", ListTodo, todo], ["messages", "Messages", MessageSquare, v.unread], ["photos", "Photos", Camera, 0], ["payments", "Payments", Banknote, due.length], ["snags", "Snagging", ClipboardCheck, openSnags], ["details", "Your details", Users, 0], ["quote", "Quote & documents", FileText, 0]] as const;
-  const TABS = ALL.filter(([k]) => k !== "snags" || v.portalOn);
+  const ALL = [["overview", "Overview", House, 0], ["todo", "To do", ListTodo, todo], ["messages", "Messages", MessageSquare, v.unread], ["photos", "Photos", Camera, 0], ["payments", "Payments", Banknote, due.length], ["snags", "Snagging", ClipboardCheck, openSnags], ["details", "Your details", Users, 0], ["quote", "Quote & documents", FileText, 0], ["review", "Your review", Star, 0]] as const;
+  const TABS = ALL.filter(([k]) => (k !== "snags" || v.portalOn) && (k !== "review" || (v.reviewOn && v.status === "COMPLETED")));
   type Tab = (typeof ALL)[number][0];
   const [tab, setTabState] = useState<Tab>((TABS.find(([k]) => k === initialTab)?.[0] ?? (todo ? "todo" : "overview")) as Tab);
   const [more, setMore] = useState(false);
@@ -123,6 +126,8 @@ export function ClientProject({ v, quoteView, greetingName = "", initialTab }: {
 
       {tab === "snags" && <SnagList snags={v.snags} audience="client" busy={busy}
         add={d => act(() => clientAddSnag(v.quoteId, d), "Snag added – we'll be in touch to fix it.")} toggle={(id, isDone) => act(() => clientSetSnag(v.quoteId, id, isDone), isDone ? "Marked as done." : "Reopened – we'll take another look.")} />}
+
+      {tab === "review" && <ReviewForm v={v} busy={busy} save={r => act(() => clientSaveReview(v.quoteId, r), "Thank you for your review – it means a lot to us.")} />}
 
       {tab === "details" && <Details v={v} busy={busy} save={p => act(() => clientSaveInfo(v.quoteId, p), "Saved – thank you.")} />}
 
@@ -395,6 +400,35 @@ function Photos({ photos }: { photos: ClientProjectView["photos"] }) {
         </div>
         <p className="px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3 text-sm text-white/80">{p.caption || p.stage || "Site"} · {when(p.createdAt)}</p>
       </div>}
+    </section>
+  );
+}
+
+/** After handover: a star rating and a few words. Shown on our website only after we approve it, and only if allowed. */
+function ReviewForm({ v, busy, save }: { v: ClientProjectView; busy: boolean; save: (r: { rating: number; title: string; body: string; displayName: string; area: string; allowPublish: boolean }) => Promise<boolean> }) {
+  const r = v.review;
+  const firstOf = (n: string) => n.trim().split(/\s+/)[0] ?? "";
+  const postcodeArea = (/\b([A-Z]{1,2}\d{1,2}[A-Z]?)\s*\d[A-Z]{2}\b/i.exec(v.siteAddress)?.[1] ?? "").toUpperCase();
+  const [f, setF] = useState({ rating: r?.rating ?? 0, title: r?.title ?? "", body: r?.body ?? "", displayName: r?.displayName ?? firstOf(v.contacts[0]?.name ?? ""), area: r?.area ?? postcodeArea, allowPublish: r?.allowPublish ?? true });
+  const [hover, setHover] = useState(0);
+  return (
+    <section className="rounded-3xl border border-[#071a33]/10 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(7,26,51,.45)] sm:p-6">
+      <h2 className="text-lg font-semibold text-[#071a33]">{r ? "Your review" : "How did we do?"}</h2>
+      <p className="mt-1 text-sm text-neutral-600">Two minutes of your time helps other families choose a builder they can trust. {r?.status === "APPROVED" ? "Your review is on our website – thank you!" : r ? "Thanks – we'll read it and, if you allowed it, add it to our website." : ""}</p>
+      {r?.reply && <p className="mt-3 rounded-xl bg-[#071a33]/5 p-3 text-sm"><strong>Our reply:</strong> {r.reply}</p>}
+      <div className="mt-4" role="radiogroup" aria-label="Star rating">
+        {[1, 2, 3, 4, 5].map(n => (
+          <button key={n} type="button" role="radio" aria-checked={f.rating === n} aria-label={`${n} star${n > 1 ? "s" : ""}`} onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)} onClick={() => setF({ ...f, rating: n })}
+            className="p-1"><Star className={`h-9 w-9 ${(hover || f.rating) >= n ? "fill-[#f5b400] text-[#f5b400]" : "text-neutral-300"}`} /></button>))}
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-semibold sm:col-span-2">A short headline (optional)<input className={`${input} mt-1`} maxLength={120} value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="e.g. Brilliant loft conversion, on time and tidy" /></label>
+        <label className="text-sm font-semibold sm:col-span-2">Your review<textarea className={`${input} mt-1`} rows={5} maxLength={3000} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} placeholder="What was it like working with us? The team, communication, quality, tidiness…" /></label>
+        <label className="text-sm font-semibold">Show my name as<input className={`${input} mt-1`} maxLength={80} value={f.displayName} onChange={e => setF({ ...f, displayName: e.target.value })} placeholder="e.g. Sarah M." /></label>
+        <label className="text-sm font-semibold">Area<input className={`${input} mt-1`} maxLength={60} value={f.area} onChange={e => setF({ ...f, area: e.target.value })} placeholder="e.g. Hornchurch or RM11" /></label>
+      </div>
+      <label className="mt-3 flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4" checked={f.allowPublish} onChange={e => setF({ ...f, allowPublish: e.target.checked })} />You may show this review (with the name and area above) on the 2A Construction website.</label>
+      <button disabled={busy || !f.rating || f.body.trim().length < 10 || f.displayName.trim().length < 2} onClick={() => save(f)} className={`${btn} mt-4 bg-[#071a33] text-white`}><Star className="h-4 w-4" />{r ? "Update my review" : "Send my review"}</button>
     </section>
   );
 }

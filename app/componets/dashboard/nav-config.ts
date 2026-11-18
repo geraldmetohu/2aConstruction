@@ -1,5 +1,5 @@
 import {
-  FileSignature, Hammer,
+  FileSignature, Hammer, Bell, Bug, Database, Download, Megaphone, Star,
   Activity, BookUser, Calculator, Columns2, FileText, Film, FolderKanban, HardHat,
   FolderOpen, Image as ImageIcon, Images, LayoutDashboard, Package, PoundSterling, Settings, ShieldCheck, SlidersHorizontal, Tag, Users, type LucideIcon,
 } from "lucide-react";
@@ -50,6 +50,17 @@ export const navSections: NavSection[] = [
       { name: "Hero video", href: "/dashboard/hero", icon: Film, hint: "Homepage video" },
       { name: "Banner pictures", href: "/dashboard/banner", icon: ImageIcon, hint: "Homepage banner images" },
       { name: "Before / after", href: "/dashboard/beforeafter", icon: Columns2, hint: "Before & after gallery" },
+    ],
+  },
+  {
+    title: "Marketing & tools",
+    links: [
+      { name: "Marketing emails", href: "/dashboard/marketing", icon: Megaphone, hint: "Ready-made emails to people who agreed, sent through Resend" },
+      { name: "Client reviews", href: "/dashboard/reviews", icon: Star, hint: "Approve reviews from the client portal for the website" },
+      { name: "Emails & notifications", href: "/dashboard/notifications", icon: Bell, hint: "Morning list, portal digest, reminders, team calendar" },
+      { name: "Accounting export", href: "/dashboard/accounting-export", icon: Download, hint: "Xero / QuickBooks / accountant CSV files" },
+      { name: "Database backup", href: "/dashboard/backup", icon: Database, hint: "Download everything now, or weekly to the office PC" },
+      { name: "Website errors", href: "/dashboard/errors", icon: Bug, hint: "Anything that broke, with alerts by email" },
     ],
   },
   {

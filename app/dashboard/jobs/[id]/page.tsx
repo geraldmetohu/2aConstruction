@@ -34,6 +34,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     team: a.team.map(t => ({ ...t, worker: { ...t.worker, createdAt: new Date(t.worker.createdAt).toISOString() } })),
     workers: a.workers.map(w => ({ id: w.id, name: w.name, trade: w.trade, kind: w.kind, payBasis: w.payBasis, dayRate: w.dayRate, phone: w.phone, email: w.email, rating: w.rating, active: w.active })),
     checkIns: a.checkIns.map(c => ({ ...c, at: new Date(c.at).toISOString() })),
+    materials: a.materials, materialsOn: a.materialsOn,
     toOrder: a.toOrder, orders: a.orders.map(o => ({ ...o, updatedAt: new Date(o.updatedAt).toISOString() })),
     stageMaterials: job.docs.programme.filter(r => r.days > 0).map(r => ({
       stage: r.stage, label: r.label, start: r.start ?? null,

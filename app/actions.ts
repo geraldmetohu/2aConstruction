@@ -6,6 +6,8 @@ import { STOREFRONT_TAG } from "./lib/storefront-query";
 import {parseWithZod} from "@conform-to/zod"
 import { bannerSchema, beforeafterSchema, ProjectSchema, ContactSchema, heroVideoSchema } from "./lib/zodSchemas";
 import { prisma } from "./lib/db";
+import { prismaDb } from "./lib/takeoff/store";
+import { recordConsent } from "./lib/marketing/contacts";
 import { officeInbox, sendMail } from "@/app/lib/takeoff/mail.server";
 import { headers } from "next/headers";
 import { deleteFile } from "./api/uploadthing/delete-file";
@@ -885,6 +887,12 @@ export async function submitEstimator(formData: FormData) {
         project: client.projects[0],
       };
     });
+
+    // Marketing is a separate, optional "yes" (agreeing to the terms isn't consent to marketing).
+    if (formData.get("newsOptIn") === "on") {
+      await recordConsent(prismaDb(prisma), { email, name: fullName, source: "ESTIMATOR", wording: "Optional: send me occasional news and offers from 2A Construction. I can unsubscribe at any time." })
+        .catch(e => console.error("[estimator] marketing consent", e instanceof Error ? e.message : e));
+    }
 
     void sendEstimatorEmails({
       fullName,

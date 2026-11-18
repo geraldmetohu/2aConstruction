@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
+    "test:all": "node tests/run-all.mjs",
     "test:estimating-migration": "node tests/estimating-foundation.test.mjs",
     "test:catalogue": "node tests/catalogue-admin.test.mjs",
     "test:catalogue-ui": "node tests/catalogue-render.test.mjs",
@@ -35,6 +36,7 @@
     "test:client-portal": "node tests/client-portal.test.mjs",
     "test:finance": "node tests/finance.test.mjs",
     "test:deletes": "node tests/deletes.test.mjs",
+    "test:admin-tools": "node tests/admin-tools.test.mjs",
     "test:compliance": "node tests/compliance.test.mjs",
     "preview:takeoff": "node scripts/preview-takeoff.mjs"
   },

@@ -13,12 +13,12 @@ import { BUDGETS, CONTACT, FOUND, HOME, JOB_GROUPS, JOBS, STARTS, VISIT, answerK
 
 type Answers = Record<string, string | string[]>;
 type Upload = { name: string; url: string; type?: string };
-type Contact = { fullName: string; phone: string; email: string; houseNumber: string; street: string; postcode: string; preferredContact: string; foundUs: string; terms: boolean; contactOk: boolean };
+type Contact = { fullName: string; phone: string; email: string; houseNumber: string; street: string; postcode: string; preferredContact: string; foundUs: string; terms: boolean; contactOk: boolean; news: boolean };
 
 const STEPS = ["What you need", "A few details", "Your home", "Photos", "Budget & timing", "Your details"];
 const DRAFT_KEY = "2a-estimator-draft-v2";
 const ICONS: Record<string, typeof House> = { House, Layers, Warehouse, Building2, HardHat, Hammer, CookingPot, Bath, Sofa, PaintRoller, Zap, Flame, Snowflake, DoorOpen, ShieldCheck, BrickWall, Trees, Sun, Droplets, Wrench };
-const emptyContact: Contact = { fullName: "", phone: "", email: "", houseNumber: "", street: "", postcode: "", preferredContact: "", foundUs: "", terms: false, contactOk: false };
+const emptyContact: Contact = { fullName: "", phone: "", email: "", houseNumber: "", street: "", postcode: "", preferredContact: "", foundUs: "", terms: false, contactOk: false, news: false };
 const homeKey = (k: string) => `Your home · ${k}`;
 
 export function EstimatorForm() {
@@ -87,6 +87,7 @@ export function EstimatorForm() {
     fd.set("startTimeframe", typeof start === "string" ? start : "");
     for (const k of ["fullName", "phone", "email", "houseNumber", "street", "postcode", "preferredContact", "foundUs"] as const) fd.set(k, contact[k].trim());
     fd.set("termsAccepted", "on"); fd.set("marketingAccepted", "on");
+    if (contact.news) fd.set("newsOptIn", "on");
     try {
       const r = await submitEstimator(fd);
       if (r.ok) { setSent({ emailSent: (r as { emailSent?: boolean }).emailSent ?? true }); top.current?.scrollIntoView({ behavior: "smooth" }); }
@@ -340,6 +341,7 @@ function ContactStep({ c, setC, errors, chosen, answers, uploads, edit }: { c: C
         <div className={`space-y-3 rounded-2xl p-4 ${errors.terms ? "bg-red-50 ring-1 ring-red-200" : "bg-neutral-50"}`}>
           <Tick on={c.terms} set={v => setC(x => ({ ...x, terms: v }))}>I agree to the <Link href="/terms" target="_blank" className="underline">terms</Link> and that the details I&apos;ve given are right to the best of my knowledge.</Tick>
           <Tick on={c.contactOk} set={v => setC(x => ({ ...x, contactOk: v }))}>2A Construction can contact me by phone, WhatsApp or email about this estimate.</Tick>
+          <Tick on={c.news} set={v => setC(x => ({ ...x, news: v }))}>Optional: send me occasional news and offers from 2A Construction. I can unsubscribe at any time.</Tick>
           {errors.terms && <p className="text-xs font-semibold text-red-600">{errors.terms}</p>}
         </div>
       </div>

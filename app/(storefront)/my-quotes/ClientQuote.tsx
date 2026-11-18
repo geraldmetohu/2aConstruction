@@ -9,6 +9,7 @@ import type { CustomerTakeoff } from "@/app/lib/takeoff/engine";
 import type { TakeoffInput } from "@/app/lib/takeoff/schema";
 import { phaseLabels } from "@/app/lib/takeoff/types";
 import { acceptClientQuote, confirmChoices, previewChoices } from "./actions";
+import { SignaturePad } from "@/app/componets/SignaturePad";
 
 export type ChoiceField = { scope: "room" | "package"; id: string; area: string; key: string; label: string; value: string; type: "select" | "text"; options: [string, string][] };
 const gbp = (x: number) => `£${x.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -39,7 +40,9 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
   async function check() { setBusy(true); const r = await previewChoices(id, payload()); setBusy(false); if (r.ok) setPreview(r); else setMsg({ ok: false, text: r.message }); }
   async function confirm() { setBusy(true); const r = await confirmChoices(id, version, payload()); setBusy(false); setMsg(r.ok ? { ok: true, text: "Thank you – your choices are saved and the quote has been updated." } : { ok: false, text: r.message }); setPreview(null); router.refresh(); }
   const [start, setStart] = useState("");
-  async function accept() { setBusy(true); const r = await acceptClientQuote(id, version, name, agree, start); setBusy(false); setMsg(r.ok ? { ok: true, text: `Thank you – you have accepted the quote. ${start ? "We'll confirm your start date shortly." : "We will be in touch to book your start date."}` } : { ok: false, text: r.message }); router.refresh(); }
+  const [signature, setSignature] = useState("");
+  const [news, setNews] = useState(false);
+  async function accept() { setBusy(true); const r = await acceptClientQuote(id, version, name, agree, start, signature, news); setBusy(false); setMsg(r.ok ? { ok: true, text: `Thank you – you have accepted the quote. ${start ? "We'll confirm your start date shortly." : "We will be in touch to book your start date."}` } : { ok: false, text: r.message }); router.refresh(); }
 
   const card = "rounded-2xl border border-[#071a33]/10 bg-white p-5 sm:p-6";
   const h2 = "text-lg font-semibold tracking-[-0.01em] text-[#071a33]";
@@ -139,13 +142,16 @@ export function ClientQuote({ id, reference, status, version, customer: c, prope
           <div className="p-5 sm:p-7">
             <div className="flex items-start gap-3"><span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f5b400] text-sm font-bold text-[#071a33]">3</span>
               <div><h2 className="text-xl font-semibold">Happy with everything? Accept online.</h2>
-                <p className="mt-1 text-sm text-white/70">You&apos;re accepting version {version} for <strong className="text-white">{gbp(c.gross)}</strong> inc. VAT. Typing your name signs the contract online. Tell us when you&apos;d like to start and we&apos;ll confirm the date and send the deposit invoice.</p></div></div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                <p className="mt-1 text-sm text-white/70">You&apos;re accepting version {version} for <strong className="text-white">{gbp(c.gross)}</strong> inc. VAT. Typing your name and signing below signs the contract online. Tell us when you&apos;d like to start and we&apos;ll confirm the date and send the deposit invoice.</p></div></div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
               <label className="block text-sm font-medium text-white/80">Your full name (your signature)<input autoComplete="name" className="mt-1.5 block w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 font-serif text-lg italic text-white placeholder:text-white/40 focus:border-[#f5b400] focus:outline-none" value={name} onChange={e => setName(e.target.value)} /></label>
               <label className="block text-sm font-medium text-white/80">Preferred start (optional)<input type="date" min={new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date())} className="mt-1.5 block w-full rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-white [color-scheme:dark] focus:border-[#f5b400] focus:outline-none" value={start} onChange={e => setStart(e.target.value)} /></label>
-              <button disabled={busy || changed || !agree} onClick={accept} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#f5b400] px-6 py-3 text-sm font-bold text-[#071a33] transition-colors hover:bg-white disabled:opacity-40" title={changed ? "Confirm or reset your choices first" : !agree ? "Tick the box first" : ""}><Check className="h-4 w-4" />Accept quote</button>
+              
             </div>
+            <div className="mt-4 max-w-xl"><p className="mb-1.5 text-sm font-medium text-white/80">Your signature</p><SignaturePad dark onChange={setSignature} label="Sign here with your finger or mouse" /></div>
             <label className="mt-4 flex items-start gap-3 text-sm text-white/80"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#f5b400]" checked={agree} onChange={e => setAgree(e.target.checked)} />I have read and accept the quotation, contract terms, payment schedule and guarantee in “Your documents”.</label>
+            <label className="mt-2 flex items-start gap-3 text-sm text-white/60"><input type="checkbox" className="mt-0.5 h-4 w-4 accent-[#f5b400]" checked={news} onChange={e => setNews(e.target.checked)} />Optional: send me occasional news and offers. I can unsubscribe at any time.</label>
+            <div className="mt-5"><button disabled={busy || changed || !agree || !signature || name.trim().length < 3} onClick={accept} className="inline-flex w-full items-center sm:w-auto justify-center gap-2 rounded-xl bg-[#f5b400] px-6 py-3 text-sm font-bold text-[#071a33] transition-colors hover:bg-white disabled:opacity-40" title={changed ? "Confirm or reset your choices first" : !signature ? "Sign in the box first" : !agree ? "Tick the box first" : ""}><Check className="h-4 w-4" />Accept quote</button></div>
             {changed && <p className="mt-3 text-xs text-[#f5b400]">You&apos;ve changed some choices – confirm them above first so you accept the right price.</p>}
           </div>
         </section>

@@ -142,6 +142,24 @@ export async function getQuote(db: Sql, quoteId: string) {
   return { quote, latest, versions, events };
 }
 
+/** Just the quote row (no versions or history) – for pages that only need who/what/status. */
+export async function getQuoteRow(db: Sql, quoteId: string): Promise<QuoteRow | null> {
+  const [quote] = await db.query<QuoteRow>(`SELECT ${QUOTE_COLS} FROM "TakeoffQuote" WHERE "id" = $1::uuid`, [quoteId]);
+  return quote ?? null;
+}
+
+/** A version without its saved price book and rate book (which are large and only needed to re-price). */
+export async function getVersionLite(db: Sql, quoteId: string, version: number) {
+  const [v] = await db.query<Omit<VersionRow, "rates" | "prices">>(`SELECT "version", "input", "result", "customer", "reason", "visibleToClient", "createdBy", "createdAt" FROM "TakeoffQuoteVersion" WHERE "quoteId" = $1::uuid AND "version" = $2::int`, [quoteId, version]);
+  return v ?? null;
+}
+
+/** Only the company details from the latest rate set (not the whole price overrides). */
+export async function latestCompanySettings(db: Sql) {
+  const [row] = await db.query<{ version: number; company: unknown }>(`SELECT "version", "overrides" -> 'company' AS "company" FROM "TakeoffRateSet" ORDER BY "version" DESC LIMIT 1`);
+  return row ?? null;
+}
+
 export async function getVersion(db: Sql, quoteId: string, version: number) {
   const [v] = await db.query<VersionRow>(`SELECT "version", "input", "result", "customer", "rates", "prices", "reason", "visibleToClient", "createdBy", "createdAt" FROM "TakeoffQuoteVersion" WHERE "quoteId" = $1::uuid AND "version" = $2::int`, [quoteId, version]);
   return v ?? null;
@@ -174,10 +192,17 @@ export async function clientQuoteFormats(db: Sql) {
   return Object.fromEntries(rows.filter(r => r.format).map(r => [r.email.toLowerCase(), { format: r.format!, groupBy: r.groupBy ?? "AREA" }]));
 }
 
-export async function getClientQuote(db: Sql, quoteId: string, clientEmail: string) {
+/** The client's view of a quote. `books: true` also loads the saved price and rate books (needed to re-price their choices). */
+export type ClientQuote<V> = { quote: QuoteRow; version: V | null; updates: EventRow[]; unseen: EventRow[] } | null;
+export async function getClientQuote(db: Sql, quoteId: string, clientEmail: string, opts: { books: true }): Promise<ClientQuote<VersionRow>>;
+export async function getClientQuote(db: Sql, quoteId: string, clientEmail: string, opts?: { books?: false }): Promise<ClientQuote<Omit<VersionRow, "rates" | "prices">>>;
+export async function getClientQuote(db: Sql, quoteId: string, clientEmail: string, opts: { books?: boolean } = {}): Promise<ClientQuote<Omit<VersionRow, "rates" | "prices">>> {
+  return opts.books ? clientQuote<VersionRow>(db, quoteId, clientEmail, getVersion) : clientQuote(db, quoteId, clientEmail, getVersionLite);
+}
+async function clientQuote<V>(db: Sql, quoteId: string, clientEmail: string, load: (db: Sql, quoteId: string, version: number) => Promise<V | null>): Promise<ClientQuote<V>> {
   const [quote] = await db.query<QuoteRow>(`SELECT ${QUOTE_COLS} FROM "TakeoffQuote" WHERE "id" = $1::uuid AND "clientEmail" = $2 AND "publishedVersion" IS NOT NULL AND "status" <> 'DRAFT'`, [quoteId, email(clientEmail)]);
   if (!quote) return null;
-  const version = await getVersion(db, quoteId, quote.publishedVersion!);
+  const version = await load(db, quoteId, quote.publishedVersion!);
   const [seen] = await db.query<{ at: Date | null }>(`SELECT max("seenAt") AS "at" FROM "TakeoffQuoteSeen" WHERE "quoteId" = $1::uuid AND "viewer" = 'CLIENT'`, [quoteId]);
   const updates = await db.query<EventRow>(`SELECT "id"::text AS "id", "version", "kind", "message", "actor", "actorKind", "createdAt" FROM "TakeoffQuoteEvent"
     WHERE "quoteId" = $1::uuid AND "kind" IN ('SENT', 'UPDATED_AFTER_SEND', 'CLIENT_CHOICE', 'ACCEPTED') ORDER BY "createdAt" DESC LIMIT 50`, [quoteId]);

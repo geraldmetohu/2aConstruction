@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "@/app/lib/db";
 import { catalogueCodeFor, defaultRateBook, mergeRateBook } from "./ratebook";
-import { currentSupplierPrices, latestRateSet, prismaDb, storageReady } from "./store";
+import { cache } from "react";
+import { currentSupplierPrices, latestCompanySettings, latestRateSet, prismaDb, storageReady } from "./store";
 import type { PriceTable, RateBook, Trade } from "./types";
 import { companyFromOverrides, defaultCompany, type CompanyProfile } from "./company";
 import { supplierName } from "./supplier-parse";
@@ -120,13 +121,14 @@ export async function readCommercialDefaults(now = new Date()) {
 }
 
 /** Company details for documents: defaults → the latest saved set (Company & documents page). */
-export async function companyProfile(): Promise<{ company: CompanyProfile; version: number }> {
+// Read once per request (pages that show many jobs call it for each), and only the company part of the set.
+export const companyProfile = cache(async (): Promise<{ company: CompanyProfile; version: number }> => {
   try {
     const db = prismaDb(prisma);
     if (await storageReady(db)) {
-      const set = await latestRateSet(db);
-      if (set) return { company: companyFromOverrides((set.overrides as { company?: unknown } | null)?.company), version: set.version };
+      const set = await latestCompanySettings(db);
+      if (set) return { company: companyFromOverrides(set.company), version: set.version };
     }
   } catch { /* storage not set up yet */ }
   return { company: defaultCompany, version: 0 };
-}
+});

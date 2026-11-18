@@ -16,6 +16,7 @@ import { hashCrewToken, newCrewToken } from "@/app/lib/takeoff/crew-token.server
 import { sendMail, siteUrl } from "@/app/lib/takeoff/mail.server";
 import { addDocuments, updateDocument } from "@/app/lib/takeoff/job-documents";
 import { addExtra, removeExtra } from "@/app/lib/takeoff/extras-store";
+import { addExtraMaterial, materialsReady, removeExtraMaterial, setMaterials, updateExtraMaterial } from "@/app/lib/takeoff/materials";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; message: string };
 const uuid = z.string().uuid();
@@ -305,4 +306,47 @@ export async function removeExtraAction(quoteId: string, extraId: string, typed:
     await removeExtra(db(), uuid.parse(quoteId), uuid.parse(extraId));
   });
   return r.ok ? { ok: true, message: "Free extra removed." } : r;
+}
+
+// ---------------------------------------------------------------- Materials (item by item, plus extras)
+
+const matStatus = z.enum(["NEEDED", "ORDERED", "DELIVERED", "NOT_NEEDED"]);
+const matItem = z.object({ itemKey: z.string().min(1).max(600), stage: z.string().max(200), description: z.string().min(1).max(400), quantity: z.number().finite().min(0).max(1e7), unit: z.string().max(40) });
+async function needMaterials() { if (!(await materialsReady(db()))) throw new StoreError("Materials need the database update 20261118130000_admin_tools (run npx prisma migrate deploy)."); }
+
+/** Confirm one item or a whole stage: bought, delivered, not needed (or back to needed); supplier, cost and note too. */
+export async function setMaterialsAction(quoteId: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    await needMaterials();
+    const p = z.object({
+      items: z.array(matItem).min(1).max(500),
+      patch: z.object({ status: matStatus.optional(), supplier: z.string().trim().max(120).optional(), cost: z.number().finite().min(0).max(1e7).nullable().optional(), note: z.string().trim().max(500).optional() }),
+    }).parse(raw);
+    await setMaterials(db(), uuid.parse(quoteId), p.items, p.patch, actor);
+  });
+}
+
+export async function addExtraMaterialAction(quoteId: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    await needMaterials();
+    const p = z.object({ stage: z.string().max(200), description: z.string().trim().min(2, "Say what the material is").max(400), quantity: z.number().finite().min(0).max(1e7), unit: z.string().trim().max(40),
+      status: matStatus, supplier: z.string().trim().max(120), cost: z.number().finite().min(0).max(1e7).nullable(), note: z.string().trim().max(500) }).parse(raw);
+    await addExtraMaterial(db(), uuid.parse(quoteId), p, actor);
+  });
+}
+
+export async function updateExtraMaterialAction(quoteId: string, itemKey: string, raw: unknown) {
+  return run(quoteId, async actor => {
+    await needMaterials();
+    const p = z.object({ stage: z.string().max(200), description: z.string().trim().min(2).max(400), quantity: z.number().finite().min(0).max(1e7), unit: z.string().trim().max(40) }).parse(raw);
+    if (!(await updateExtraMaterial(db(), uuid.parse(quoteId), z.string().startsWith("extra:").parse(itemKey), p, actor))) throw new StoreError("That extra material was not found.");
+  });
+}
+
+export async function removeExtraMaterialAction(quoteId: string, itemKey: string, typed: string) {
+  const r = await run(quoteId, async () => {
+    if (typed.trim() !== "DELETE") throw new StoreError("Type DELETE to confirm.");
+    if (!(await removeExtraMaterial(db(), uuid.parse(quoteId), z.string().startsWith("extra:").parse(itemKey)))) throw new StoreError("That extra material was not found.");
+  });
+  return r.ok ? { ok: true as const, message: "Extra material removed." } : r;
 }

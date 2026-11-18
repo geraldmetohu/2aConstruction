@@ -21,7 +21,7 @@ import CurvedNavyInverted from "../componets/storefront/CurvedNavyInverted";
 import { ServicesPortfolio } from "../componets/storefront/ServicesPortfolio";
 import { ProjectProcess } from "../componets/storefront/ProjectProcess";
 import CurvedBlack from "../componets/storefront/CurvedBlack";
-import Testimonials from "../componets/storefront/Testimonials";
+import TestimonialsSection from "../componets/storefront/TestimonialsSection";
 
 // 👇 client-side reveal wrappers (small client component)
 // file: app/components/ui/Reveal.tsx (added separately)
@@ -67,7 +67,7 @@ export default function IndexPage() {
         <FeaturedProject />
       </Reveal>
       <Reveal>
-        <Testimonials />
+        <TestimonialsSection />
       </Reveal>
 
       <Reveal>

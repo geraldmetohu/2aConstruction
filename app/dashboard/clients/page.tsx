@@ -5,8 +5,12 @@ import { BadgeCheck, Clock, ExternalLink, FileText, FolderOpen, Mail, Phone, Tra
 
 export const dynamic = "force-dynamic";
 
-async function getClients() {
+const PER_PAGE = 20;
+
+async function getClients(page: number) {
   return prisma.client.findMany({
+    take: PER_PAGE,
+    skip: (page - 1) * PER_PAGE,
     orderBy: {
       createdAt: "desc",
     },
@@ -20,8 +24,21 @@ async function getClients() {
   });
 }
 
-export default async function ClientsPage() {
-  const clients = await getClients();
+export default async function ClientsPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const sp = await searchParams;
+  const total = await prisma.client.count();
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const page = Math.min(pages, Math.max(1, Math.floor(Number(sp.page) || 1)));
+  const clients = await getClients(page);
+  const pager = pages > 1 ? (
+    <nav className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-muted-foreground">Page {page} of {pages} · {total} submissions</span>
+      <span className="flex gap-2">
+        {page > 1 && <a href={`?page=${page - 1}`} className="rounded-full border px-3 py-1.5 font-semibold">← Newer</a>}
+        {page < pages && <a href={`?page=${page + 1}`} className="rounded-full border px-3 py-1.5 font-semibold">Older →</a>}
+      </span>
+    </nav>
+  ) : null;
 
   return (
     <Card>
@@ -30,6 +47,7 @@ export default async function ClientsPage() {
         <CardDescription>Estimator submissions from the website.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {pager}
         {clients.length === 0 ? (
           <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
             No estimator forms have been submitted yet.
@@ -179,6 +197,7 @@ export default async function ClientsPage() {
             </details>
           ))
         )}
+        {pager}
       </CardContent>
     </Card>
   );

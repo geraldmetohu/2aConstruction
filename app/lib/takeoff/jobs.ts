@@ -83,10 +83,11 @@ export function payOwed(a: AssignmentRow, checkIns: CheckInRow[], expenses: Expe
 export interface OrderNeed { stage: string; label: string; start: string; daysAway: number; items: { description: string; quantity: number; unit: string }[]; ordered?: OrderRow }
 
 /** Our materials for stages starting within `lookAhead` working days that are not yet ordered. */
-export function ordersToPlace(lines: TakeoffLine[], rows: ProgrammeRow[], orders: OrderRow[], today: string, lookAhead = 3): OrderNeed[] {
+export function ordersToPlace(lines: TakeoffLine[], rows: ProgrammeRow[], orders: OrderRow[], today: string, lookAhead = 3, skip: Set<string> = new Set()): OrderNeed[] {
   const out: OrderNeed[] = [];
   for (const r of rows) {
-    if (!r.start || r.days <= 0) continue;
+    // Stages already finished don't need ordering any more.
+    if (!r.start || r.days <= 0 || skip.has(r.stage)) continue;
     const away = daysBetween(today, r.start);
     if (away < 0 || away > lookAhead + 2) continue; // +2 calendar days covers a weekend
     const items = new Map<string, { description: string; quantity: number; unit: string }>();

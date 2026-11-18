@@ -21,14 +21,42 @@ export function mailFrom() {
   return pick[0] ?? "";
 }
 
-type Mail = { to: string | string[]; subject: string; text: string; html?: string; replyTo?: string; attachments?: { filename: string; content: Buffer; contentType?: string }[] };
+/**
+ * Which address an email comes from. All are on the same verified domain as MAIL_FROM, so Resend sends them
+ * at no extra cost (one domain, any address on it). Override any with MAIL_FROM_<KIND>, e.g.
+ * MAIL_FROM_INVOICES="2A Construction Accounts <accounts@2aconstruction.co.uk>".
+ * Replies to anything but the main address go to the office inbox unless a reply-to is given,
+ * so nothing bounces when there's no mailbox behind invoices@ or projects@.
+ */
+export type Sender = "quotes" | "invoices" | "projects" | "office" | "marketing" | "alerts";
+const SENDER: Record<Sender, { local: string; name: string }> = {
+  quotes: { local: "quotes", name: "2A Construction" },
+  invoices: { local: "invoices", name: "2A Construction Accounts" },
+  projects: { local: "projects", name: "2A Construction Projects" },
+  office: { local: "notifications", name: "2A Construction" },
+  marketing: { local: "marketing", name: "2A Construction" },
+  alerts: { local: "alerts", name: "2A Construction website" },
+};
+/** The domain of the main from-address (e.g. 2aconstruction.co.uk). */
+export function mailDomain() { return /@([^>\s]+)>?\s*$/.exec(mailFrom())?.[1]?.toLowerCase() ?? "2aconstruction.co.uk"; }
+export function senderAddress(kind: Sender = "quotes") {
+  const custom = process.env[`MAIL_FROM_${kind.toUpperCase()}`]?.trim();
+  if (custom) return custom;
+  if (kind === "quotes") return mailFrom();
+  // SMTP sends as the SMTP account only, so the special addresses are a Resend feature.
+  if (!resendKey()) return mailFrom();
+  return `${SENDER[kind].name} <${SENDER[kind].local}@${mailDomain()}>`;
+}
+
+type Mail = { to: string | string[]; subject: string; text: string; html?: string; replyTo?: string; from?: Sender; headers?: Record<string, string>; attachments?: { filename: string; content: Buffer; contentType?: string }[] };
 type Sent = { sent: true } | { sent: false; reason: string };
 
 export async function sendMail(m: Mail): Promise<Sent> {
   if (!mailConfigured()) return { sent: false as const, reason: "Email is not set up (RESEND_API_KEY missing)." };
   const to = (Array.isArray(m.to) ? m.to : [m.to]).map(x => x.trim()).filter(x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x));
   if (!to.length) return { sent: false as const, reason: "No valid email address." };
-  const replyTo = m.replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.replyTo.trim()) ? m.replyTo.trim() : undefined;
+  const given = m.replyTo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m.replyTo.trim()) ? m.replyTo.trim() : undefined;
+  const replyTo = given ?? (m.from && m.from !== "quotes" && senderAddress(m.from) !== mailFrom() ? officeInbox()[0] : undefined);
   try {
     if (resendKey()) await viaResend({ ...m, to, replyTo });
     else await viaSmtp({ ...m, to, replyTo });
@@ -47,7 +75,7 @@ async function viaResend(m: Mail & { to: string[] }) {
       method: "POST", signal: ctrl.signal,
       headers: { Authorization: `Bearer ${resendKey()}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        from: mailFrom(), to: m.to, subject: m.subject, text: m.text, ...(m.html ? { html: m.html } : {}), ...(m.replyTo ? { reply_to: m.replyTo } : {}),
+        from: senderAddress(m.from), to: m.to, subject: m.subject, ...(m.headers ? { headers: m.headers } : {}), text: m.text, ...(m.html ? { html: m.html } : {}), ...(m.replyTo ? { reply_to: m.replyTo } : {}),
         ...(m.attachments?.length ? { attachments: m.attachments.map(a => ({ filename: a.filename, content: a.content.toString("base64"), ...(a.contentType ? { content_type: a.contentType } : {}) })) } : {}),
       }),
     });
@@ -63,7 +91,7 @@ async function viaSmtp(m: Mail & { to: string[] }) {
       // 465 = SSL from the start; 587 / 25 = STARTTLS. SMTP_SECURE overrides.
       secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : Number(process.env.SMTP_PORT) === 465,
       auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }, ...timeouts });
-  await transport.sendMail({ from: mailFrom(), to: m.to, subject: m.subject, text: m.text, html: m.html, replyTo: m.replyTo, ...(m.attachments?.length ? { attachments: m.attachments } : {}) });
+  await transport.sendMail({ from: mailFrom(), headers: m.headers, to: m.to, subject: m.subject, text: m.text, html: m.html, replyTo: m.replyTo, ...(m.attachments?.length ? { attachments: m.attachments } : {}) });
 }
 
 export const siteUrl = () => (process.env.NEXT_PUBLIC_SITE_URL || process.env.KINDE_SITE_URL || "").replace(/\/$/, "");

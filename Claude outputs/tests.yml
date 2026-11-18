@@ -1,0 +1,27 @@
+# Runs every test and the TypeScript check on each push and pull request, so a broken change is caught
+# before Vercel tries to build it. No database or secrets are needed: the tests use an in-memory PostgreSQL.
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Only so Prisma can generate its client; nothing connects to it.
+      DATABASE_URL: postgresql://user:pass@localhost:5432/db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Prisma client
+        run: npx prisma generate
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Tests
+        run: npm run test:all

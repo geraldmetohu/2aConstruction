@@ -3,12 +3,14 @@ import { type ReactNode } from "react";
 import { NavBar } from "../componets/storefront/NavBar";
 import Footer from "../componets/storefront/Footer";
 import { CookieNotice } from "../componets/storefront/site/CookieNotice";
+import { OfficeDigestTick } from "../componets/OfficeDigestTick";
 
 //import LoadingOverlay from "../components/storefront/LoadingOverlay";
 
 export default function StoreFrontLayout({ children }: { children: ReactNode }) {
   return (
     <>
+      <OfficeDigestTick />
       {/* Accessibility: keyboard users can jump past the nav */}
       <a
         href="#main"

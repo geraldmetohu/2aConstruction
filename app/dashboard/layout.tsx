@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { getAuthSession } from "@/app/lib/auth/session.server";
 import { redirect } from "next/navigation";
+import { OfficeDigestTick } from "@/app/componets/OfficeDigestTick";
 import Link from "next/link";
 import { CircleUser, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="min-h-screen bg-neutral-50">
+      <OfficeDigestTick />
       <DashboardSidebar />
       <div className="lg:pl-64">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur sm:px-6 lg:px-8 print:hidden">

@@ -11,9 +11,22 @@ type PrismaLike = {
   $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>;
   $transaction<T>(fn: (tx: { $queryRawUnsafe<R = unknown>(query: string, ...values: unknown[]): Promise<R> }) => Promise<T>, options?: { timeout?: number }): Promise<T>;
 };
+// "Is this table there yet?" checks run on almost every page. Once a table exists it never goes away
+// (migrations only add), so a positive answer is remembered for the life of the server instance.
+const tablesFound = new WeakMap<object, Set<string>>();
+const isTableCheck = (text: string) => /^\s*SELECT\s+to_regclass\(/i.test(text);
+
 export function prismaDb(prisma: PrismaLike): Db {
+  const found = tablesFound.get(prisma) ?? new Set<string>();
+  tablesFound.set(prisma, found);
   const wrap = (c: { $queryRawUnsafe<R = unknown>(query: string, ...values: unknown[]): Promise<R> }): Sql => ({
-    query: async <T,>(text: string, params: unknown[] = []) => (await c.$queryRawUnsafe<T[]>(text, ...params)),
+    query: async <T,>(text: string, params: unknown[] = []) => {
+      const key = isTableCheck(text) ? `${text}|${JSON.stringify(params)}` : "";
+      if (key && found.has(key)) return [{ ok: true }] as T[];
+      const rows = await c.$queryRawUnsafe<T[]>(text, ...params);
+      if (key && (rows as { ok?: unknown }[])[0]?.ok === true) found.add(key);
+      return rows;
+    },
   });
   return { ...wrap(prisma), transaction: fn => prisma.$transaction(tx => fn(wrap(tx)), { timeout: 30000 }) };
 }

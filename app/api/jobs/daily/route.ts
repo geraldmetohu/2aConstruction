@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { companyOverview, db, jobsAvailable, loadJob } from "@/app/lib/takeoff/jobs.server";
 import { listJobs } from "@/app/lib/takeoff/jobs-store";
 import { mailConfigured, sendMail, siteUrl } from "@/app/lib/takeoff/mail.server";
+import { sendOfficeDigest } from "@/app/lib/takeoff/office-digest.server";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ function authorised(req: Request) {
 async function run(req: Request) {
   if (!authorised(req)) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   if (!(await jobsAvailable())) return NextResponse.json({ ok: false, reason: "Jobs tables not set up" });
+  // Anything still waiting from the client portal goes out first (the hourly schedule normally sends it).
+  const portal = await sendOfficeDigest(db()).catch(e => { console.error("[daily] office digest", e); return { sent: 0 }; });
   const o = await companyOverview();
   const base = siteUrl();
   const lines = o.todos.map(t => `• ${t.text}${base ? `\n  ${base}${t.href}` : ""}`);
@@ -42,7 +45,7 @@ async function run(req: Request) {
       if (r.sent) sent.push(`client ${j.reference}`);
     }
   }
-  return NextResponse.json({ ok: true, todos: o.todos.length, orders: o.orders.length, emailed: sent, email: mailConfigured() });
+  return NextResponse.json({ ok: true, portalDigest: portal.sent, todos: o.todos.length, orders: o.orders.length, emailed: sent, email: mailConfigured() });
 }
 export const GET = run;
 export const POST = run;

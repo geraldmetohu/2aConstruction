@@ -16,6 +16,7 @@ const extras = load('app/lib/takeoff/extras-store.ts');
 const jobsLib = load('app/lib/takeoff/jobs.ts');
 const signer = load('app/lib/takeoff/signer-store.ts');
 const company = load('app/lib/takeoff/company.ts');
+const digest = load('app/lib/takeoff/office-digest.ts');
 
 const pg = new PGlite();
 const wrap = c => ({ query: async (text, params = []) => (await c.query(text, params)).rows });
@@ -52,6 +53,26 @@ await db.query(`INSERT INTO "FinanceBankLine" ("statementId", "date", "amount", 
 await extras.addExtra(db, A, { doneOn: '2026-11-04', title: 'Boxed in pipes', detail: '', stage: 'Loft · Steel beams', hours: 2, cost: 15, value: 120, reason: 'Goodwill' }, 'admin');
 
 const countFor = async q => { let n = 0; for (const { t } of await db.query(`SELECT table_name AS t FROM information_schema.columns WHERE column_name = 'quoteId' AND table_schema = current_schema()`)) n += Number((await db.query(`SELECT count(*)::int AS n FROM "${t}" WHERE "quoteId" = $1::uuid`, [q]))[0].n); return n; };
+
+await test('office digest: client changes queue up and go out as one list, never twice', async () => {
+  assert.equal(await digest.oldestWaitingMinutes(db), null);
+  for (const [q, h] of [[A, 'Client sent a message'], [A, 'Client added a snag'], [A, 'Client says they have paid'], [B, 'Client answered']])
+    assert.equal(await digest.queueNotice(db, { quoteId: q, kind: 'MESSAGE', heading: h, detail: 'detail <b>', link: 'https://x/j', replyTo: 'c@example.com' }), true);
+  assert.ok((await digest.oldestWaitingMinutes(db)) >= 0);
+  const { batch, notices } = await digest.claimNotices(db);
+  assert.equal(notices.length, 4);
+  assert.equal((await digest.claimNotices(db)).notices.length, 0, 'a second run finds nothing to send');
+  const m = digest.digestContent(notices, 'https://site');
+  assert.match(m.subject, /4 updates on 2 projects/);
+  assert.equal(m.replyTo, undefined, 'no single reply-to when several clients are in one email');
+  assert.ok(m.html.includes('detail &lt;b&gt;') && !m.html.includes('detail <b>'), 'client text is escaped');
+  assert.equal((m.text.match(/•/g) ?? []).length, 4);
+  await digest.releaseBatch(db, batch);
+  assert.equal((await digest.claimNotices(db)).notices.length, 4, 'a failed email puts the items back');
+  const one = digest.digestContent(notices.filter(n => n.quoteId === B), 'https://site');
+  assert.match(one.subject, /1 update – Test/); assert.equal(one.replyTo, 'c@example.com');
+  await digest.queueNotice(db, { quoteId: A, kind: 'SNAG', heading: 'Left for the delete test', detail: '', link: '' });
+});
 
 await test('deleting a project removes the quote, job, messages, photos, requests, payments, expenses and money – nothing else', async () => {
   assert.ok(await countFor(A) > 8);

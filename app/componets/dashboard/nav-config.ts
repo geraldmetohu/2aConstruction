@@ -1,5 +1,5 @@
 import {
-  FileSignature, Hammer, Bell, Bug, Database, Download, Megaphone, Star,
+  ClipboardList, FileSignature, Hammer, Bell, Bug, Database, Download, Megaphone, Star,
   Activity, BookUser, Calculator, Columns2, FileText, Film, FolderKanban, HardHat,
   FolderOpen, Image as ImageIcon, Images, LayoutDashboard, Package, PoundSterling, Settings, ShieldCheck, SlidersHorizontal, Tag, Users, type LucideIcon,
 } from "lucide-react";
@@ -21,6 +21,7 @@ export const navSections: NavSection[] = [
   {
     title: "Pricing & quotes",
     links: [
+      { name: "Site visits", href: "/dashboard/site-visits", icon: ClipboardList, hint: "Prepare and fill in each visit, PDF, then make the quote" },
       { name: "Quote calculator", href: "/dashboard/calculator", icon: Calculator, hint: "Price a job room by room" },
       { name: "Saved quotes", href: "/dashboard/saved-quotes", icon: FolderOpen, hint: "Drafts, sent and accepted quotes, client choices" },
       { name: "Labour & material rates", href: "/dashboard/rates", icon: SlidersHorizontal, hint: "Your standard prices per job and material" },

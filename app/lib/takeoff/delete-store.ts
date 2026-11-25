@@ -59,7 +59,12 @@ export async function deleteProject(db: Db, quoteId: string): Promise<DeleteRepo
     report.bankLinesUnmatched = await unmatchBank(tx, { entries, payments, expenses });
     if (entries.length) report.FinanceEntry = await count(tx, `DELETE FROM "FinanceEntry" WHERE "id" = ANY($1::uuid[])`, [entries]);
     // Every other table that records this quote id (children of the quote), then the job, then the quote.
-    const skip = new Set(["TakeoffQuote", "TakeoffJob", "FinanceEntry", "FinanceBankLine"]);
+    const skip = new Set(["TakeoffQuote", "TakeoffJob", "FinanceEntry", "FinanceBankLine", "SiteVisit"]);
+    // A site visit stays (it is the record of the visit); it just stops pointing at the deleted quote.
+    if (await hasTable(tx, "SiteVisit")) {
+      const n = await count(tx, `UPDATE "SiteVisit" SET "quoteId" = NULL, "status" = CASE WHEN "status" = 'QUOTED' THEN 'DONE' ELSE "status" END, "updatedAt" = now() WHERE "quoteId" = $1::uuid`, p);
+      if (n) report.siteVisitsUnlinked = n;
+    }
     for (const t of await tablesWith(tx, "quoteId")) {
       if (skip.has(t)) continue;
       const n = await count(tx, `DELETE FROM "${t}" WHERE "quoteId" = $1::uuid`, p);

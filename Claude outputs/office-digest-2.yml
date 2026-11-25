@@ -1,0 +1,27 @@
+# OPTIONAL – the site already sends the digest hourly from its own traffic. This adds a fixed hourly run.
+# Sends the office ONE email per hour listing what clients changed in their portal (nothing if nothing changed).
+# Needs a repository secret TAKEOFF_CRON_SECRET with the same value as the Vercel environment variable
+# (GitHub: Settings → Secrets and variables → Actions → New repository secret).
+#
+# This run never "fails", so GitHub doesn't email you about it. If the site is slow or the secret is missing,
+# it simply skips that hour – the site's own traffic sends the digest anyway. The result is shown in the run log.
+name: Office digest (hourly)
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    steps:
+      - name: Send the client portal digest
+        continue-on-error: true
+        env:
+          SECRET: ${{ secrets.TAKEOFF_CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then echo "TAKEOFF_CRON_SECRET is not set – skipped (the site still sends the digest)."; exit 0; fi
+          code=$(curl -sS -o response.txt -w "%{http_code}" --max-time 60 -X POST -H "Authorization: Bearer $SECRET" https://2aconstruction.co.uk/api/jobs/office-digest || echo "000")
+          echo "Site answered $code: $(cat response.txt 2>/dev/null)"
+          exit 0

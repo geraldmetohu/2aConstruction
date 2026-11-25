@@ -37,6 +37,7 @@
     "test:finance": "node tests/finance.test.mjs",
     "test:deletes": "node tests/deletes.test.mjs",
     "test:admin-tools": "node tests/admin-tools.test.mjs",
+    "test:site-visits": "node tests/site-visits.test.mjs",
     "test:compliance": "node tests/compliance.test.mjs",
     "preview:takeoff": "node scripts/preview-takeoff.mjs"
   },

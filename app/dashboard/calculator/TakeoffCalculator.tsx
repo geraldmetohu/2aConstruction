@@ -23,6 +23,7 @@ import { defaultCompany, missingCompanyFields, resolveSigner, type CompanyProfil
 
 const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 import { saveTakeoffQuote, sendTakeoffQuote, setQuoteSignerAction } from "./actions";
+import { linkVisitQuoteAction } from "../site-visits/actions";
 import { CustomWork, fieldsForTrades, LoftRooms, TradeFilter, WordingEditor } from "./QuoteExtras";
 import { ClientCard, missingClientDetails, ModePicker, packageTrades, ProjectPicker, QuickStart, ReviewCard, ScaffoldCard, TradePicker, WholeHome } from "./Wizard";
 
@@ -50,8 +51,11 @@ export type SavedQuote = {
   /** Who signs this quote's documents ("" = company default). */
   signerId?: string;
 };
+/** A new quote started from a site visit (everything recorded on the visit already filled in). */
+export type VisitPrefill = { visitId: string; reference: string; input: TakeoffInput; client: Client; quoteId: string | null; quoteReference: string | null; summary?: string[] };
 
-export function TakeoffCalculator({ rates, prices, notes, commercial, storage, saved, company = defaultCompany, savedJobs = [], clientFormats = {} }: {
+export function TakeoffCalculator({ rates, prices, notes, commercial, storage, saved, company = defaultCompany, savedJobs = [], clientFormats = {}, prefill = null }: {
+  prefill?: VisitPrefill | null;
   rates: RateBook; prices: PriceTable; notes: string[]; commercial: Commercial; storage: boolean; saved: SavedQuote | null; company?: CompanyProfile;
   savedJobs?: CustomItem[]; clientFormats?: Record<string, { format: string; groupBy: string }>;
 }) {
@@ -62,8 +66,8 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
     return { ...d, terms, ...(commercial ? { commercial: { ...d.commercial, ...commercial } } : {}) };
   };
   const [formatTouched, setFormatTouched] = useState(!!saved);
-  const [input, setInput] = useState<TakeoffInput>(() => saved?.input ?? fresh());
-  const [client, setClient] = useState<Client>(saved?.client ?? { name: "", email: "", address: "" });
+  const [input, setInput] = useState<TakeoffInput>(() => saved?.input ?? prefill?.input ?? fresh());
+  const [client, setClient] = useState<Client>(saved?.client ?? prefill?.client ?? { name: "", email: "", address: "" });
   const [step, setStep] = useState<Step>(saved ? "review" : "start");
   // Phones: keep the current step visible in the swipeable step strip.
   const stepStrip = useRef<HTMLElement>(null);
@@ -79,15 +83,15 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
 
   // Unsaved drafts for a new quote are kept in this browser only.
   useEffect(() => {
-    if (saved) return;
+    if (saved || prefill) return;
     try {
       const s = JSON.parse(localStorage.getItem(STORAGE) ?? "null");
       const p = takeoffInputSchema.safeParse(s?.input);
       if (p.success) setInput(p.data);
       if (s?.client) setClient(c => ({ ...c, ...s.client }));
     } catch { /* optional */ }
-  }, [saved]);
-  useEffect(() => { if (!saved) try { localStorage.setItem(STORAGE, JSON.stringify({ input, client })); } catch { /* ignore */ } }, [input, client, saved]);
+  }, [saved, prefill]);
+  useEffect(() => { if (!saved && !prefill) try { localStorage.setItem(STORAGE, JSON.stringify({ input, client })); } catch { /* ignore */ } }, [input, client, saved, prefill]);
 
   const computed = useMemo(() => {
     try { return { result: calculateTakeoff(input, prices, rates), error: "" }; }
@@ -141,6 +145,7 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
     setSaving("");
     if (!r.ok) { setFlash({ ok: false, text: r.message }); return; }
     if (!saved && signerId) await setQuoteSignerAction([r.id], signerId);
+    if (!saved && prefill) await linkVisitQuoteAction(prefill.visitId, r.id);
     setDirty(false); setReason("");
     try { if (!saved) localStorage.removeItem(STORAGE); } catch { /* ignore */ }
     setFlash({ ok: true, text: r.notified ? `Saved version ${r.version}. The client will see an "updated" notice when they log in.` : `Draft saved (version ${r.version}). The client can't see it until you press Send to client.` });
@@ -198,6 +203,10 @@ export function TakeoffCalculator({ rates, prices, notes, commercial, storage, s
           <button onClick={() => { if (!dirty || confirm("Start a new quote? Unsaved changes will be lost.")) { try { localStorage.removeItem(STORAGE); } catch { /* */ } router.push("/dashboard/calculator"); if (!saved) { setInput(fresh()); setClient({ name: "", email: "", address: "" }); setDirty(false); } } }} className={`${btn} border`}><RotateCcw className="h-4 w-4" />New</button>
         </div>
         {flash && <p className={`w-full rounded-lg px-3 py-2 text-sm ${flash.ok ? "bg-emerald-50 text-emerald-900" : "bg-red-50 text-red-800"}`}>{flash.text}</p>}
+        {prefill && !saved && <p className="w-full rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">Filled in from site visit <a href={`/dashboard/site-visits/${prefill.visitId}`} className="font-semibold underline">{prefill.reference}</a>: house, rooms, room works, projects, site set-up, and the finishes in each room&apos;s notes. Check the structure, steels, materials and measurements in each step before you send it.
+          {prefill.quoteId && <> A quote was already made from this visit: <a href={`/dashboard/calculator?quote=${prefill.quoteId}`} className="font-semibold underline">{prefill.quoteReference}</a>. Saving here makes a second one.</>}</p>}
+        {prefill && !!prefill.summary?.length && <details className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm"><summary className="cursor-pointer font-semibold text-sky-900">What the client told us on the visit (office only – not on the quote)</summary>
+          <ul className="mt-2 list-disc space-y-0.5 pl-5 text-neutral-700">{prefill.summary.map((l, i) => <li key={i}>{l}</li>)}</ul></details>}
         {!storage && <p className="w-full rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900">Calculating works now. Saving, sending and the client portal start working once the new database tables are applied (migration 20261101120000_add_takeoff_quotes).</p>}
       </header>
       {notes.filter(n => !n.includes("database tables")).map(n => <p key={n} className="rounded-lg bg-sky-50 px-4 py-2 text-xs text-sky-900 print:hidden">{n}</p>)}

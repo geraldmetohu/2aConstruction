@@ -1,0 +1,343 @@
+{
+ "kind": "2a-site-visit",
+ "version": 1,
+ "details": {
+  "clientName": "",
+  "clientEmail": "",
+  "clientPhone": "",
+  "siteAddress": "4 Emerson Drive, Hornchurch, Essex",
+  "postcode": "RM11 1XH",
+  "visitAt": null,
+  "projectTypes": [
+   "LOFT",
+   "BATHROOM",
+   "REFURB",
+   "AIRCON",
+   "HEATING"
+  ]
+ },
+ "answers": {
+  "before.prepNotes": "DRAWINGS: NJ Rouse 4ED.26.01 (existing, May 2026), .02 (location), .05 (proposed plans & elevations, Sept 2026), .06 & .07 (sections S1, S2, Oct 2026), .08 (specification). Designer's risk assessment 15 Oct 2026. Engineer: John Peck, calcs Rev A (20 Oct 2026) + 1st floor, 2nd floor and chimney support drawings.\n\nSCOPE: hip-to-gable + rear dormer (5.625 m finished, hanging tiles, flat crown roof); loft = bedroom 5, bedroom 6 and en-suite; new stair over the existing; Velux 134×140 (bed 6) and 94×140 (over stairs). First floor re-planned: new stud walls, new en-suite, FD30 doors DF01–DF04, air con to all bedrooms. Ground floor: new shower room off the hall, partitions + FD30 doors DG03–DG05 to form a protected hall, remove living-room chimney breast with new beam + plates, sound-proofing to living & dining party wall. New boiler position to be agreed. Mains interlinked smoke/heat alarms, CO alarm.\n\nSTEEL (S355, intumescent paint or Glasroc F): ridge 152×152×44 UC (5.7 m) on 2 × 90 mm sq C24 posts; B1 152×152×23 UC; B2 203×203×52 UC; B3 203×203×46 UC; T5 152×152×23 UC; chimney support 152×152×23 UC + 10 mm plate (min 40 mm into party wall); L3 2 × 152×89 UB. Timber C24: floor 47×170 @ 400; flat roof 47×147 @ 400; trimmers 2 × 47×170 (T1–T3, T6–T9), T4 with 160×8 flitch plate, L1/L2 2 × 47×147. Bearing plates 250×100×15 and 350×100×20.\n\nCHECK ON SITE: ridge height and party wall to party wall (engineer used 5.7 m ridge span); stair headroom 2.0 m (1.8 m at the edge); soil stack position for both en-suites and the shower room; where the boiler and the air con condensers go; chimney stack condition (stack stays, supported on the new steel); scaffold access on the side and rear; the neighbour at No. 6 (party wall notice – sound-proofing and steels into the party wall); fire board to the dormer cheek within 1 m of the boundary.\n\nASK THE ARCHITECT: gable finish – spec sheet says K-Rend render on the new gable, elevations say \"all materials to match existing\"; engineer's drawings show the postcode as RM11 1HX (architect: RM11 1XH).",
+  "project.LOFT.loftType": "Hip to gable + rear dormer",
+  "project.LOFT.loftRooms": [
+   "Bedroom",
+   "En-suite"
+  ],
+  "project.LOFT.ensuite": true,
+  "project.LOFT.stairs": "Over the existing stairs",
+  "project.LOFT.loftWindows": [
+   "Dormer windows",
+   "Velux front"
+  ],
+  "project.AIRCON.acRooms": [
+   "Loft bedrooms",
+   "First floor bedrooms"
+  ],
+  "client.heardFrom": "Architect"
+ },
+ "takeoff": {
+  "property": {
+   "houseType": "SEMI_OR_END",
+   "width": 5.7,
+   "length": 7.8,
+   "storeys": 2,
+   "bedrooms": 4,
+   "postcode": "RM11 1XH",
+   "notes": "Hip-to-gable and rear dormer loft conversion with alterations, to the architect's drawings 4ED.26.01–08 (NJ Rouse) and the structural calculations Rev A (John Peck)."
+  },
+  "rooms": [
+   {
+    "id": "rmwwr81bm0",
+    "name": "Loft bedroom 5",
+    "type": "BEDROOM",
+    "floor": "LOFT",
+    "length": 3.64,
+    "width": 3.2,
+    "height": 2.3,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Dormer window to the rear, air con, fitted wardrobe shown on plan.",
+    "works": {
+     "jobs": "PLASTER,ELECTRICS,HEATING,FLOOR,JOINERY,PAINT"
+    }
+   },
+   {
+    "id": "rmwwr81bo1",
+    "name": "Loft bedroom 6",
+    "type": "BEDROOM",
+    "floor": "LOFT",
+    "length": 4.05,
+    "width": 3.25,
+    "height": 2.3,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Velux 134 × 140 to the front slope, air con, sloping ceiling (1.0 / 1.5 / 1.8 m lines on plan).",
+    "works": {
+     "jobs": "PLASTER,ELECTRICS,HEATING,FLOOR,JOINERY,PAINT"
+    }
+   },
+   {
+    "id": "rmwwr81bo2",
+    "name": "Loft en-suite",
+    "type": "ENSUITE",
+    "floor": "LOFT",
+    "length": 2.4,
+    "width": 2.2,
+    "height": 2.3,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 0,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. WC, basin, shower (tray about 1230 × 1472 on plan), extractor to outside.",
+    "works": {
+     "jobs": "BATHROOM",
+     "bathroomRefit": true,
+     "layout": "SHOWER"
+    }
+   },
+   {
+    "id": "rmwwr81bo3",
+    "name": "Loft stairs & landing",
+    "type": "STAIRS",
+    "floor": "LOFT",
+    "length": 3,
+    "width": 1.45,
+    "height": 2.3,
+    "doors": 0,
+    "windows": 1,
+    "radiators": 0,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. New stair over the existing; Velux 94 × 140 over the stairs; 2.0 m headroom (1.8 m at the edge).",
+    "works": {
+     "jobs": "PLASTER,ELECTRICS,FLOOR,PAINT"
+    }
+   },
+   {
+    "id": "rmwwr81bo4",
+    "name": "First floor bedroom (rear)",
+    "type": "BEDROOM",
+    "floor": "FIRST",
+    "length": 3.85,
+    "width": 2.68,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Air con.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81bo5",
+    "name": "First floor bedroom (middle)",
+    "type": "BEDROOM",
+    "floor": "FIRST",
+    "length": 3.4,
+    "width": 3.93,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Air con. New stud wall and FD30 door (DF02); beams B1, B2 and T5 above.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81bo6",
+    "name": "First floor bedroom (front, small)",
+    "type": "BEDROOM",
+    "floor": "FIRST",
+    "length": 2.32,
+    "width": 2.7,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Air con. New FD30 door (DF04).",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81bo7",
+    "name": "First floor bedroom (front, bay)",
+    "type": "BEDROOM",
+    "floor": "FIRST",
+    "length": 3.64,
+    "width": 3.58,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Air con. New FD30 door (DF03); beam B3 above.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81bo8",
+    "name": "First floor en-suite",
+    "type": "ENSUITE",
+    "floor": "FIRST",
+    "length": 1.88,
+    "width": 2.29,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. New en-suite shown on plan (door DF06).",
+    "works": {
+     "jobs": "BATHROOM",
+     "bathroomRefit": true,
+     "layout": "SHOWER"
+    }
+   },
+   {
+    "id": "rmwwr81bo9",
+    "name": "First floor bathroom",
+    "type": "BATHROOM",
+    "floor": "FIRST",
+    "length": 1.76,
+    "width": 4.29,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Existing bathroom – confirm with the client if it is being refitted.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81boa",
+    "name": "Ground floor shower room",
+    "type": "BATHROOM",
+    "floor": "GROUND",
+    "length": 1.76,
+    "width": 1.48,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. New shower room off the hall: WC, basin, shower, extractor; lintel L3 (2 × 152×89 UB). Shower floor: 65 mm screed on 120 mm insulation (spec).",
+    "works": {
+     "jobs": "BATHROOM",
+     "bathroomRefit": true,
+     "layout": "SHOWER"
+    }
+   },
+   {
+    "id": "rmwwr81bob",
+    "name": "Living room",
+    "type": "LIVING",
+    "floor": "GROUND",
+    "length": 3.9,
+    "width": 3.64,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Remove the chimney breast, new beam and bearing plates, make good. Sound-proofing to the party wall (Isocheck + 2 × 15 mm sound-grade plasterboard). New FD30 door DG03.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81boc",
+    "name": "Dining room",
+    "type": "DINING",
+    "floor": "GROUND",
+    "length": 3.9,
+    "width": 3.9,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. Sound-proofing to the party wall. New partition and FD30 door DG04 to separate the hall.",
+    "works": {}
+   },
+   {
+    "id": "rmwwr81bod",
+    "name": "Hall",
+    "type": "HALL",
+    "floor": "GROUND",
+    "length": 1.94,
+    "width": 4.6,
+    "height": 2.5,
+    "doors": 1,
+    "windows": 1,
+    "radiators": 1,
+    "notes": "Size scaled from the architect's drawing (4ED.26.05) – measure on site. New partitions and FD30 doors (DG04, DG05) to make the protected stair; 30-minute fire ceilings.",
+    "works": {}
+   }
+  ],
+  "packages": {
+   "loft": {
+    "enabled": true,
+    "values": {
+     "loftType": "HIP_TO_GABLE",
+     "gables": 1,
+     "gableFinish": "RENDER",
+     "renderSystem": "SILICONE",
+     "loftWidth": 5.625,
+     "beams": true,
+     "beamCount": 8,
+     "beam1Size": "152x152h",
+     "beam1Length": 5.9,
+     "beam1EndA": "COLUMN",
+     "beam1EndB": "COLUMN",
+     "beam2Size": "152x152",
+     "beam2EndA": "PLATE",
+     "beam2EndB": "PLATE",
+     "beam3Size": "203x203h",
+     "beam3EndA": "PLATE",
+     "beam3EndB": "PLATE",
+     "beam4Size": "203x203",
+     "beam4EndA": "PLATE",
+     "beam4EndB": "PLATE",
+     "beam5Size": "152x152",
+     "beam5EndA": "STEEL",
+     "beam5EndB": "STEEL",
+     "beam6Size": "152x152",
+     "beam6EndA": "PLATE",
+     "beam6EndB": "PLATE",
+     "beam7Size": "152x89",
+     "beam8Size": "152x89",
+     "beamPosts": 2,
+     "trimmers": 10,
+     "trimmerLength": 2.5,
+     "flitchBeams": 1,
+     "joistSize": "47x175",
+     "flatJoistSize": "47x150",
+     "frontWindows": 2,
+     "roofWindowSize": "PK08",
+     "largeRoofWindows": 1,
+     "rearWindows": 2,
+     "cladding": "TILE",
+     "fitOut": true,
+     "fitOutBy": "ROOMS",
+     "staircase": true,
+     "fireDoors": 2,
+     "smokeAlarms": 3
+    }
+   },
+   "internal": {
+    "enabled": true,
+    "values": {
+     "acoustic": 19.5,
+     "fireDoors": 7
+    }
+   },
+   "aircon": {
+    "enabled": true,
+    "values": {
+     "system": "MULTI",
+     "wallUnits": 6
+    }
+   },
+   "heating": {
+    "enabled": true,
+    "values": {
+     "boiler": "NONE",
+     "boilerMove": true
+    }
+   }
+  },
+  "prelims": {
+   "scaffoldMode": "YES",
+   "structuralEngineer": false,
+   "buildingControl": true,
+   "partyWallNeighbours": 1
+  }
+ }
+}
